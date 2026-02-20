@@ -9,6 +9,7 @@ import {
   Animated,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
 
 const MOCK_USER = {
   name: 'Alex Johnson',
@@ -17,22 +18,29 @@ const MOCK_USER = {
 };
 
 const USER_TYPE_CONFIG: Record<string, { label: string; icon: string; color: string; bg: string }> = {
-  client: { label: 'Client', icon: 'person', color: '#2563EB', bg: '#DBEAFE' },
-  owner: { label: 'Space Owner', icon: 'business', color: '#FF6B35', bg: '#FFF0EB' },
-  vendor: { label: 'Service Vendor', icon: 'construct', color: '#16A34A', bg: '#DCFCE7' },
+  client: { label: 'Client',         icon: 'person',    color: Colors.info,    bg: Colors.infoLight    },
+  owner:  { label: 'Space Owner',    icon: 'business',  color: Colors.primary, bg: Colors.primaryLight },
+  vendor: { label: 'Service Vendor', icon: 'construct', color: Colors.success, bg: Colors.successLight },
 };
 
+// ─── Menu item ────────────────────────────────────────────────────────────────
 function MenuItem({ item }: { item: any }) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const onPressIn = () => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, speed: 30 }).start();
-  const onPressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 22 }).start();
+  const scale      = useRef(new Animated.Value(1)).current;
+  const onPressIn  = () => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, speed: 30 }).start();
+  const onPressOut = () => Animated.spring(scale, { toValue: 1,    useNativeDriver: true, speed: 22 }).start();
 
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
-      <TouchableOpacity style={styles.menuItem} onPress={item.onPress} onPressIn={onPressIn} onPressOut={onPressOut} activeOpacity={1}>
+      <TouchableOpacity
+        style={styles.menuItem}
+        onPress={item.onPress}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
+        activeOpacity={1}
+      >
         <View style={styles.menuItemLeft}>
-          <View style={[styles.menuIconWrap, { backgroundColor: item.iconBg ?? '#FFF0EB' }]}>
-            <Ionicons name={item.icon} size={20} color={item.iconColor ?? '#FF6B35'} />
+          <View style={[styles.menuIconWrap, { backgroundColor: item.iconBg ?? Colors.primaryLight }]}>
+            <Ionicons name={item.icon} size={20} color={item.iconColor ?? Colors.primary} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.menuItemTitle}>{item.title}</Text>
@@ -40,13 +48,14 @@ function MenuItem({ item }: { item: any }) {
           </View>
         </View>
         <View style={styles.menuChevronWrap}>
-          <Ionicons name="chevron-forward" size={16} color="#CCC" />
+          <Ionicons name="chevron-forward" size={16} color={Colors.border} />
         </View>
       </TouchableOpacity>
     </Animated.View>
   );
 }
 
+// ─── Menu section ─────────────────────────────────────────────────────────────
 function MenuSection({ title, items }: { title: string; items: any[] }) {
   return (
     <View style={styles.section}>
@@ -63,36 +72,42 @@ function MenuSection({ title, items }: { title: string; items: any[] }) {
   );
 }
 
+// ─── Screen ───────────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
-  const user = MOCK_USER;
-  const typeCfg = USER_TYPE_CONFIG[user.userType] ?? USER_TYPE_CONFIG.client;
+  const user     = MOCK_USER;
+  const typeCfg  = USER_TYPE_CONFIG[user.userType] ?? USER_TYPE_CONFIG.client;
   const initials = user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase();
 
   const handleLogout = () => {
-    Alert.alert('Log out', 'Are you sure you want to log out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Log out', style: 'destructive', onPress: () => console.log('Logout') },
-    ], { cancelable: true });
+    Alert.alert(
+      'Log out',
+      'Are you sure you want to log out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Log out', style: 'destructive', onPress: () => console.log('Logout') },
+      ],
+      { cancelable: true }
+    );
   };
 
   const accountItems = [
     user.userType === 'owner' && {
-      id: 'my-venues', icon: 'business-outline', iconColor: '#FF6B35', iconBg: '#FFF0EB',
+      id: 'my-venues', icon: 'business-outline', iconColor: Colors.primary, iconBg: Colors.primaryLight,
       title: 'My Venues', subtitle: 'Manage your listed spaces',
       onPress: () => console.log('Navigate to /my-venues'),
     },
     user.userType === 'vendor' && {
-      id: 'my-services', icon: 'construct-outline', iconColor: '#16A34A', iconBg: '#DCFCE7',
+      id: 'my-services', icon: 'construct-outline', iconColor: Colors.success, iconBg: Colors.successLight,
       title: 'My Services', subtitle: 'Manage your offered services',
       onPress: () => console.log('Navigate to /my-services'),
     },
     {
-      id: 'edit-profile', icon: 'person-circle-outline', iconColor: '#FF6B35', iconBg: '#FFF0EB',
+      id: 'edit-profile', icon: 'person-circle-outline', iconColor: Colors.primary, iconBg: Colors.primaryLight,
       title: 'Edit Profile', subtitle: 'Update your personal info',
       onPress: () => Alert.alert('Coming Soon', 'Edit profile is coming soon.'),
     },
     {
-      id: 'payment', icon: 'card-outline', iconColor: '#2563EB', iconBg: '#DBEAFE',
+      id: 'payment', icon: 'card-outline', iconColor: Colors.info, iconBg: Colors.infoLight,
       title: 'Payment Methods', subtitle: 'Cards & billing info',
       onPress: () => Alert.alert('Coming Soon', 'Payment methods coming soon.'),
     },
@@ -100,17 +115,17 @@ export default function ProfileScreen() {
 
   const preferenceItems = [
     {
-      id: 'notifications', icon: 'notifications-outline', iconColor: '#D97706', iconBg: '#FEF3C7',
+      id: 'notifications', icon: 'notifications-outline', iconColor: Colors.warning, iconBg: Colors.warningLight,
       title: 'Notifications', subtitle: 'Alerts & reminders',
       onPress: () => Alert.alert('Coming Soon', 'Notifications coming soon.'),
     },
     {
-      id: 'help', icon: 'help-circle-outline', iconColor: '#6B7280', iconBg: '#F3F4F6',
+      id: 'help', icon: 'help-circle-outline', iconColor: Colors.charcoalLight, iconBg: Colors.border,
       title: 'Help & Support', subtitle: 'support@rentalmeet.com',
       onPress: () => Alert.alert('Help', 'Contact us at support@rentalmeet.com'),
     },
     {
-      id: 'about', icon: 'information-circle-outline', iconColor: '#6B7280', iconBg: '#F3F4F6',
+      id: 'about', icon: 'information-circle-outline', iconColor: Colors.charcoalLight, iconBg: Colors.border,
       title: 'About RentalMeet', subtitle: 'Version 1.0.0',
       onPress: () => Alert.alert('RentalMeet', 'Version 1.0.0\n\nBook your perfect space with ease.'),
     },
@@ -118,6 +133,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
+      {/* ── Header ── */}
       <View style={styles.header}>
         <View style={styles.headerAccentBar} />
         <View style={styles.headerContent}>
@@ -126,20 +142,23 @@ export default function ProfileScreen() {
             <Text style={styles.headerTitle}>Profile</Text>
           </View>
           <TouchableOpacity style={styles.settingsBtn}>
-            <Ionicons name="settings-outline" size={20} color="#1A1A1A" />
+            <Ionicons name="settings-outline" size={20} color={Colors.charcoal} />
           </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentPadding} showsVerticalScrollIndicator={false}>
-
-        {/* ── Profile card: banner + content as normal-flow children, NO overflow hidden ── */}
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentPadding}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Profile card ── */}
         <View style={styles.profileCard}>
-          {/* Orange banner — normal flow element */}
+          {/* Amber banner */}
           <View style={styles.profileBanner} />
 
-          {/* Content pulled up with negative marginTop to overlap banner */}
           <View style={styles.profileContent}>
+            {/* Avatar */}
             <View style={styles.avatarWrapper}>
               <View style={styles.avatarRing}>
                 <View style={styles.avatar}>
@@ -147,7 +166,7 @@ export default function ProfileScreen() {
                 </View>
               </View>
               <TouchableOpacity style={styles.cameraBtn}>
-                <Ionicons name="camera" size={14} color="#FFFFFF" />
+                <Ionicons name="camera" size={14} color={Colors.white} />
               </TouchableOpacity>
             </View>
 
@@ -159,6 +178,7 @@ export default function ProfileScreen() {
               <Text style={[styles.typeBadgeText, { color: typeCfg.color }]}>{typeCfg.label}</Text>
             </View>
 
+            {/* Stats */}
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
                 <Text style={styles.statNum}>12</Text>
@@ -178,12 +198,13 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <MenuSection title="ACCOUNT" items={accountItems} />
+        <MenuSection title="ACCOUNT"     items={accountItems}    />
         <MenuSection title="PREFERENCES" items={preferenceItems} />
 
+        {/* Logout */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
           <View style={styles.logoutIconWrap}>
-            <Ionicons name="log-out-outline" size={18} color="#DC2626" />
+            <Ionicons name="log-out-outline" size={18} color={Colors.danger} />
           </View>
           <Text style={styles.logoutText}>Log Out</Text>
         </TouchableOpacity>
@@ -194,111 +215,66 @@ export default function ProfileScreen() {
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F4F0' },
+  container: { flex: 1, backgroundColor: Colors.background },
 
-  header: {
-    backgroundColor: '#FFFFFF',
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-    paddingBottom: 20,
-    shadowColor: '#1A1A1A',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.07,
-    shadowRadius: 16,
-    elevation: 6,
-  },
-  headerAccentBar: { height: 4, backgroundColor: '#FF6B35' },
-  headerContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 20,
-    paddingTop: 20,
-  },
-  headerEyebrow: { fontSize: 11, fontWeight: '700', color: '#FF6B35', letterSpacing: 2.5, marginBottom: 4 },
-  headerTitle: { fontSize: 28, fontWeight: '800', color: '#1A1A1A', letterSpacing: -0.5 },
-  settingsBtn: { width: 46, height: 46, borderRadius: 14, backgroundColor: '#F5F4F0', alignItems: 'center', justifyContent: 'center' },
+  // Header
+  header:           { backgroundColor: Colors.surface, borderBottomLeftRadius: Radii.xxl, borderBottomRightRadius: Radii.xxl, paddingBottom: Spacing.xl, ...Shadows.header },
+  headerAccentBar:  { height: 4, backgroundColor: Colors.primary },
+  headerContent:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: Spacing.xl, paddingTop: Spacing.xl },
+  headerEyebrow:    { fontSize: Typography.sm, fontWeight: Typography.bold, color: Colors.primary, letterSpacing: Typography.wider, marginBottom: Spacing.xxs },
+  headerTitle:      { fontSize: Typography.xxl, fontWeight: Typography.extraBold, color: Colors.charcoal, letterSpacing: Typography.tight },
+  settingsBtn:      { width: 46, height: 46, borderRadius: Radii.md, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' },
 
-  content: { flex: 1 },
-  contentPadding: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 120 },
+  // Content
+  content:          { flex: 1 },
+  contentPadding:   { paddingHorizontal: Spacing.lg, paddingTop: Spacing.xl, paddingBottom: 120 },
 
-  // ── Profile card — NO overflow: 'hidden' ──
-  profileCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    marginBottom: 20,
-    shadowColor: '#1A1A1A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 12,
-    elevation: 4,
-  },
-  profileBanner: {
-    height: 72,
-    backgroundColor: '#FFF0EB',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderBottomLeftRadius: 48,
-    borderBottomRightRadius: 48,
-  },
-  profileContent: {
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-    marginTop: -44,
-  },
+  // Profile card — no overflow:hidden so avatar ring isn't clipped
+  profileCard:      { backgroundColor: Colors.surface, borderRadius: 24, marginBottom: Spacing.xl, ...Shadows.card },
 
-  avatarWrapper: { position: 'relative', marginBottom: 14 },
-  avatarRing: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 3,
-    borderColor: '#FF6B35',
-    padding: 3,
-    backgroundColor: '#FFFFFF',
-  },
-  avatar: { flex: 1, borderRadius: 44, backgroundColor: '#FF6B35', alignItems: 'center', justifyContent: 'center' },
-  avatarInitials: { fontSize: 28, fontWeight: '800', color: '#FFFFFF', letterSpacing: 1 },
-  cameraBtn: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#1A1A1A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
+  // Amber banner — matches brand primary
+  profileBanner:    { height: 72, backgroundColor: Colors.primaryLight, borderTopLeftRadius: 24, borderTopRightRadius: 24, borderBottomLeftRadius: 48, borderBottomRightRadius: 48 },
 
-  userName: { fontSize: 22, fontWeight: '800', color: '#1A1A1A', letterSpacing: -0.3, marginBottom: 4 },
-  userEmail: { fontSize: 13, color: '#999', fontWeight: '400', marginBottom: 12 },
-  typeBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, marginBottom: 20 },
-  typeBadgeText: { fontSize: 13, fontWeight: '700', letterSpacing: 0.2 },
+  profileContent:   { alignItems: 'center', paddingHorizontal: Spacing.xl, paddingBottom: 24, marginTop: -44 },
 
-  statsRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F5F4F0', borderRadius: 16, paddingVertical: 14, paddingHorizontal: 8, width: '100%' },
-  statItem: { flex: 1, alignItems: 'center', gap: 3 },
-  statNum: { fontSize: 20, fontWeight: '800', color: '#1A1A1A', letterSpacing: -0.3 },
-  statLabel: { fontSize: 11, color: '#999', fontWeight: '500' },
-  statDivider: { width: 1, height: 32, backgroundColor: '#E5E3DF' },
+  // Avatar
+  avatarWrapper:    { position: 'relative', marginBottom: 14 },
+  avatarRing:       { width: 96, height: 96, borderRadius: 48, borderWidth: 3, borderColor: Colors.primary, padding: 3, backgroundColor: Colors.surface },
+  avatar:           { flex: 1, borderRadius: 44, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center' },
+  avatarInitials:   { fontSize: 28, fontWeight: Typography.extraBold, color: Colors.white, letterSpacing: 1 },
+  cameraBtn:        { position: 'absolute', bottom: 2, right: 2, width: 28, height: 28, borderRadius: 14, backgroundColor: Colors.charcoal, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: Colors.surface },
 
-  section: { marginBottom: 16 },
-  sectionLabel: { fontSize: 11, fontWeight: '700', color: '#B0ADA8', letterSpacing: 2, marginBottom: 8, paddingHorizontal: 4 },
-  sectionCard: { backgroundColor: '#FFFFFF', borderRadius: 20, shadowColor: '#1A1A1A', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.06, shadowRadius: 10, elevation: 3 },
-  menuItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14 },
-  menuItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
-  menuIconWrap: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  menuItemTitle: { fontSize: 15, fontWeight: '700', color: '#1A1A1A', marginBottom: 2 },
-  menuItemSubtitle: { fontSize: 12, color: '#AAA', fontWeight: '400' },
-  menuChevronWrap: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#F5F4F0', alignItems: 'center', justifyContent: 'center' },
-  menuDivider: { height: 1, backgroundColor: '#F5F4F0', marginLeft: 72 },
+  // User info
+  userName:         { fontSize: 22, fontWeight: Typography.extraBold, color: Colors.charcoal, letterSpacing: -0.3, marginBottom: 4 },
+  userEmail:        { fontSize: Typography.base, color: Colors.charcoalLight, fontWeight: Typography.regular, marginBottom: 12 },
+  typeBadge:        { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 7, borderRadius: Radii.full, marginBottom: Spacing.xl },
+  typeBadgeText:    { fontSize: Typography.base, fontWeight: Typography.bold, letterSpacing: Typography.normal },
 
-  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#FFFFFF', borderRadius: 20, paddingVertical: 16, marginBottom: 16, borderWidth: 1.5, borderColor: '#FEE2E2', shadowColor: '#DC2626', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
-  logoutIconWrap: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center' },
-  logoutText: { fontSize: 15, fontWeight: '700', color: '#DC2626', letterSpacing: 0.2 },
-  versionText: { textAlign: 'center', fontSize: 12, color: '#CCC', fontWeight: '400' },
+  // Stats strip — warm background from theme
+  statsRow:         { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, borderRadius: Radii.lg, paddingVertical: 14, paddingHorizontal: Spacing.sm, width: '100%' },
+  statItem:         { flex: 1, alignItems: 'center', gap: 3 },
+  statNum:          { fontSize: Typography.xl, fontWeight: Typography.extraBold, color: Colors.charcoal, letterSpacing: -0.3 },
+  statLabel:        { fontSize: Typography.sm, color: Colors.charcoalLight, fontWeight: Typography.medium },
+  statDivider:      { width: 1, height: 32, backgroundColor: Colors.border },
+
+  // Menu sections
+  section:          { marginBottom: Spacing.lg },
+  sectionLabel:     { fontSize: Typography.sm, fontWeight: Typography.bold, color: Colors.charcoalLight, letterSpacing: 2, marginBottom: Spacing.sm, paddingHorizontal: Spacing.xxs },
+  sectionCard:      { backgroundColor: Colors.surface, borderRadius: Radii.xl, shadowColor: Colors.charcoal, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.06, shadowRadius: 10, elevation: 3 },
+  menuItem:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.lg, paddingVertical: 14 },
+  menuItemLeft:     { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
+  menuIconWrap:     { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  menuItemTitle:    { fontSize: 15, fontWeight: Typography.bold, color: Colors.charcoal, marginBottom: 2 },
+  menuItemSubtitle: { fontSize: 12, color: Colors.charcoalLight, fontWeight: Typography.regular },
+  menuChevronWrap:  { width: 28, height: 28, borderRadius: Spacing.sm, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' },
+  menuDivider:      { height: 1, backgroundColor: Colors.background, marginLeft: 72 },
+
+  // Logout
+  logoutBtn:        { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: Colors.surface, borderRadius: Radii.xl, paddingVertical: Spacing.lg, marginBottom: Spacing.lg, borderWidth: 1.5, borderColor: Colors.dangerLight, shadowColor: Colors.danger, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
+  logoutIconWrap:   { width: 32, height: 32, borderRadius: 10, backgroundColor: Colors.dangerLight, alignItems: 'center', justifyContent: 'center' },
+  logoutText:       { fontSize: 15, fontWeight: Typography.bold, color: Colors.danger, letterSpacing: Typography.normal },
+
+  versionText:      { textAlign: 'center', fontSize: 12, color: Colors.border, fontWeight: Typography.regular },
 });
