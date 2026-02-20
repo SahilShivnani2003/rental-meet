@@ -13,32 +13,32 @@ import {
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { Colors, Typography, TAB_BAR_HEIGHT, TAB_CENTER_SIZE } from "../theme/theme";
-import HomeScreen     from "../screens/tabs/home";
+import HomeScreen from "../screens/tabs/home";
 import BookingsScreen from "../screens/tabs/bookings";
 import FavoritesScreen from "../screens/tabs/favorites";
 import MessagesScreen from "../screens/tabs/messages";
-import ProfileScreen  from "../screens/tabs/profile";
+import ProfileScreen from "../screens/tabs/profile";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const PARTICLE_N = 7;
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
 const TABS = [
-  { name: "home",      label: "Home",     icon: "home",        iconOff: "home-outline"            },
-  { name: "bookings",  label: "Bookings", icon: "calendar",    iconOff: "calendar-outline"        },
-  { name: "favorites", label: "Saved",    icon: "heart",       iconOff: "heart-outline",  center: true },
-  { name: "messages",  label: "Chat",     icon: "chatbubbles", iconOff: "chatbubbles-outline", badge: true },
-  { name: "profile",   label: "Profile",  icon: "person",      iconOff: "person-outline"          },
+  { name: "home", label: "Home", icon: "home", iconOff: "home-outline" },
+  { name: "bookings", label: "Bookings", icon: "calendar", iconOff: "calendar-outline" },
+  { name: "favorites", label: "Saved", icon: "heart", iconOff: "heart-outline", center: true },
+  { name: "messages", label: "Chat", icon: "chatbubbles", iconOff: "chatbubbles-outline", badge: true },
+  { name: "profile", label: "Profile", icon: "person", iconOff: "person-outline" },
 ];
 
 // ─── Particle burst ───────────────────────────────────────────────────────────
 function ParticleBurst({ trigger }: { trigger: number }) {
   const particles = useRef(
     Array.from({ length: PARTICLE_N }, () => ({
-      x:  new Animated.Value(0),
-      y:  new Animated.Value(0),
+      x: new Animated.Value(0),
+      y: new Animated.Value(0),
       op: new Animated.Value(0),
-      s:  new Animated.Value(0),
+      s: new Animated.Value(0),
     }))
   ).current;
 
@@ -47,12 +47,12 @@ function ParticleBurst({ trigger }: { trigger: number }) {
     particles.forEach((p, i) => {
       p.x.setValue(0); p.y.setValue(0); p.op.setValue(1); p.s.setValue(1.2);
       const angle = (i / PARTICLE_N) * Math.PI * 2;
-      const dist  = 16 + Math.random() * 12;
+      const dist = 16 + Math.random() * 12;
       Animated.parallel([
-        Animated.timing(p.x,  { toValue: Math.cos(angle) * dist, duration: 400, useNativeDriver: true }),
-        Animated.timing(p.y,  { toValue: Math.sin(angle) * dist, duration: 400, useNativeDriver: true }),
-        Animated.timing(p.op, { toValue: 0,                       duration: 400, useNativeDriver: true }),
-        Animated.timing(p.s,  { toValue: 0,                       duration: 400, useNativeDriver: true }),
+        Animated.timing(p.x, { toValue: Math.cos(angle) * dist, duration: 400, useNativeDriver: true }),
+        Animated.timing(p.y, { toValue: Math.sin(angle) * dist, duration: 400, useNativeDriver: true }),
+        Animated.timing(p.op, { toValue: 0, duration: 400, useNativeDriver: true }),
+        Animated.timing(p.s, { toValue: 0, duration: 400, useNativeDriver: true }),
       ]).start();
     });
   }, [trigger]);
@@ -72,20 +72,20 @@ function ParticleBurst({ trigger }: { trigger: number }) {
 
 // ─── Center hero tab ──────────────────────────────────────────────────────────
 function CenterTab({ tab, isFocused, onPress, tabWidth }: { tab: typeof TABS[0]; isFocused: boolean; onPress: () => void; tabWidth: number }) {
-  const [burst, setBurst]   = useState(0);
-  const scale               = useRef(new Animated.Value(1)).current;
-  const ringScale           = useRef(new Animated.Value(1)).current;
-  const ringOpacity         = useRef(new Animated.Value(0.6)).current;
+  const [burst, setBurst] = useState(0);
+  const scale = useRef(new Animated.Value(1)).current;
+  const ringScale = useRef(new Animated.Value(1)).current;
+  const ringOpacity = useRef(new Animated.Value(0.6)).current;
 
   useEffect(() => {
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.parallel([
-          Animated.timing(ringScale,   { toValue: 1.3, duration: 1100, useNativeDriver: true }),
-          Animated.timing(ringOpacity, { toValue: 0,   duration: 1100, useNativeDriver: true }),
+          Animated.timing(ringScale, { toValue: 1.3, duration: 1100, useNativeDriver: true }),
+          Animated.timing(ringOpacity, { toValue: 0, duration: 1100, useNativeDriver: true }),
         ]),
         Animated.parallel([
-          Animated.timing(ringScale,   { toValue: 1,   duration: 0, useNativeDriver: true }),
+          Animated.timing(ringScale, { toValue: 1, duration: 0, useNativeDriver: true }),
           Animated.timing(ringOpacity, { toValue: 0.6, duration: 0, useNativeDriver: true }),
         ]),
       ])
@@ -127,17 +127,17 @@ function CenterTab({ tab, isFocused, onPress, tabWidth }: { tab: typeof TABS[0];
 // ─── Regular tab ──────────────────────────────────────────────────────────────
 function RegularTab({ tab, isFocused, onPress, tabWidth }: { tab: typeof TABS[0]; isFocused: boolean; onPress: () => void; tabWidth: number }) {
   const [burst, setBurst] = useState(0);
-  const scale   = useRef(new Animated.Value(1)).current;
-  const iconY   = useRef(new Animated.Value(0)).current;
+  const scale = useRef(new Animated.Value(1)).current;
+  const iconY = useRef(new Animated.Value(0)).current;
   const labelOp = useRef(new Animated.Value(0)).current;
-  const labelY  = useRef(new Animated.Value(6)).current;
+  const labelY = useRef(new Animated.Value(6)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.spring(scale,   { toValue: isFocused ? 1.18 : 1, useNativeDriver: true, speed: 28, bounciness: 10 }),
-      Animated.spring(iconY,   { toValue: isFocused ? -4 : 0,   useNativeDriver: true, speed: 28 }),
-      Animated.timing(labelOp, { toValue: isFocused ? 1 : 0,    duration: 200, useNativeDriver: true }),
-      Animated.timing(labelY,  { toValue: isFocused ? 0 : 6,    duration: 200, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: isFocused ? 1.18 : 1, useNativeDriver: true, speed: 28, bounciness: 10 }),
+      Animated.spring(iconY, { toValue: isFocused ? -4 : 0, useNativeDriver: true, speed: 28 }),
+      Animated.timing(labelOp, { toValue: isFocused ? 1 : 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(labelY, { toValue: isFocused ? 0 : 6, duration: 200, useNativeDriver: true }),
     ]).start();
   }, [isFocused]);
 
@@ -166,8 +166,8 @@ function RegularTab({ tab, isFocused, onPress, tabWidth }: { tab: typeof TABS[0]
 // ─── Custom tab bar ───────────────────────────────────────────────────────────
 function CustomTabBar({ state, navigation }: any) {
   const [barWidth, setBarWidth] = useState(SCREEN_WIDTH - 32);
-  const tabWidth  = barWidth / TABS.length;
-  const orbX      = useRef(new Animated.Value(state.index * tabWidth + tabWidth / 2 - 26)).current;
+  const tabWidth = barWidth / TABS.length;
+  const orbX = useRef(new Animated.Value(state.index * tabWidth + tabWidth / 2 - 26)).current;
   const orbScaleX = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -196,14 +196,14 @@ function CustomTabBar({ state, navigation }: any) {
         <View style={styles.innerLine} pointerEvents="none" />
 
         {state.routes.map((route: any, index: number) => {
-          const tab       = TABS.find((t) => t.name === route.name)!;
+          const tab = TABS.find((t) => t.name === route.name)!;
           const isFocused = state.index === index;
-          const onPress   = () => {
+          const onPress = () => {
             const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
             if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
           };
           return tab.center
-            ? <CenterTab  key={route.key} tab={tab} isFocused={isFocused} onPress={onPress} tabWidth={tabWidth} />
+            ? <CenterTab key={route.key} tab={tab} isFocused={isFocused} onPress={onPress} tabWidth={tabWidth} />
             : <RegularTab key={route.key} tab={tab} isFocused={isFocused} onPress={onPress} tabWidth={tabWidth} />;
         })}
       </View>
@@ -215,15 +215,13 @@ function CustomTabBar({ state, navigation }: any) {
 const Tabs = createBottomTabNavigator();
 
 export const TabNavigation = () => (
-  <NavigationContainer>
-    <Tabs.Navigator tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
-      <Tabs.Screen name="home"      component={HomeScreen}      />
-      <Tabs.Screen name="bookings"  component={BookingsScreen}  />
-      <Tabs.Screen name="favorites" component={FavoritesScreen} />
-      <Tabs.Screen name="messages"  component={MessagesScreen}  />
-      <Tabs.Screen name="profile"   component={ProfileScreen}   />
-    </Tabs.Navigator>
-  </NavigationContainer>
+  <Tabs.Navigator tabBar={(props) => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
+    <Tabs.Screen name="home" component={HomeScreen} />
+    <Tabs.Screen name="bookings" component={BookingsScreen} />
+    <Tabs.Screen name="favorites" component={FavoritesScreen} />
+    <Tabs.Screen name="messages" component={MessagesScreen} />
+    <Tabs.Screen name="profile" component={ProfileScreen} />
+  </Tabs.Navigator>
 );
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -282,10 +280,10 @@ const styles = StyleSheet.create({
   },
 
   // Regular tab
-  tabItem:      { height: "100%", alignItems: "center", justifyContent: "center", zIndex: 1, overflow: "visible" },
+  tabItem: { height: "100%", alignItems: "center", justifyContent: "center", zIndex: 1, overflow: "visible" },
   tabTouchable: { alignItems: "center", justifyContent: "center", gap: 3, paddingTop: 4, position: "relative", minWidth: 48, minHeight: 48 },
-  tabLabel:     { fontSize: Typography.xs, fontWeight: Typography.extraBold, color: Colors.primary, letterSpacing: Typography.wide, textTransform: "uppercase" },
-  badge:        { position: "absolute", top: -1, right: -6, width: 7, height: 7, borderRadius: 4, backgroundColor: Colors.primary, borderWidth: 1.5, borderColor: Colors.tabBar },
+  tabLabel: { fontSize: Typography.xs, fontWeight: Typography.extraBold, color: Colors.primary, letterSpacing: Typography.wide, textTransform: "uppercase" },
+  badge: { position: "absolute", top: -1, right: -6, width: 7, height: 7, borderRadius: 4, backgroundColor: Colors.primary, borderWidth: 1.5, borderColor: Colors.tabBar },
 
   // Center hero tab
   centerOuter: {
@@ -322,5 +320,5 @@ const styles = StyleSheet.create({
 
   // Particles
   particleOrigin: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
-  particle:       { position: "absolute", width: 5, height: 5, borderRadius: 2.5, backgroundColor: Colors.primary },
+  particle: { position: "absolute", width: 5, height: 5, borderRadius: 2.5, backgroundColor: Colors.primary },
 });
