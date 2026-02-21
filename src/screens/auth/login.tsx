@@ -16,41 +16,41 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../navigations/RootNavigation';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 // ─── Dummy credentials ────────────────────────────────────────────────────────
 const DUMMY_USERS = [
-  { email: 'owner@rentalmeet.com',  password: 'owner123',  name: 'Alex Johnson', userType: 'owner'  },
-  { email: 'client@rentalmeet.com', password: 'client123', name: 'Sara Patel',   userType: 'client' },
+  { email: 'owner@rentalmeet.com', password: 'owner123', name: 'Alex Johnson', userType: 'owner' },
+  { email: 'client@rentalmeet.com', password: 'client123', name: 'Sara Patel', userType: 'client' },
 ];
 
-interface LoginScreenProps {
-  onLogin: (user: { name: string; email: string; userType: string }) => void;
-}
+type LoginProps = NativeStackScreenProps<RootStackParamList, 'login'>;
 
-export default function LoginScreen({ onLogin }: LoginScreenProps) {
-  const [email, setEmail]           = useState('');
-  const [password, setPassword]     = useState('');
+export default function LoginScreen({ navigation }: LoginProps) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPass] = useState(false);
-  const [loading, setLoading]       = useState(false);
-  const [emailFocused, setEmailF]   = useState(false);
-  const [passFocused, setPassF]     = useState(false);
-  const [error, setError]           = useState('');
+  const [loading, setLoading] = useState(false);
+  const [emailFocused, setEmailF] = useState(false);
+  const [passFocused, setPassF] = useState(false);
+  const [error, setError] = useState('');
 
   // ── Animation refs ──────────────────────────────────────────────────────────
-  const logoAnim    = useRef(new Animated.Value(0)).current;
-  const cardAnim    = useRef(new Animated.Value(40)).current;
+  const logoAnim = useRef(new Animated.Value(0)).current;
+  const cardAnim = useRef(new Animated.Value(40)).current;
   const cardOpacity = useRef(new Animated.Value(0)).current;
-  const shakeAnim   = useRef(new Animated.Value(0)).current;
-  const btnScale    = useRef(new Animated.Value(1)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const btnScale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     StatusBar.setBarStyle('dark-content');
     Animated.sequence([
       Animated.timing(logoAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
       Animated.parallel([
-        Animated.spring(cardAnim,    { toValue: 0, useNativeDriver: true, speed: 14, bounciness: 6 }),
+        Animated.spring(cardAnim, { toValue: 0, useNativeDriver: true, speed: 14, bounciness: 6 }),
         Animated.timing(cardOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
       ]),
     ]).start();
@@ -58,11 +58,11 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
 
   const shakeCard = () => {
     Animated.sequence([
-      Animated.timing(shakeAnim, { toValue: 10,  duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 10, duration: 60, useNativeDriver: true }),
       Animated.timing(shakeAnim, { toValue: -10, duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 8,   duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -8,  duration: 60, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 0,   duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
     ]).start();
   };
 
@@ -92,7 +92,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
     setLoading(false);
 
     if (user) {
-      onLogin({ name: user.name, email: user.email, userType: user.userType });
+      navigation.replace('main');
     } else {
       setError('Incorrect email or password. Try the hints below.');
       shakeCard();
@@ -272,7 +272,7 @@ export default function LoginScreen({ onLogin }: LoginScreenProps) {
         {/* ── Sign up nudge ── */}
         <Animated.View style={[styles.signupRow, { opacity: cardOpacity }]}>
           <Text style={styles.signupText}>Don't have an account? </Text>
-          <TouchableOpacity onPress={() => Alert.alert('Sign Up', 'Registration coming soon!')}>
+          <TouchableOpacity onPress={() => navigation.navigate('registerType')}>
             <Text style={styles.signupLink}>Sign up</Text>
           </TouchableOpacity>
         </Animated.View>
@@ -288,7 +288,7 @@ function LoadingDots() {
   const dot0 = useRef(new Animated.Value(0)).current;
   const dot1 = useRef(new Animated.Value(0)).current;
   const dot2 = useRef(new Animated.Value(0)).current;
-  const dots  = [dot0, dot1, dot2];
+  const dots = [dot0, dot1, dot2];
 
   useEffect(() => {
     const pulse = (dot: Animated.Value, delay: number) =>
@@ -296,7 +296,7 @@ function LoadingDots() {
         Animated.sequence([
           Animated.delay(delay),
           Animated.timing(dot, { toValue: -6, duration: 280, useNativeDriver: true }),
-          Animated.timing(dot, { toValue: 0,  duration: 280, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0, duration: 280, useNativeDriver: true }),
         ])
       );
     dots.forEach((d, i) => pulse(d, i * 140).start());
@@ -321,8 +321,8 @@ function LoadingDots() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  container:    { flex: 1, backgroundColor: Colors.background },
-  scrollContent:{ flexGrow: 1, alignItems: 'center', paddingBottom: Spacing.xxl, paddingTop: 0 },
+  container: { flex: 1, backgroundColor: Colors.background },
+  scrollContent: { flexGrow: 1, alignItems: 'center', paddingBottom: Spacing.xxl, paddingTop: 0 },
 
   // Decorative arcs
   arcTop: {
@@ -341,12 +341,12 @@ const styles = StyleSheet.create({
   },
 
   // Logo area
-  logoArea:     { alignItems: 'center', paddingTop: SCREEN_HEIGHT * 0.09, marginBottom: Spacing.xxl },
-  logoCard:     { width: 110, height: 110, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.md },
-  logo:         { width: '100%', height: '100%' },
-  brandRow:     { flexDirection: 'row', alignItems: 'baseline' },
-  brandRental:  { fontSize: 32, fontWeight: Typography.bold, color: Colors.primary, letterSpacing: -0.5 },
-  brandMeet:    { fontSize: 32, fontWeight: Typography.extraBold, color: Colors.charcoal, letterSpacing: -0.5 },
+  logoArea: { alignItems: 'center', paddingTop: SCREEN_HEIGHT * 0.09, marginBottom: Spacing.xxl },
+  logoCard: { width: 110, height: 110, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.md },
+  logo: { width: '100%', height: '100%' },
+  brandRow: { flexDirection: 'row', alignItems: 'baseline' },
+  brandRental: { fontSize: 32, fontWeight: Typography.bold, color: Colors.primary, letterSpacing: -0.5 },
+  brandMeet: { fontSize: 32, fontWeight: Typography.extraBold, color: Colors.charcoal, letterSpacing: -0.5 },
   brandTagline: { fontSize: 9, fontWeight: Typography.bold, color: Colors.charcoalLight, letterSpacing: 2, textTransform: 'uppercase', marginTop: 4 },
 
   // Card
@@ -357,48 +357,48 @@ const styles = StyleSheet.create({
     padding: Spacing.xl,
     ...Shadows.header,
   },
-  cardTitle:    { fontSize: 24, fontWeight: Typography.extraBold, color: Colors.charcoal, letterSpacing: -0.4, marginBottom: 4 },
+  cardTitle: { fontSize: 24, fontWeight: Typography.extraBold, color: Colors.charcoal, letterSpacing: -0.4, marginBottom: 4 },
   cardSubtitle: { fontSize: Typography.md, color: Colors.charcoalLight, fontWeight: Typography.regular, marginBottom: Spacing.lg },
 
   // Error
-  errorBanner:  { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.dangerLight, borderRadius: Radii.md, padding: 12, marginBottom: Spacing.md, borderLeftWidth: 3, borderLeftColor: Colors.danger },
-  errorText:    { flex: 1, fontSize: 12, color: Colors.danger, fontWeight: Typography.semiBold, lineHeight: 17 },
+  errorBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.dangerLight, borderRadius: Radii.md, padding: 12, marginBottom: Spacing.md, borderLeftWidth: 3, borderLeftColor: Colors.danger },
+  errorText: { flex: 1, fontSize: 12, color: Colors.danger, fontWeight: Typography.semiBold, lineHeight: 17 },
 
   // Fields
-  fieldWrap:         { marginBottom: Spacing.md },
-  fieldLabel:        { fontSize: 12, fontWeight: Typography.bold, color: Colors.charcoalMid, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 },
-  inputRow:          { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, borderRadius: Radii.md, borderWidth: 1.5, borderColor: Colors.border, height: 52, paddingHorizontal: Spacing.md },
-  inputRowFocused:   { borderColor: Colors.primary, backgroundColor: Colors.primaryLight + '55' },
-  inputIcon:         { marginRight: Spacing.sm },
-  input:             { flex: 1, fontSize: 15, color: Colors.charcoal, fontWeight: Typography.regular },
-  eyeBtn:            { padding: 4 },
+  fieldWrap: { marginBottom: Spacing.md },
+  fieldLabel: { fontSize: 12, fontWeight: Typography.bold, color: Colors.charcoalMid, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 },
+  inputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.background, borderRadius: Radii.md, borderWidth: 1.5, borderColor: Colors.border, height: 52, paddingHorizontal: Spacing.md },
+  inputRowFocused: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight + '55' },
+  inputIcon: { marginRight: Spacing.sm },
+  input: { flex: 1, fontSize: 15, color: Colors.charcoal, fontWeight: Typography.regular },
+  eyeBtn: { padding: 4 },
 
   // Forgot
-  forgotRow:    { alignItems: 'flex-end', marginBottom: Spacing.lg, marginTop: -4 },
-  forgotText:   { fontSize: 13, color: Colors.primary, fontWeight: Typography.bold },
+  forgotRow: { alignItems: 'flex-end', marginBottom: Spacing.lg, marginTop: -4 },
+  forgotText: { fontSize: 13, color: Colors.primary, fontWeight: Typography.bold },
 
   // Login button
-  loginBtn:         { backgroundColor: Colors.charcoal, borderRadius: Radii.md, height: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, ...Shadows.floating },
+  loginBtn: { backgroundColor: Colors.charcoal, borderRadius: Radii.md, height: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, ...Shadows.floating },
   loginBtnDisabled: { opacity: 0.7 },
-  loginBtnText:     { fontSize: 16, fontWeight: Typography.extraBold, color: Colors.white, letterSpacing: 0.3 },
-  loginBtnArrow:    { width: 30, height: 30, borderRadius: 15, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
-  loadingRow:        { alignItems: 'center', justifyContent: 'center', height: 24 },
+  loginBtnText: { fontSize: 16, fontWeight: Typography.extraBold, color: Colors.white, letterSpacing: 0.3 },
+  loginBtnArrow: { width: 30, height: 30, borderRadius: 15, backgroundColor: Colors.surface, alignItems: 'center', justifyContent: 'center' },
+  loadingRow: { alignItems: 'center', justifyContent: 'center', height: 24 },
 
   // Divider
-  dividerRow:   { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginVertical: Spacing.lg },
-  dividerLine:  { flex: 1, height: 1, backgroundColor: Colors.border },
-  dividerText:  { fontSize: 10, fontWeight: Typography.bold, color: Colors.charcoalLight, letterSpacing: 1.5, textTransform: 'uppercase' },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginVertical: Spacing.lg },
+  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
+  dividerText: { fontSize: 10, fontWeight: Typography.bold, color: Colors.charcoalLight, letterSpacing: 1.5, textTransform: 'uppercase' },
 
   // Hint pills
-  hintRow:      { flexDirection: 'row', gap: Spacing.sm },
-  hintPill:     { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.primaryLight, borderRadius: Radii.md, padding: Spacing.sm, borderWidth: 1, borderColor: Colors.primaryBorder },
-  hintPillLabel:{ fontSize: 11, fontWeight: Typography.bold, color: Colors.primary, letterSpacing: 0.2 },
+  hintRow: { flexDirection: 'row', gap: Spacing.sm },
+  hintPill: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.primaryLight, borderRadius: Radii.md, padding: Spacing.sm, borderWidth: 1, borderColor: Colors.primaryBorder },
+  hintPillLabel: { fontSize: 11, fontWeight: Typography.bold, color: Colors.primary, letterSpacing: 0.2 },
   hintPillCred: { fontSize: 9.5, color: Colors.charcoalLight, fontWeight: Typography.medium, marginTop: 1 },
 
   // Sign up
-  signupRow:    { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.xl },
-  signupText:   { fontSize: 14, color: Colors.charcoalLight, fontWeight: Typography.regular },
-  signupLink:   { fontSize: 14, color: Colors.primary, fontWeight: Typography.extraBold },
+  signupRow: { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.xl },
+  signupText: { fontSize: 14, color: Colors.charcoalLight, fontWeight: Typography.regular },
+  signupLink: { fontSize: 14, color: Colors.primary, fontWeight: Typography.extraBold },
 
-  version:      { marginTop: Spacing.lg, fontSize: 11, color: Colors.border, fontWeight: Typography.medium },
+  version: { marginTop: Spacing.lg, fontSize: 11, color: Colors.border, fontWeight: Typography.medium },
 });

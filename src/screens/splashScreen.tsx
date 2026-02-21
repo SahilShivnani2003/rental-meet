@@ -9,23 +9,23 @@ import {
   StatusBar,
 } from 'react-native';
 import { Colors, Typography, Spacing } from '../theme/theme';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigations/RootNavigation';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-interface SplashScreenProps {
-  onFinish: () => void;
-}
+type SplashProps = NativeStackScreenProps<RootStackParamList, 'splash'>;
 
-export default function SplashScreen({ onFinish }: SplashScreenProps) {
+export default function SplashScreen({ navigation }: SplashProps) {
   // ── Animation values ────────────────────────────────────────────────────────
-  const logoScale     = useRef(new Animated.Value(0.7)).current;
-  const logoOpacity   = useRef(new Animated.Value(0)).current;
-  const textOpacity   = useRef(new Animated.Value(0)).current;
-  const textY         = useRef(new Animated.Value(16)).current;
-  const taglineOpacity= useRef(new Animated.Value(0)).current;
-  const dotScale1     = useRef(new Animated.Value(0)).current;
-  const dotScale2     = useRef(new Animated.Value(0)).current;
-  const dotScale3     = useRef(new Animated.Value(0)).current;
+  const logoScale = useRef(new Animated.Value(0.7)).current;
+  const logoOpacity = useRef(new Animated.Value(0)).current;
+  const textOpacity = useRef(new Animated.Value(0)).current;
+  const textY = useRef(new Animated.Value(16)).current;
+  const taglineOpacity = useRef(new Animated.Value(0)).current;
+  const dotScale1 = useRef(new Animated.Value(0)).current;
+  const dotScale2 = useRef(new Animated.Value(0)).current;
+  const dotScale3 = useRef(new Animated.Value(0)).current;
   const screenOpacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -34,14 +34,14 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
     Animated.sequence([
       // 1 — Logo pops in
       Animated.parallel([
-        Animated.spring(logoScale,   { toValue: 1,    useNativeDriver: true, speed: 10, bounciness: 14 }),
-        Animated.timing(logoOpacity, { toValue: 1,    duration: 380, useNativeDriver: true }),
+        Animated.spring(logoScale, { toValue: 1, useNativeDriver: true, speed: 10, bounciness: 14 }),
+        Animated.timing(logoOpacity, { toValue: 1, duration: 380, useNativeDriver: true }),
       ]),
 
       // 2 — Brand name slides up
       Animated.parallel([
         Animated.timing(textOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
-        Animated.spring(textY,       { toValue: 0, useNativeDriver: true, speed: 18, bounciness: 6 }),
+        Animated.spring(textY, { toValue: 0, useNativeDriver: true, speed: 18, bounciness: 6 }),
       ]),
 
       // 3 — Tagline fades in
@@ -59,7 +59,7 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
 
       // 6 — Fade entire screen out
       Animated.timing(screenOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
-    ]).start(() => onFinish());
+    ]).start(() => navigation.replace('login'));
   }, []);
 
   return (
