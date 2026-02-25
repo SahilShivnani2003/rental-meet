@@ -5,12 +5,16 @@ import { TabNavigation } from './TabNavigation';
 import LoginScreen from '../screens/auth/login';
 import SplashScreen from '../screens/splashScreen';
 import RegisterTypeScreen from '../screens/auth/resigter-type';
+import { ClientTabNavigation } from './ClientTabNavigation';
+import { OwnerTabNavigation } from './OwnerTabNavigation';
 
 export type RootStackParamList = {
     splash: undefined;
     login: undefined;
     main: undefined;
     registerType: undefined;
+    client: undefined;
+    owner: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -30,6 +34,8 @@ export default function RootNavigator() {
                     component={TabNavigation}
                     options={{ animation: 'fade' }}
                 />
+                <Stack.Screen name="client" component={ClientTabNavigation} />
+                <Stack.Screen name="owner" component={OwnerTabNavigation} />
             </Stack.Navigator>
         </NavigationContainer>
     );

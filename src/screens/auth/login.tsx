@@ -92,7 +92,7 @@ export default function LoginScreen({ navigation }: LoginProps) {
     setLoading(false);
 
     if (user) {
-      navigation.replace('main');
+      user.userType === 'owner' ? navigation.replace('owner') : navigation.replace('client');
     } else {
       setError('Incorrect email or password. Try the hints below.');
       shakeCard();
