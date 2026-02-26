@@ -1,4 +1,6 @@
-const BASE_URL = "https://api.meragharsansaar.com/api/v1";
+import { useAuthStore } from "../store/auth-store";
+
+const BASE_URL = "https://rentalmeet.onrender.com/api/";
 
 type RequestOptions = {
     method?: string;
@@ -6,6 +8,12 @@ type RequestOptions = {
     params?: Record<string, unknown>;
     headers?: Record<string, string>;
 };
+
+const { token } = useAuthStore();
+
+export const header = {
+    authorization: `Bearer${token}`
+}
 
 async function request<T = unknown>(
     endpoint: string,
@@ -41,7 +49,7 @@ async function request<T = unknown>(
     return data;
 }
 
-const apiClient = {
+export const apiClient = {
     get: <T = unknown>(url: string, opts?: Pick<RequestOptions, "params" | "headers">) =>
         request<T>(url, { method: "GET", ...opts }),
     post: <T = unknown>(url: string, body?: unknown, opts?: Pick<RequestOptions, "headers">) =>
@@ -51,5 +59,3 @@ const apiClient = {
     delete: <T = unknown>(url: string, opts?: Pick<RequestOptions, "headers">) =>
         request<T>(url, { method: "DELETE", ...opts }),
 };
-
-export default apiClient;

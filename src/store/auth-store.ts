@@ -4,7 +4,8 @@ import { create } from "zustand"
 interface AuthStore {
     user: any | null,
     isAuthenticated: boolean,
-    setUser: (user: any | null) => void,
+    token: any | null,
+    setUser: (user: any | null, token: any | null) => void,
     logOut: () => void,
     loadUser: () => Promise<void>
 }
@@ -12,13 +13,20 @@ interface AuthStore {
 export const useAuthStore = create<AuthStore>((set) => ({
     user: null,
     isAuthenticated: false,
-    setUser: async (user) => {
-        if (user) {
+    token: null,
+    setUser: async (user, token) => {
+        if (user && token) {
+
             await AsyncStorage.setItem('user', JSON.stringify(user))
-            set({ user: user, isAuthenticated: true })
+
+            await AsyncStorage.setItem('token', token);
+
+            set({ user: user, isAuthenticated: true, token: token })
         } else {
+
             await AsyncStorage.removeItem('user');
-            set({ user: null, isAuthenticated: false })
+
+            set({ user: null, isAuthenticated: false, token: token })
         }
     },
     loadUser: async () => {
