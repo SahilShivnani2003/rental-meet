@@ -2,7 +2,7 @@ import { Colors } from "../theme/theme";
 
 export const ROLES = [
     {
-        id: 'client',
+        id: 'customer',
         title: 'Client',
         subtitle: 'User',
         description:

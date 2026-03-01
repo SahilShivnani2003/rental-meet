@@ -7,6 +7,8 @@ import SplashScreen from '../screens/splashScreen';
 import RegisterTypeScreen from '../screens/auth/resigter-type';
 import { ClientTabNavigation } from './ClientTabNavigation';
 import { OwnerTabNavigation } from './OwnerTabNavigation';
+import RegisterScreen from '../screens/auth/register';
+import { AlertProvider } from '../context/AlertContext';
 
 export type RootStackParamList = {
     splash: undefined;
@@ -15,28 +17,40 @@ export type RootStackParamList = {
     registerType: undefined;
     client: undefined;
     owner: undefined;
+    register: {
+        role: string;
+    };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
     return (
-        <NavigationContainer>
-            <Stack.Navigator
-                initialRouteName="splash"
-                screenOptions={{ headerShown: false, animation: 'fade' }}
-            >
-                <Stack.Screen name="splash" component={SplashScreen} />
-                <Stack.Screen name="login" component={LoginScreen} />
-                <Stack.Screen name="registerType" component={RegisterTypeScreen} />
-                <Stack.Screen
-                    name="main"
-                    component={TabNavigation}
-                    options={{ animation: 'fade' }}
-                />
-                <Stack.Screen name="client" component={ClientTabNavigation} />
-                <Stack.Screen name="owner" component={OwnerTabNavigation} />
-            </Stack.Navigator>
-        </NavigationContainer>
+        <AlertProvider>
+            <NavigationContainer>
+                <Stack.Navigator
+                    initialRouteName="splash"
+                    screenOptions={{ headerShown: false, animation: 'fade' }}
+                >
+                    <Stack.Screen name="splash" component={SplashScreen} />
+                    <Stack.Screen name="login" component={LoginScreen} />
+                    <Stack.Screen name="registerType" component={RegisterTypeScreen} />
+                    <Stack.Screen name="register" component={RegisterScreen} />
+                    <Stack.Screen
+                        name="main"
+                        component={TabNavigation}
+                        options={{ animation: 'fade' }}
+                    />
+                    <Stack.Screen name="client"
+                        component={ClientTabNavigation}
+                        options={{ animation: 'fade' }}
+                    />
+                    <Stack.Screen name="owner"
+                        component={OwnerTabNavigation}
+                        options={{ animation: 'fade' }}
+                    />
+                </Stack.Navigator>
+            </NavigationContainer>
+        </AlertProvider>
     );
 }

@@ -9,11 +9,11 @@ type RequestOptions = {
     headers?: Record<string, string>;
 };
 
-const { token } = useAuthStore();
+export const getAuthHeader = () => {
+    const token = useAuthStore.getState().token;
 
-export const header = {
-    authorization: `Bearer${token}`
-}
+    return { authorization: `Bearer ${token}` };
+};
 
 async function request<T = unknown>(
     endpoint: string,

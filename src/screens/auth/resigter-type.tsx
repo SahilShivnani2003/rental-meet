@@ -31,6 +31,9 @@ export default function RegisterTypeScreen({ navigation }: registerTypeParams) {
     const handleSelect = (roleId: string) => {
         // Navigate to your Register form screen, passing the chosen role
         //navigation.navigate('Register', { role: roleId });
+        navigation.navigate('register',{
+            role:roleId
+        });
     };
 
     return (

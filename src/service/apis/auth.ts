@@ -1,20 +1,20 @@
-import { apiClient, header } from "../api-client";
+import { apiClient, getAuthHeader } from "../api-client";
 
 export const authAPI = {
-    register: (data: any) => apiClient.post('auth/register', data),
+    register: (data: any) => apiClient.post<any>('auth/register', data),
 
-    login: (data: any) => apiClient.post('auth/login', data),
+    login: (data: any) => apiClient.post<any>('auth/login', data),
 
-    getUser: () => apiClient.get('auth/me', {
-        headers: header
+    getUser: () => apiClient.get<any>('auth/me', {
+        headers: getAuthHeader()
     }),
 
-    updateProfile: (data: any) => apiClient.put('auth/update-profile', data, {
-        headers: header
+    updateProfile: (data: any) => apiClient.put<any>('auth/update-profile', data, {
+        headers: getAuthHeader()
     }),
 
-    changePassword: (data: any) => apiClient.put('auth/change-password', data, {
-        headers: header
+    changePassword: (data: any) => apiClient.put<any>('auth/change-password', data, {
+        headers: getAuthHeader()
     })
 
 }
