@@ -1,4 +1,4 @@
-import { apiClient, header } from "../api-client";
+import { apiClient, getAuthHeader } from "../api-client";
 
 export const venueAPI = {
 
@@ -7,11 +7,11 @@ export const venueAPI = {
     }),
 
     createVenue: (data: any) => apiClient.post('venues', data, {
-        headers: header
+        headers: getAuthHeader()
     }),
 
     getMyVenues: () => apiClient.get('venues/my-venues', {
-        headers: header
+        headers: getAuthHeader()
     }),
 
     getVenueLocations: () => apiClient.get('/venues/locations/all'),
@@ -21,14 +21,14 @@ export const venueAPI = {
     getById: (id: string) => apiClient.get(`venues/${id}`),
 
     updateVenue: (data: any, id: string) => apiClient.put(`venues/${id}`, data, {
-        headers: header
+        headers: getAuthHeader()
     }),
 
     deleteVenue: (id: string) => apiClient.delete(`venues/${id}`, {
-        headers: header
+        headers: getAuthHeader()
     }),
 
     venueImages: (data: any, id: string) => apiClient.post(`venues/${id}/images`, data, {
-        headers: header
+        headers: getAuthHeader()
     })
 }

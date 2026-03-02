@@ -13,408 +13,45 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../theme/theme';
+import {
+    FEATURED,
+    KEY_STATS,
+    CATEGORIES,
+    AMENITIES,
+    PACKAGES,
+    TESTIMONIALS,
+} from '../Data/landingData';
+import useEntrance from '../hooks/useEntrance';
+import FeaturedCard from '../components/landing/featuredCard';
+import { useAuthStore } from '../store/auth-store';
+import { ClientTabParamList } from '../navigations/ClientTabNavigation';
+import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
+import { useAlert } from '../context/AlertContext';
+import { venueAPI } from '../service/apis/venues';
 
 const { width: W, height: H } = Dimensions.get('window');
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
-const MOCK_USER = { initials: 'AJ', name: 'Alex' };
+type landingProps = NativeBottomTabScreenProps<ClientTabParamList, 'home'>;
 
-const KEY_STATS = [
-    { value: '500+', label: 'Venues' },
-    { value: '10K+', label: 'Bookings' },
-    { value: '4.9', label: 'Rating' },
-    { value: '24/7', label: 'Support' },
-];
-
-const CATEGORIES = [
-    { icon: 'business-outline', label: 'Banquet', count: 12 },
-    { icon: 'desktop-outline', label: 'Meeting', count: 28 },
-    { icon: 'mic-outline', label: 'Auditorium', count: 7 },
-    { icon: 'briefcase-outline', label: 'Board Room', count: 19 },
-    { icon: 'sunny-outline', label: 'Outdoor', count: 5 },
-    { icon: 'camera-outline', label: 'Studio', count: 9 },
-];
-
-const FEATURED = [
-    {
-        id: '1',
-        name: 'BNSS Meeting Hall',
-        type: 'Meeting Room',
-        capacity: '500–600',
-        price: 'Rs.1,000',
-        rating: 4.5,
-        accent: Colors.info,
-        badge: 'Featured',
-    },
-    {
-        id: '2',
-        name: 'Luxury Grand Palace',
-        type: 'Banquet Hall',
-        capacity: '500–600',
-        price: 'Rs.4,500',
-        rating: 4.8,
-        accent: Colors.success,
-        badge: 'Top Rated',
-    },
-    {
-        id: '3',
-        name: 'Rooftop Lounge',
-        type: 'Event Space',
-        capacity: '100–200',
-        price: 'Rs.2,000',
-        rating: 4.3,
-        accent: Colors.primary,
-        badge: null,
-    },
-];
-
-const AMENITIES = [
-    { icon: 'wifi-outline', label: 'High-Speed WiFi' },
-    { icon: 'tv-outline', label: 'HD Projection' },
-    { icon: 'restaurant-outline', label: 'Gourmet Catering' },
-    { icon: 'shield-checkmark-outline', label: '24/7 Security' },
-    { icon: 'car-outline', label: 'Ample Parking' },
-    { icon: 'headset-outline', label: 'Tech Support' },
-    { icon: 'snow-outline', label: 'Climate Control' },
-    { icon: 'cafe-outline', label: 'Refreshments' },
-];
-
-const PACKAGES = [
-    {
-        label: '1 Hour',
-        price: 'Rs.1,000',
-        subtext: 'up to Rs.5,000',
-        icon: 'time-outline',
-        featured: false,
-    },
-    {
-        label: '2 Hours',
-        price: 'Rs.1,800',
-        subtext: 'up to Rs.9,000',
-        icon: 'time-outline',
-        featured: false,
-    },
-    {
-        label: '4 Hours',
-        price: 'Rs.3,000',
-        subtext: 'up to Rs.15,000',
-        icon: 'hourglass-outline',
-        featured: true,
-    },
-    {
-        label: 'Full Day',
-        price: 'Rs.6,000',
-        subtext: 'up to Rs.30,000',
-        icon: 'calendar-outline',
-        featured: false,
-    },
-];
-
-const TESTIMONIALS = [
-    {
-        initials: 'RK',
-        name: 'Rajesh Kumar',
-        role: 'CEO, Tech Corp',
-        stars: 5,
-        text: 'RentalMeet transformed how we organize meetings. Premium spaces, seamless experience.',
-    },
-    {
-        initials: 'SS',
-        name: 'Sneha Sharma',
-        role: 'Event Director, Bloom',
-        stars: 5,
-        text: 'Unmatched attention to detail and premium facilities. Highly recommend for any event!',
-    },
-    {
-        initials: 'AP',
-        name: 'Amit Patel',
-        role: 'Founder, Startup Hub',
-        stars: 5,
-        text: 'Finding quality spaces was always a challenge until RentalMeet. Truly professional.',
-    },
-];
-
-// ─── Entrance animation hook ──────────────────────────────────────────────────
-function useEntrance(delay = 0) {
-    const fade = useRef(new Animated.Value(0)).current;
-    const slide = useRef(new Animated.Value(24)).current;
-    useEffect(() => {
-        Animated.parallel([
-            Animated.timing(fade, {
-                toValue: 1,
-                delay,
-                duration: 360,
-                useNativeDriver: true,
-            }),
-            Animated.spring(slide, {
-                toValue: 0,
-                delay,
-                useNativeDriver: true,
-                speed: 14,
-                bounciness: 5,
-            }),
-        ]).start();
-    }, []);
-    return { fade, slide };
-}
-
-// ─── Press scale helper ───────────────────────────────────────────────────────
-function usePressScale(to = 0.96) {
-    const scale = useRef(new Animated.Value(1)).current;
-    const onIn = () =>
-        Animated.spring(scale, {
-            toValue: to,
-            useNativeDriver: true,
-            speed: 30,
-        }).start();
-    const onOut = () =>
-        Animated.spring(scale, {
-            toValue: 1,
-            useNativeDriver: true,
-            speed: 22,
-        }).start();
-    return { scale, onIn, onOut };
-}
-
-// ─── Featured venue card ──────────────────────────────────────────────────────
-function FeaturedCard({
-    v,
-    index,
-    onPress,
-}: {
-    v: (typeof FEATURED)[0];
-    index: number;
-    onPress: () => void;
-}) {
-    const { fade, slide } = useEntrance(200 + index * 80);
-    const { scale, onIn, onOut } = usePressScale();
-
-    return (
-        <Animated.View
-            style={{
-                opacity: fade,
-                transform: [{ translateY: slide }],
-                marginRight: Spacing.md,
-            }}
-        >
-            <TouchableOpacity
-                activeOpacity={1}
-                onPress={onPress}
-                onPressIn={onIn}
-                onPressOut={onOut}
-            >
-                <Animated.View style={[fc.card, { transform: [{ scale }] }]}>
-                    {/* Coloured top section */}
-                    <View
-                        style={[fc.top, { backgroundColor: Colors.charcoal }]}
-                    >
-                        {/* Accent bar */}
-                        <View
-                            style={[
-                                fc.accentBar,
-                                { backgroundColor: v.accent },
-                            ]}
-                        />
-                        {/* Decorative orb */}
-                        <View
-                            style={[
-                                fc.orb,
-                                { backgroundColor: v.accent + '22' },
-                            ]}
-                        />
-                        {/* Badge */}
-                        {v.badge && (
-                            <View style={fc.badge}>
-                                <Ionicons
-                                    name="star"
-                                    size={9}
-                                    color={Colors.primary}
-                                />
-                                <Text style={fc.badgeText}>{v.badge}</Text>
-                            </View>
-                        )}
-                        {/* Type + Rating */}
-                        <View style={fc.topBottom}>
-                            <View style={fc.typeChip}>
-                                <Text style={fc.typeText}>{v.type}</Text>
-                            </View>
-                            <View style={fc.ratingChip}>
-                                <Ionicons
-                                    name="star"
-                                    size={10}
-                                    color={Colors.primary}
-                                />
-                                <Text style={fc.ratingText}>{v.rating}</Text>
-                            </View>
-                        </View>
-                    </View>
-
-                    {/* Body */}
-                    <View style={fc.body}>
-                        <Text style={fc.name} numberOfLines={1}>
-                            {v.name}
-                        </Text>
-                        <View style={fc.metaRow}>
-                            <Ionicons
-                                name="people-outline"
-                                size={12}
-                                color={Colors.charcoalLight}
-                            />
-                            <Text style={fc.metaText}>
-                                Up to {v.capacity} guests
-                            </Text>
-                        </View>
-                        <View style={fc.footer}>
-                            <View>
-                                <Text style={fc.priceCaption}>from</Text>
-                                <Text style={fc.price}>
-                                    {v.price}
-                                    <Text style={fc.priceUnit}>/hr</Text>
-                                </Text>
-                            </View>
-                            <TouchableOpacity style={fc.cta} onPress={onPress}>
-                                <Text style={fc.ctaText}>Book</Text>
-                                <Ionicons
-                                    name="arrow-forward"
-                                    size={12}
-                                    color={Colors.white}
-                                />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </Animated.View>
-            </TouchableOpacity>
-        </Animated.View>
-    );
-}
-const fc = StyleSheet.create({
-    card: {
-        width: W * 0.62,
-        backgroundColor: Colors.surface,
-        borderRadius: Radii.xl,
-        overflow: 'hidden',
-        ...Shadows.card,
-    },
-    top: {
-        height: 140,
-        padding: Spacing.md,
-        justifyContent: 'space-between',
-        overflow: 'hidden',
-    },
-    accentBar: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
-    orb: {
-        position: 'absolute',
-        top: -30,
-        right: -30,
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-    },
-    badge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        alignSelf: 'flex-start',
-        backgroundColor: 'rgba(0,0,0,0.55)',
-        paddingHorizontal: 9,
-        paddingVertical: 4,
-        borderRadius: Radii.full,
-    },
-    badgeText: {
-        fontSize: 9,
-        fontWeight: Typography.bold,
-        color: Colors.primary,
-        letterSpacing: 0.6,
-    },
-    topBottom: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    typeChip: {
-        backgroundColor: 'rgba(255,255,255,0.12)',
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: Radii.full,
-    },
-    typeText: {
-        fontSize: 10,
-        fontWeight: Typography.semiBold,
-        color: 'rgba(255,255,255,0.80)',
-    },
-    ratingChip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 3,
-        backgroundColor: Colors.surface,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: Radii.full,
-    },
-    ratingText: {
-        fontSize: 11,
-        fontWeight: Typography.bold,
-        color: Colors.charcoal,
-    },
-    body: { padding: Spacing.md },
-    name: {
-        fontSize: 15,
-        fontWeight: Typography.extraBold,
-        color: Colors.charcoal,
-        letterSpacing: -0.3,
-        marginBottom: 6,
-    },
-    metaRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-        marginBottom: Spacing.md,
-    },
-    metaText: {
-        fontSize: 11.5,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.medium,
-    },
-    footer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    priceCaption: { fontSize: 9.5, color: Colors.charcoalLight },
-    price: {
-        fontSize: 17,
-        fontWeight: Typography.extraBold,
-        color: Colors.primary,
-        letterSpacing: -0.4,
-    },
-    priceUnit: {
-        fontSize: 11,
-        fontWeight: Typography.medium,
-        color: Colors.charcoalLight,
-    },
-    cta: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-        backgroundColor: Colors.charcoal,
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        borderRadius: Radii.full,
-    },
-    ctaText: { fontSize: 12, fontWeight: Typography.bold, color: Colors.white },
-});
-
-// ─── Screen ───────────────────────────────────────────────────────────────────
-export default function LandingScreen() {
-    const navigation = useNavigation<any>();
+export default function LandingScreen({ navigation }: landingProps) {
+    const { user } = useAuthStore();
+    const alert = useAlert();
     const [search, setSearch] = useState('');
+
+    //API Data
+    const [cities, setCities] = useState<any[]>([]);
+    const [locations, setLocations] = useState<any[]>([]);
+    const [venues, setVenues] = useState<any[]>([]);
 
     const { fade: heroFade, slide: heroSlide } = useEntrance(0);
     const { fade: bodyFade } = useEntrance(180);
     const heroScale = useRef(new Animated.Value(1.06)).current;
 
     useEffect(() => {
-        StatusBar.setBarStyle('light-content');
+        //fetch data
+        getAllVenueLoc();
+        getAllVenue();
+
         Animated.spring(heroScale, {
             toValue: 1,
             useNativeDriver: true,
@@ -426,19 +63,48 @@ export default function LandingScreen() {
     const goToVenues = () => navigation.navigate('venues');
     const goToProfile = () => navigation.navigate('profile');
 
+    const getAllVenueLoc = async () => {
+        try {
+            const response = await venueAPI.getVenueLocations();
+
+            if (!response.success) {
+                console.error('FETCHING LOCATION ERROR : ', response.message);
+                return;
+            }
+
+            setCities(response?.cities);
+            setLocations(response?.locations);
+        } catch (error: any) {
+            console.error('FETCHING LOCATION ERROR : ', error);
+        }
+    };
+
+    const getAllVenue = async () => {
+        try {
+            const params = {
+                limit: 6,
+            };
+
+            const response = await venueAPI.getVenues(params);
+
+            if (!response?.success) {
+                console.error('FETCHING VENUES ERROR : ', response?.message);
+                return;
+            }
+
+            setVenues(response?.venues);
+        } catch (error: any) {
+            console.error('FETCHING VENUES ERROR : ', error);
+        }
+    };
+
     return (
         <View style={s.root}>
-            <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={s.scroll}
-            >
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
                 <View style={s.hero}>
                     {/* Dark background */}
                     <Animated.View
-                        style={[
-                            StyleSheet.absoluteFill,
-                            { transform: [{ scale: heroScale }] },
-                        ]}
+                        style={[StyleSheet.absoluteFill, { transform: [{ scale: heroScale }] }]}
                     >
                         <View style={s.heroBg} />
                         {/* Subtle amber diagonal lines */}
@@ -453,26 +119,18 @@ export default function LandingScreen() {
                         {/* Brand */}
                         <View style={s.brand}>
                             <View style={s.brandDot}>
-                                <Ionicons
-                                    name="location"
-                                    size={12}
-                                    color={Colors.charcoal}
-                                />
+                                <Ionicons name="location" size={12} color={Colors.charcoal} />
                             </View>
                             <Text style={s.brandName}>
-                                <Text style={{ color: Colors.primary }}>
-                                    Rental
-                                </Text>
-                                <Text style={{ color: Colors.white }}>
-                                    Meet
-                                </Text>
+                                <Text style={{ color: Colors.primary }}>Rental</Text>
+                                <Text style={{ color: Colors.white }}>Meet</Text>
                             </Text>
                         </View>
 
                         {/* Nav icons */}
                         <View style={s.navIcons}>
                             {/* Messages */}
-                            <TouchableOpacity
+                            {/* <TouchableOpacity
                                 style={s.navIconBtn}
                                 onPress={() => navigation.navigate('messages')}
                             >
@@ -481,7 +139,7 @@ export default function LandingScreen() {
                                     size={18}
                                     color={Colors.white}
                                 />
-                            </TouchableOpacity>
+                            </TouchableOpacity> */}
 
                             {/* Notifications */}
                             <TouchableOpacity style={s.navIconBtn}>
@@ -501,12 +159,10 @@ export default function LandingScreen() {
                             >
                                 <View style={s.profileAvatar}>
                                     <Text style={s.profileInitials}>
-                                        {MOCK_USER.initials}
+                                        {user?.name?.slice(0, 2).toUpperCase() || ''}
                                     </Text>
                                 </View>
-                                <Text style={s.profileName}>
-                                    {MOCK_USER.name}
-                                </Text>
+                                <Text style={s.profileName}>{user.name}</Text>
                                 <Ionicons
                                     name="chevron-down"
                                     size={11}
@@ -528,23 +184,15 @@ export default function LandingScreen() {
                     >
                         {/* Location pill */}
                         <View style={s.locationPill}>
-                            <Ionicons
-                                name="location"
-                                size={11}
-                                color={Colors.primary}
-                            />
-                            <Text style={s.locationPillText}>
-                                BHOPAL, MADHYA PRADESH
-                            </Text>
+                            <Ionicons name="location" size={11} color={Colors.primary} />
+                            <Text style={s.locationPillText}>BHOPAL, MADHYA PRADESH</Text>
                         </View>
 
-                        <Text style={s.heroTitle}>
-                            Book Your{'\n'}Perfect Space
-                        </Text>
+                        <Text style={s.heroTitle}>Book Your{'\n'}Perfect Space</Text>
                         <Text style={s.heroHighlight}>with RentalMeet</Text>
                         <Text style={s.heroSub}>
-                            Premium venues for 1000+ guests.{'\n'}Hourly
-                            bookings, world-class hospitality.
+                            Premium venues for 1000+ guests.{'\n'}Hourly bookings, world-class
+                            hospitality.
                         </Text>
 
                         {/* CTA row */}
@@ -554,40 +202,18 @@ export default function LandingScreen() {
                                 onPress={goToVenues}
                                 activeOpacity={0.88}
                             >
-                                <Text style={s.ctaPrimaryText}>
-                                    Browse Venues
-                                </Text>
-                                <Ionicons
-                                    name="arrow-forward"
-                                    size={15}
-                                    color={Colors.charcoal}
-                                />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={s.ctaGhost}
-                                activeOpacity={0.8}
-                            >
-                                <Ionicons
-                                    name="play-circle-outline"
-                                    size={18}
-                                    color={Colors.white}
-                                />
-                                <Text style={s.ctaGhostText}>How it works</Text>
+                                <Text style={s.ctaPrimaryText}>Browse Venues</Text>
+                                <Ionicons name="arrow-forward" size={15} color={Colors.charcoal} />
                             </TouchableOpacity>
                         </View>
                     </Animated.View>
 
                     {/* ── Stats strip (overlaps hero / search card) ── */}
-                    <Animated.View
-                        style={[s.statsStrip, { opacity: heroFade }]}
-                    >
+                    <Animated.View style={[s.statsStrip, { opacity: heroFade }]}>
                         {KEY_STATS.map((st, i) => (
                             <View
                                 key={i}
-                                style={[
-                                    s.statItem,
-                                    i < KEY_STATS.length - 1 && s.statBorder,
-                                ]}
+                                style={[s.statItem, i < KEY_STATS.length - 1 && s.statBorder]}
                             >
                                 <Text style={s.statValue}>{st.value}</Text>
                                 <Text style={s.statLabel}>{st.label}</Text>
@@ -648,9 +274,7 @@ export default function LandingScreen() {
                                         size={13}
                                         color={Colors.primary}
                                     />
-                                    <Text style={s.filterChipText}>
-                                        {f.label}
-                                    </Text>
+                                    <Text style={s.filterChipText}>{f.label}</Text>
                                     <Ionicons
                                         name="chevron-down"
                                         size={11}
@@ -666,11 +290,7 @@ export default function LandingScreen() {
                             onPress={goToVenues}
                             activeOpacity={0.88}
                         >
-                            <Ionicons
-                                name="search"
-                                size={16}
-                                color={Colors.charcoal}
-                            />
+                            <Ionicons name="search" size={16} color={Colors.charcoal} />
                             <Text style={s.searchBtnText}>Search Venues</Text>
                         </TouchableOpacity>
                     </View>
@@ -681,9 +301,7 @@ export default function LandingScreen() {
                     <View style={s.sectionHeader}>
                         <View style={s.sectionTitleRow}>
                             <View style={s.accentBar} />
-                            <Text style={s.sectionTitle}>
-                                Browse by Category
-                            </Text>
+                            <Text style={s.sectionTitle}>Browse by Category</Text>
                         </View>
                         <TouchableOpacity onPress={goToVenues}>
                             <Text style={s.seeAll}>See all →</Text>
@@ -725,22 +343,15 @@ export default function LandingScreen() {
                             <Text style={s.seeAll}>See all →</Text>
                         </TouchableOpacity>
                     </View>
-                    <Text style={s.sectionSub}>
-                        Handpicked premium spaces for your events
-                    </Text>
+                    <Text style={s.sectionSub}>Handpicked premium spaces for your events</Text>
 
                     <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={s.hScroll}
                     >
-                        {FEATURED.map((v, i) => (
-                            <FeaturedCard
-                                key={v.id}
-                                v={v}
-                                index={i}
-                                onPress={goToVenues}
-                            />
+                        {venues.map((v, i) => (
+                            <FeaturedCard key={v.id} v={v} index={i} onPress={goToVenues} />
                         ))}
                     </ScrollView>
 
@@ -750,11 +361,7 @@ export default function LandingScreen() {
                         activeOpacity={0.85}
                     >
                         <Text style={s.viewAllBtnText}>View All Venues</Text>
-                        <Ionicons
-                            name="arrow-forward"
-                            size={14}
-                            color={Colors.white}
-                        />
+                        <Ionicons name="arrow-forward" size={14} color={Colors.white} />
                     </TouchableOpacity>
                 </View>
 
@@ -762,12 +369,9 @@ export default function LandingScreen() {
                 <View style={s.section}>
                     <View style={s.centeredHead}>
                         <Text style={s.eyebrow}>FACILITIES</Text>
-                        <Text style={s.centeredTitle}>
-                            Unparalleled Amenities
-                        </Text>
+                        <Text style={s.centeredTitle}>Unparalleled Amenities</Text>
                         <Text style={s.centeredSub}>
-                            Every space comes equipped to ensure your meeting
-                            runs flawlessly.
+                            Every space comes equipped to ensure your meeting runs flawlessly.
                         </Text>
                     </View>
 
@@ -801,67 +405,38 @@ export default function LandingScreen() {
                         {PACKAGES.map((p, i) => (
                             <TouchableOpacity
                                 key={i}
-                                style={[
-                                    s.pkgRow,
-                                    p.featured && s.pkgRowFeatured,
-                                ]}
+                                style={[s.pkgRow, p.featured && s.pkgRowFeatured]}
                                 onPress={goToVenues}
                                 activeOpacity={0.88}
                             >
                                 {/* Left: icon + label */}
-                                <View
-                                    style={[
-                                        s.pkgIconWrap,
-                                        p.featured && s.pkgIconFeatured,
-                                    ]}
-                                >
+                                <View style={[s.pkgIconWrap, p.featured && s.pkgIconFeatured]}>
                                     <Ionicons
                                         name={p.icon as any}
                                         size={18}
-                                        color={
-                                            p.featured
-                                                ? Colors.white
-                                                : Colors.primary
-                                        }
+                                        color={p.featured ? Colors.white : Colors.primary}
                                     />
                                 </View>
                                 <View style={s.pkgMid}>
                                     <View style={s.pkgLabelRow}>
-                                        <Text
-                                            style={[
-                                                s.pkgLabel,
-                                                p.featured && s.textWhite,
-                                            ]}
-                                        >
+                                        <Text style={[s.pkgLabel, p.featured && s.textWhite]}>
                                             {p.label}
                                         </Text>
                                         {p.featured && (
                                             <View style={s.popularBadge}>
-                                                <Text
-                                                    style={s.popularBadgeText}
-                                                >
-                                                    Popular
-                                                </Text>
+                                                <Text style={s.popularBadgeText}>Popular</Text>
                                             </View>
                                         )}
                                     </View>
                                     <Text
-                                        style={[
-                                            s.pkgSubtext,
-                                            p.featured && s.pkgSubtextFeatured,
-                                        ]}
+                                        style={[s.pkgSubtext, p.featured && s.pkgSubtextFeatured]}
                                     >
                                         {p.subtext}
                                     </Text>
                                 </View>
                                 {/* Right: price + chevron */}
                                 <View style={s.pkgRight}>
-                                    <Text
-                                        style={[
-                                            s.pkgPrice,
-                                            p.featured && s.textWhite,
-                                        ]}
-                                    >
+                                    <Text style={[s.pkgPrice, p.featured && s.textWhite]}>
                                         {p.price}
                                     </Text>
                                     <Text
@@ -878,11 +453,7 @@ export default function LandingScreen() {
                                 <Ionicons
                                     name="chevron-forward"
                                     size={15}
-                                    color={
-                                        p.featured
-                                            ? 'rgba(255,255,255,0.5)'
-                                            : Colors.border
-                                    }
+                                    color={p.featured ? 'rgba(255,255,255,0.5)' : Colors.border}
                                 />
                             </TouchableOpacity>
                         ))}
@@ -906,17 +477,11 @@ export default function LandingScreen() {
                                 {/* Top: avatar + info */}
                                 <View style={s.testiTop}>
                                     <View style={s.testiAvatar}>
-                                        <Text style={s.testiAvatarText}>
-                                            {t.initials}
-                                        </Text>
+                                        <Text style={s.testiAvatarText}>{t.initials}</Text>
                                     </View>
                                     <View style={{ flex: 1 }}>
-                                        <Text style={s.testiName}>
-                                            {t.name}
-                                        </Text>
-                                        <Text style={s.testiRole}>
-                                            {t.role}
-                                        </Text>
+                                        <Text style={s.testiName}>{t.name}</Text>
+                                        <Text style={s.testiRole}>{t.role}</Text>
                                     </View>
                                     <View style={s.testiStars}>
                                         {[1, 2, 3, 4, 5].map(j => (
@@ -948,19 +513,13 @@ export default function LandingScreen() {
 
                         <View style={s.ctaInner}>
                             <View style={s.ctaIconCircle}>
-                                <Ionicons
-                                    name="business"
-                                    size={28}
-                                    color={Colors.primary}
-                                />
+                                <Ionicons name="business" size={28} color={Colors.primary} />
                             </View>
 
-                            <Text style={s.ctaTitle}>
-                                Ready to Book{'\n'}Your Venue?
-                            </Text>
+                            <Text style={s.ctaTitle}>Ready to Book{'\n'}Your Venue?</Text>
                             <Text style={s.ctaSub}>
-                                Browse our collection and find the perfect space
-                                for your next event.
+                                Browse our collection and find the perfect space for your next
+                                event.
                             </Text>
 
                             <View style={s.ctaBtnRow}>
@@ -969,9 +528,7 @@ export default function LandingScreen() {
                                     onPress={goToVenues}
                                     activeOpacity={0.85}
                                 >
-                                    <Text style={s.ctaMainBtnText}>
-                                        Browse All Venues
-                                    </Text>
+                                    <Text style={s.ctaMainBtnText}>Browse All Venues</Text>
                                     <View style={s.ctaBtnArrow}>
                                         <Ionicons
                                             name="arrow-forward"
@@ -990,17 +547,11 @@ export default function LandingScreen() {
                             >
                                 <View style={s.ctaProfileAvatar}>
                                     <Text style={s.ctaProfileInitials}>
-                                        {MOCK_USER.initials}
+                                        {user?.name?.slice(0, 2).toUpperCase() || ''}
                                     </Text>
                                 </View>
-                                <Text style={s.ctaProfileText}>
-                                    View your profile
-                                </Text>
-                                <Ionicons
-                                    name="arrow-forward"
-                                    size={13}
-                                    color={Colors.primary}
-                                />
+                                <Text style={s.ctaProfileText}>View your profile</Text>
+                                <Ionicons name="arrow-forward" size={13} color={Colors.primary} />
                             </TouchableOpacity>
                         </View>
                     </View>

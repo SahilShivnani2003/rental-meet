@@ -32,7 +32,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
     loadUser: async () => {
 
         const user = await AsyncStorage.getItem('user')
-
+        debugger
         if (user) {
             const userData = JSON.parse(user);
             set({ user: userData, isAuthenticated: true })

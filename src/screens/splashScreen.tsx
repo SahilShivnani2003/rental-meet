@@ -1,13 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import {
-    View,
-    Text,
-    Image,
-    StyleSheet,
-    Animated,
-    Dimensions,
-    StatusBar,
-} from 'react-native';
+import { View, Text, Image, StyleSheet, Animated, Dimensions, StatusBar } from 'react-native';
 import { Colors, Typography, Spacing } from '../theme/theme';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigations/RootNavigation';
@@ -18,7 +10,7 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 type SplashProps = NativeStackScreenProps<RootStackParamList, 'splash'>;
 
 export default function SplashScreen({ navigation }: SplashProps) {
-    const { isAuthenticated, user } = useAuthStore();
+    const loadUser = useAuthStore(state => state.loadUser);
     // ── Animation values ────────────────────────────────────────────────────────
     const logoScale = useRef(new Animated.Value(0.7)).current;
     const logoOpacity = useRef(new Animated.Value(0)).current;
@@ -30,7 +22,11 @@ export default function SplashScreen({ navigation }: SplashProps) {
     const dotScale3 = useRef(new Animated.Value(0)).current;
     const screenOpacity = useRef(new Animated.Value(1)).current;
 
-    const handleNavigation = () => {
+    const handleNavigation = async () => {
+        await loadUser();
+
+        const { isAuthenticated, user } = useAuthStore.getState();
+        console.log('FOUNDED USER : ', user);
         console.log('SPLASH SCREEN AUTHENTICATION : ', isAuthenticated);
         if (isAuthenticated) {
             if (user?.role === 'owner') {
@@ -39,7 +35,7 @@ export default function SplashScreen({ navigation }: SplashProps) {
                 navigation.replace('client');
             }
         } else {
-            navigation.replace('login')
+            navigation.replace('login');
         }
     };
 
@@ -49,24 +45,54 @@ export default function SplashScreen({ navigation }: SplashProps) {
         Animated.sequence([
             // 1 — Logo pops in
             Animated.parallel([
-                Animated.spring(logoScale, { toValue: 1, useNativeDriver: true, speed: 10, bounciness: 14 }),
+                Animated.spring(logoScale, {
+                    toValue: 1,
+                    useNativeDriver: true,
+                    speed: 10,
+                    bounciness: 14,
+                }),
                 Animated.timing(logoOpacity, { toValue: 1, duration: 380, useNativeDriver: true }),
             ]),
 
             // 2 — Brand name slides up
             Animated.parallel([
                 Animated.timing(textOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
-                Animated.spring(textY, { toValue: 0, useNativeDriver: true, speed: 18, bounciness: 6 }),
+                Animated.spring(textY, {
+                    toValue: 0,
+                    useNativeDriver: true,
+                    speed: 18,
+                    bounciness: 6,
+                }),
             ]),
 
             // 3 — Tagline fades in
-            Animated.timing(taglineOpacity, { toValue: 1, duration: 280, delay: 80, useNativeDriver: true }),
+            Animated.timing(taglineOpacity, {
+                toValue: 1,
+                duration: 280,
+                delay: 80,
+                useNativeDriver: true,
+            }),
 
             // 4 — Loading dots stagger in
             Animated.stagger(140, [
-                Animated.spring(dotScale1, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 10 }),
-                Animated.spring(dotScale2, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 10 }),
-                Animated.spring(dotScale3, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 10 }),
+                Animated.spring(dotScale1, {
+                    toValue: 1,
+                    useNativeDriver: true,
+                    speed: 20,
+                    bounciness: 10,
+                }),
+                Animated.spring(dotScale2, {
+                    toValue: 1,
+                    useNativeDriver: true,
+                    speed: 20,
+                    bounciness: 10,
+                }),
+                Animated.spring(dotScale3, {
+                    toValue: 1,
+                    useNativeDriver: true,
+                    speed: 20,
+                    bounciness: 10,
+                }),
             ]),
 
             // 5 — Hold for a moment
@@ -88,7 +114,12 @@ export default function SplashScreen({ navigation }: SplashProps) {
             {/* ── Center content ── */}
             <View style={styles.centerContent}>
                 {/* Logo */}
-                <Animated.View style={[styles.logoWrap, { opacity: logoOpacity, transform: [{ scale: logoScale }] }]}>
+                <Animated.View
+                    style={[
+                        styles.logoWrap,
+                        { opacity: logoOpacity, transform: [{ scale: logoScale }] },
+                    ]}
+                >
                     <Image
                         source={require('../assets/logo.jpeg')}
                         style={styles.logo}
@@ -97,7 +128,12 @@ export default function SplashScreen({ navigation }: SplashProps) {
                 </Animated.View>
 
                 {/* Brand name — "Rental" normal weight, "Meet" bold charcoal */}
-                <Animated.View style={[styles.brandRow, { opacity: textOpacity, transform: [{ translateY: textY }] }]}>
+                <Animated.View
+                    style={[
+                        styles.brandRow,
+                        { opacity: textOpacity, transform: [{ translateY: textY }] },
+                    ]}
+                >
                     <Text style={styles.brandRental}>Rental</Text>
                     <Text style={styles.brandMeet}>Meet</Text>
                 </Animated.View>
@@ -185,13 +221,13 @@ const styles = StyleSheet.create({
     brandRental: {
         fontSize: 36,
         fontWeight: Typography.bold,
-        color: Colors.primary,        // amber — matches logo icon color
+        color: Colors.primary, // amber — matches logo icon color
         letterSpacing: -0.5,
     },
     brandMeet: {
         fontSize: 36,
         fontWeight: Typography.extraBold,
-        color: Colors.charcoal,       // dark — matches "Meet" in logo wordmark
+        color: Colors.charcoal, // dark — matches "Meet" in logo wordmark
         letterSpacing: -0.5,
     },
 
@@ -222,7 +258,7 @@ const styles = StyleSheet.create({
         width: 10,
         height: 10,
         borderRadius: 5,
-        backgroundColor: Colors.primary,  // larger amber center dot
+        backgroundColor: Colors.primary, // larger amber center dot
     },
 
     // ── Footer ──
