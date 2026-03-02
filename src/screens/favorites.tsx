@@ -13,7 +13,7 @@ import {
   Dimensions,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
+import { Colors, Typography, Spacing, Radii, Shadows } from '../theme/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 

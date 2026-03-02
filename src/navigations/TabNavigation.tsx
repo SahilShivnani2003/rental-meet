@@ -13,9 +13,9 @@ import {
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { Colors, Typography, TAB_BAR_HEIGHT, TAB_CENTER_SIZE } from "../theme/theme";
-import HomeScreen from "../screens/tabs/home";
+import HomeScreen from "../screens/tabs/venues";
 import BookingsScreen from "../screens/tabs/bookings";
-import FavoritesScreen from "../screens/tabs/favorites";
+import FavoritesScreen from "../screens/favorites";
 import MessagesScreen from "../screens/tabs/messages";
 import ProfileScreen from "../screens/tabs/profile";
 

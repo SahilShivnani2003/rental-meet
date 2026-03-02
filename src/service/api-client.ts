@@ -50,12 +50,12 @@ async function request<T = unknown>(
 }
 
 export const apiClient = {
-    get: <T = unknown>(url: string, opts?: Pick<RequestOptions, "params" | "headers">) =>
+    get: <T = any>(url: string, opts?: Pick<RequestOptions, "params" | "headers">) =>
         request<T>(url, { method: "GET", ...opts }),
-    post: <T = unknown>(url: string, body?: unknown, opts?: Pick<RequestOptions, "headers">) =>
+    post: <T = any>(url: string, body?: unknown, opts?: Pick<RequestOptions, "headers">) =>
         request<T>(url, { method: "POST", body, ...opts }),
-    put: <T = unknown>(url: string, body?: unknown, opts?: Pick<RequestOptions, "headers">) =>
+    put: <T = any>(url: string, body?: unknown, opts?: Pick<RequestOptions, "headers">) =>
         request<T>(url, { method: "PUT", body, ...opts }),
-    delete: <T = unknown>(url: string, opts?: Pick<RequestOptions, "headers">) =>
+    delete: <T = any>(url: string, opts?: Pick<RequestOptions, "headers">) =>
         request<T>(url, { method: "DELETE", ...opts }),
 };
