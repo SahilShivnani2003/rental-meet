@@ -10,14 +10,23 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Radii, Shadows, Spacing, Typography } from '../../theme/theme';
+import { useNavigation } from '@react-navigation/native';
+import { RootStackParamList } from '../../navigations/RootNavigation';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 const { width } = Dimensions.get('window');
 const CARD_WIDTH = (width - 56) / 2;
 
 export default function VenueCard({ venue }: { venue: any }) {
+    const navigation = useNavigation<any>();
     const scale = useRef(new Animated.Value(1)).current;
     const press = (v: number) =>
         Animated.spring(scale, { toValue: v, useNativeDriver: true, speed: 30 }).start();
+
+    // ── Derived values from API response ─────────────────────────────────────
+    const pricePerHour = venue.pricing?.perHour?.weekday ?? 0;
+    const rating = typeof venue.rating === 'number' ? venue.rating : 0;
+    const hasRating = rating > 0;
 
     return (
         <Animated.View style={[styles.venueCard, { transform: [{ scale }] }]}>
@@ -25,12 +34,12 @@ export default function VenueCard({ venue }: { venue: any }) {
                 activeOpacity={1}
                 onPressIn={() => press(0.96)}
                 onPressOut={() => press(1)}
-                onPress={() => console.log(`venue ${venue.id}`)}
+                onPress={() => navigation.navigate('venueDetail',{venue:venue})}
             >
                 <View style={styles.venueImageWrapper}>
                     <Image source={{ uri: venue.images[0]?.url }} style={styles.venueImage} />
                     <View style={styles.pricePill}>
-                        <Text style={styles.priceText}>${venue.pricePerHour}</Text>
+                        <Text style={styles.priceText}>₹{pricePerHour}</Text>
                         <Text style={styles.priceUnit}>/hr</Text>
                     </View>
                 </View>
@@ -42,12 +51,14 @@ export default function VenueCard({ venue }: { venue: any }) {
                         <View style={styles.locationRow}>
                             <Ionicons name="location" size={11} color={Colors.primary} />
                             <Text style={styles.venueLocation} numberOfLines={1}>
-                                {venue.city}
+                                {venue.location?.city ?? venue.city}
                             </Text>
                         </View>
                         <View style={styles.ratingContainer}>
                             <Ionicons name="star" size={11} color={Colors.primary} />
-                            <Text style={styles.rating}>{venue.rating.toFixed(1)}</Text>
+                            <Text style={styles.rating}>
+                                {hasRating ? rating.toFixed(1) : 'New'}
+                            </Text>
                         </View>
                     </View>
                 </View>
@@ -56,7 +67,7 @@ export default function VenueCard({ venue }: { venue: any }) {
     );
 }
 
-const styles = StyleSheet.create({    
+const styles = StyleSheet.create({
     venueCard: {
         width: CARD_WIDTH,
         backgroundColor: Colors.surface,

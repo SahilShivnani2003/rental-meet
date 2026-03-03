@@ -9,6 +9,7 @@ import { ClientTabNavigation } from './ClientTabNavigation';
 import { OwnerTabNavigation } from './OwnerTabNavigation';
 import RegisterScreen from '../screens/auth/register';
 import { AlertProvider } from '../context/AlertContext';
+import VenueDetailScreen, { Venue } from '../screens/venue-detail';
 
 export type RootStackParamList = {
     splash: undefined;
@@ -19,6 +20,9 @@ export type RootStackParamList = {
     owner: undefined;
     register: {
         role: string;
+    };
+    venueDetail: {
+        venue:Venue
     };
 };
 
@@ -49,6 +53,7 @@ export default function RootNavigator() {
                         component={OwnerTabNavigation}
                         options={{ animation: 'fade' }}
                     />
+                    <Stack.Screen name="venueDetail" component={VenueDetailScreen}/>
                 </Stack.Navigator>
             </NavigationContainer>
         </AlertProvider>

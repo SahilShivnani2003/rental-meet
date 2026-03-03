@@ -13,6 +13,10 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
 import { useAlert } from '../../context/AlertContext';
 import { useAuthStore } from '../../store/auth-store';
+import { NativeBottomTabBarProps, NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
+import { ClientTabParamList } from '../../navigations/ClientTabNavigation';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../navigations/RootNavigation';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -305,7 +309,9 @@ function MenuSection({ title, items }: { title: string; items: any[] }) {
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
-export default function ClientProfile({ navigation }: any) {
+type clientProfileProps = NativeBottomTabScreenProps<ClientTabParamList, 'profile'>
+
+export default function ClientProfile({ navigation }:clientProfileProps) {
     const {user} = useAuthStore();
     const typeCfg = USER_TYPE_CONFIG[user.userType] ?? USER_TYPE_CONFIG.client;
     const alert = useAlert();
@@ -341,10 +347,10 @@ export default function ClientProfile({ navigation }: any) {
                     label: 'Log Out',
                     onPress: async () => {
                         await logOut();
-                        navigation.reset({
-                            index: 0,
-                            routes: [{ name: 'login' }],
-                        });
+                        navigation.getParent<NativeStackNavigationProp<RootStackParamList>>().reset({
+                            index: 0 ,
+                            routes:[{name:'login'}]
+                        })
                     },
                 },
             ],
@@ -359,7 +365,7 @@ export default function ClientProfile({ navigation }: any) {
             iconBg: Colors.primaryLight,
             title: 'My Venues',
             subtitle: 'Manage your listed spaces',
-            onPress: () => navigation.navigate('my-venues'),
+            onPress: () => console.log('navigating to venue'),
         },
         user.userType === 'vendor' && {
             id: 'my-services',
@@ -368,7 +374,7 @@ export default function ClientProfile({ navigation }: any) {
             iconBg: Colors.successLight,
             title: 'My Services',
             subtitle: 'Manage your offered services',
-            onPress: () => navigation.navigate('my-services'),
+            onPress: () => console.log('navigating to service'),
         },
         {
             id: 'edit-profile',
@@ -442,7 +448,7 @@ export default function ClientProfile({ navigation }: any) {
                     <View style={styles.headerActions}>
                         <TouchableOpacity
                             style={styles.iconBtn}
-                            onPress={() => navigation.navigate('messages')}
+                            onPress={() => console.log('navigating to message')}
                         >
                             <Ionicons
                                 name="chatbubble-outline"
@@ -580,7 +586,7 @@ export default function ClientProfile({ navigation }: any) {
 
                         <TouchableOpacity
                             style={[styles.quickTile, { backgroundColor: '#E11D48' }]}
-                            onPress={() => navigation.navigate('favorites')}
+                            onPress={() => console.log('navigating to favourite')}
                             activeOpacity={0.85}
                         >
                             <View

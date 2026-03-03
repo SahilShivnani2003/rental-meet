@@ -13,34 +13,31 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../theme/theme';
-import {
-    FEATURED,
-    KEY_STATS,
-    CATEGORIES,
-    AMENITIES,
-    PACKAGES,
-    TESTIMONIALS,
-} from '../Data/landingData';
+import { KEY_STATS, CATEGORIES, AMENITIES, PACKAGES, TESTIMONIALS } from '../Data/landingData';
 import useEntrance from '../hooks/useEntrance';
 import FeaturedCard from '../components/landing/featuredCard';
 import { useAuthStore } from '../store/auth-store';
 import { ClientTabParamList } from '../navigations/ClientTabNavigation';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
-import { useAlert } from '../context/AlertContext';
 import { venueAPI } from '../service/apis/venues';
+import { Venue } from './venue-detail';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigations/RootNavigation';
 
 const { width: W, height: H } = Dimensions.get('window');
 
 type landingProps = NativeBottomTabScreenProps<ClientTabParamList, 'home'>;
 
 export default function LandingScreen({ navigation }: landingProps) {
+    const navigatonV2 = useNavigation();
     const { user } = useAuthStore();
-    const alert = useAlert();
     const [search, setSearch] = useState('');
 
-    //API Data
-    const [cities, setCities] = useState<any[]>([]);
-    const [locations, setLocations] = useState<any[]>([]);
+    // ── API data ───────────────────────────────────────────────────────────────
+    // cities: string[]  e.g. ["Bhopal"]
+    // locations: { city: string; areas: string[] }[]
+    const [cities, setCities] = useState<string[]>([]);
+    const [locations, setLocations] = useState<{ city: string; areas: string[] }[]>([]);
     const [venues, setVenues] = useState<any[]>([]);
 
     const { fade: heroFade, slide: heroSlide } = useEntrance(0);
@@ -48,7 +45,6 @@ export default function LandingScreen({ navigation }: landingProps) {
     const heroScale = useRef(new Animated.Value(1.06)).current;
 
     useEffect(() => {
-        //fetch data
         getAllVenueLoc();
         getAllVenue();
 
@@ -63,17 +59,25 @@ export default function LandingScreen({ navigation }: landingProps) {
     const goToVenues = () => navigation.navigate('venues');
     const goToProfile = () => navigation.navigate('profile');
 
+    // ── Navigate to venue detail, passing the full venue object ──────────────
+    const goToVenueDetail = (venue: Venue) => {
+        navigation
+            .getParent<NativeStackNavigationProp<RootStackParamList>>()
+            ?.navigate('venueDetail', { venue });
+    };
+
     const getAllVenueLoc = async () => {
         try {
             const response = await venueAPI.getVenueLocations();
 
-            if (!response.success) {
-                console.error('FETCHING LOCATION ERROR : ', response.message);
+            if (!response?.success) {
+                console.error('FETCHING LOCATION ERROR : ', response?.message);
                 return;
             }
 
-            setCities(response?.cities);
-            setLocations(response?.locations);
+            // API shape: { success, cities: string[], locations: { city, areas }[] }
+            setCities(response.cities ?? []);
+            setLocations(response.locations ?? []);
         } catch (error: any) {
             console.error('FETCHING LOCATION ERROR : ', error);
         }
@@ -81,22 +85,21 @@ export default function LandingScreen({ navigation }: landingProps) {
 
     const getAllVenue = async () => {
         try {
-            const params = {
-                limit: 6,
-            };
-
-            const response = await venueAPI.getVenues(params);
+            const response = await venueAPI.getVenues({ limit: 6 });
 
             if (!response?.success) {
                 console.error('FETCHING VENUES ERROR : ', response?.message);
                 return;
             }
 
-            setVenues(response?.venues);
+            setVenues(response.venues ?? []);
         } catch (error: any) {
             console.error('FETCHING VENUES ERROR : ', error);
         }
     };
+
+    // ── Active city display (first from API or fallback) ─────────────────────
+    const activeCity = cities.length > 0 ? cities[0].toUpperCase() : 'YOUR CITY';
 
     return (
         <View style={s.root}>
@@ -107,16 +110,13 @@ export default function LandingScreen({ navigation }: landingProps) {
                         style={[StyleSheet.absoluteFill, { transform: [{ scale: heroScale }] }]}
                     >
                         <View style={s.heroBg} />
-                        {/* Subtle amber diagonal lines */}
                         <View style={s.diag1} />
                         <View style={s.diag2} />
-                        {/* Bottom amber glow */}
                         <View style={s.heroGlow} />
                     </Animated.View>
 
                     {/* ── Navbar ── */}
                     <Animated.View style={[s.navbar, { opacity: heroFade }]}>
-                        {/* Brand */}
                         <View style={s.brand}>
                             <View style={s.brandDot}>
                                 <Ionicons name="location" size={12} color={Colors.charcoal} />
@@ -127,21 +127,7 @@ export default function LandingScreen({ navigation }: landingProps) {
                             </Text>
                         </View>
 
-                        {/* Nav icons */}
                         <View style={s.navIcons}>
-                            {/* Messages */}
-                            {/* <TouchableOpacity
-                                style={s.navIconBtn}
-                                onPress={() => navigation.navigate('messages')}
-                            >
-                                <Ionicons
-                                    name="chatbubble-outline"
-                                    size={18}
-                                    color={Colors.white}
-                                />
-                            </TouchableOpacity> */}
-
-                            {/* Notifications */}
                             <TouchableOpacity style={s.navIconBtn}>
                                 <Ionicons
                                     name="notifications-outline"
@@ -151,7 +137,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                                 <View style={s.notifDot} />
                             </TouchableOpacity>
 
-                            {/* Profile */}
                             <TouchableOpacity
                                 style={s.profilePill}
                                 onPress={goToProfile}
@@ -176,16 +161,13 @@ export default function LandingScreen({ navigation }: landingProps) {
                     <Animated.View
                         style={[
                             s.heroBody,
-                            {
-                                opacity: heroFade,
-                                transform: [{ translateY: heroSlide }],
-                            },
+                            { opacity: heroFade, transform: [{ translateY: heroSlide }] },
                         ]}
                     >
-                        {/* Location pill */}
+                        {/* Dynamic city pill from API */}
                         <View style={s.locationPill}>
                             <Ionicons name="location" size={11} color={Colors.primary} />
-                            <Text style={s.locationPillText}>BHOPAL, MADHYA PRADESH</Text>
+                            <Text style={s.locationPillText}>{activeCity}, MADHYA PRADESH</Text>
                         </View>
 
                         <Text style={s.heroTitle}>Book Your{'\n'}Perfect Space</Text>
@@ -195,7 +177,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                             hospitality.
                         </Text>
 
-                        {/* CTA row */}
                         <View style={s.heroCtaRow}>
                             <TouchableOpacity
                                 style={s.ctaPrimary}
@@ -208,7 +189,7 @@ export default function LandingScreen({ navigation }: landingProps) {
                         </View>
                     </Animated.View>
 
-                    {/* ── Stats strip (overlaps hero / search card) ── */}
+                    {/* ── Stats strip ── */}
                     <Animated.View style={[s.statsStrip, { opacity: heroFade }]}>
                         {KEY_STATS.map((st, i) => (
                             <View
@@ -224,13 +205,10 @@ export default function LandingScreen({ navigation }: landingProps) {
 
                 {/* SEARCH CARD */}
                 <Animated.View style={[s.searchCard, { opacity: bodyFade }]}>
-                    {/* Amber accent top bar */}
                     <View style={s.searchAccent} />
-
                     <View style={s.searchBody}>
                         <Text style={s.searchHeading}>Find Your Venue</Text>
 
-                        {/* Input */}
                         <View style={s.searchInputWrap}>
                             <Ionicons
                                 name="search-outline"
@@ -257,10 +235,13 @@ export default function LandingScreen({ navigation }: landingProps) {
                             )}
                         </View>
 
-                        {/* Filter chips */}
+                        {/* Dynamic filter chips — city from API, rest static */}
                         <View style={s.filterRow}>
                             {[
-                                { icon: 'location-outline', label: 'Bhopal' },
+                                {
+                                    icon: 'location-outline',
+                                    label: cities.length > 0 ? cities[0] : 'City',
+                                },
                                 { icon: 'people-outline', label: 'Capacity' },
                                 { icon: 'calendar-outline', label: 'Date' },
                             ].map(f => (
@@ -284,7 +265,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                             ))}
                         </View>
 
-                        {/* Search button */}
                         <TouchableOpacity
                             style={s.searchBtn}
                             onPress={goToVenues}
@@ -296,7 +276,7 @@ export default function LandingScreen({ navigation }: landingProps) {
                     </View>
                 </Animated.View>
 
-                {/* CATEGORIES*/}
+                {/* CATEGORIES */}
                 <Animated.View style={[s.section, { opacity: bodyFade }]}>
                     <View style={s.sectionHeader}>
                         <View style={s.sectionTitleRow}>
@@ -308,7 +288,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                         </TouchableOpacity>
                     </View>
 
-                    {/* 2-row grid of 3 */}
                     <View style={s.catGrid}>
                         {CATEGORIES.map((cat, i) => (
                             <TouchableOpacity
@@ -331,9 +310,8 @@ export default function LandingScreen({ navigation }: landingProps) {
                     </View>
                 </Animated.View>
 
-                {/*FEATURED VENUES */}
+                {/* FEATURED VENUES */}
                 <View style={[s.section, s.surfaceSection]}>
-                    {/* Section heading */}
                     <View style={s.sectionHeader}>
                         <View style={s.sectionTitleRow}>
                             <View style={s.accentBar} />
@@ -351,7 +329,8 @@ export default function LandingScreen({ navigation }: landingProps) {
                         contentContainerStyle={s.hScroll}
                     >
                         {venues.map((v, i) => (
-                            <FeaturedCard key={v.id} v={v} index={i} onPress={goToVenues} />
+                            // ✅ Fix: key uses v._id; onPress passes venue to detail screen
+                            <FeaturedCard key={v._id} v={v} index={i} onPress={goToVenueDetail} />
                         ))}
                     </ScrollView>
 
@@ -365,7 +344,7 @@ export default function LandingScreen({ navigation }: landingProps) {
                     </TouchableOpacity>
                 </View>
 
-                {/*AMENITIES*/}
+                {/* AMENITIES */}
                 <View style={s.section}>
                     <View style={s.centeredHead}>
                         <Text style={s.eyebrow}>FACILITIES</Text>
@@ -391,7 +370,7 @@ export default function LandingScreen({ navigation }: landingProps) {
                     </View>
                 </View>
 
-                {/*PRICING PACKAGES*/}
+                {/* PRICING PACKAGES */}
                 <View style={[s.section, s.surfaceSection]}>
                     <View style={s.centeredHead}>
                         <Text style={s.eyebrow}>PRICING</Text>
@@ -409,7 +388,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                                 onPress={goToVenues}
                                 activeOpacity={0.88}
                             >
-                                {/* Left: icon + label */}
                                 <View style={[s.pkgIconWrap, p.featured && s.pkgIconFeatured]}>
                                     <Ionicons
                                         name={p.icon as any}
@@ -434,7 +412,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                                         {p.subtext}
                                     </Text>
                                 </View>
-                                {/* Right: price + chevron */}
                                 <View style={s.pkgRight}>
                                     <Text style={[s.pkgPrice, p.featured && s.textWhite]}>
                                         {p.price}
@@ -442,9 +419,7 @@ export default function LandingScreen({ navigation }: landingProps) {
                                     <Text
                                         style={[
                                             s.pkgPriceUnit,
-                                            p.featured && {
-                                                color: 'rgba(255,255,255,0.65)',
-                                            },
+                                            p.featured && { color: 'rgba(255,255,255,0.65)' },
                                         ]}
                                     >
                                         /hr
@@ -460,7 +435,7 @@ export default function LandingScreen({ navigation }: landingProps) {
                     </View>
                 </View>
 
-                {/* TESTIMONIALS*/}
+                {/* TESTIMONIALS */}
                 <View style={s.section}>
                     <View style={s.centeredHead}>
                         <Text style={s.eyebrow}>TESTIMONIALS</Text>
@@ -474,7 +449,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                     >
                         {TESTIMONIALS.map((t, i) => (
                             <View key={i} style={s.testiCard}>
-                                {/* Top: avatar + info */}
                                 <View style={s.testiTop}>
                                     <View style={s.testiAvatar}>
                                         <Text style={s.testiAvatarText}>{t.initials}</Text>
@@ -494,9 +468,7 @@ export default function LandingScreen({ navigation }: landingProps) {
                                         ))}
                                     </View>
                                 </View>
-                                {/* Divider */}
                                 <View style={s.testiDivider} />
-                                {/* Quote */}
                                 <Text style={s.quoteMark}>"</Text>
                                 <Text style={s.testiText}>{t.text}</Text>
                             </View>
@@ -507,7 +479,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                 {/* BOTTOM CTA BANNER */}
                 <View style={s.ctaBannerWrap}>
                     <View style={s.ctaBanner}>
-                        {/* Decorative orbs */}
                         <View style={s.orb1} />
                         <View style={s.orb2} />
 
@@ -539,7 +510,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                                 </TouchableOpacity>
                             </View>
 
-                            {/* Inline profile link */}
                             <TouchableOpacity
                                 style={s.ctaProfileLink}
                                 onPress={goToProfile}
@@ -569,17 +539,9 @@ const s = StyleSheet.create({
     root: { flex: 1, backgroundColor: Colors.background },
     scroll: { paddingBottom: 120 },
 
-    // ── Hero ────────────────────────────────────────────────────────────────────
-    hero: {
-        height: H * 0.6,
-        justifyContent: 'flex-end',
-        overflow: 'hidden',
-    },
-
-    heroBg: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: '#1A1208',
-    },
+    // ── Hero ──────────────────────────────────────────────────────────────────
+    hero: { height: H * 0.6, justifyContent: 'flex-end', overflow: 'hidden' },
+    heroBg: { ...StyleSheet.absoluteFillObject, backgroundColor: '#1A1208' },
     diag1: {
         position: 'absolute',
         top: '28%',
@@ -618,11 +580,7 @@ const s = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: Spacing.xl,
     },
-    brand: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
+    brand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     brandDot: {
         width: 30,
         height: 30,
@@ -631,16 +589,8 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    brandName: {
-        fontSize: 20,
-        fontWeight: Typography.extraBold,
-        letterSpacing: -0.4,
-    },
-    navIcons: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-    },
+    brandName: { fontSize: 20, fontWeight: Typography.extraBold, letterSpacing: -0.4 },
+    navIcons: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
     navIconBtn: {
         width: 36,
         height: 36,
@@ -660,8 +610,6 @@ const s = StyleSheet.create({
         borderWidth: 1.5,
         borderColor: '#1A1208',
     },
-
-    // Profile pill
     profilePill: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -682,22 +630,11 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    profileInitials: {
-        fontSize: 10,
-        fontWeight: Typography.extraBold,
-        color: Colors.charcoal,
-    },
-    profileName: {
-        fontSize: 12,
-        fontWeight: Typography.bold,
-        color: Colors.white,
-    },
+    profileInitials: { fontSize: 10, fontWeight: Typography.extraBold, color: Colors.charcoal },
+    profileName: { fontSize: 12, fontWeight: Typography.bold, color: Colors.white },
 
     // Hero body
-    heroBody: {
-        paddingHorizontal: Spacing.xl,
-        paddingBottom: 80,
-    },
+    heroBody: { paddingHorizontal: Spacing.xl, paddingBottom: 80 },
     locationPill: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -738,11 +675,7 @@ const s = StyleSheet.create({
         lineHeight: 20,
         marginBottom: 24,
     },
-    heroCtaRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 14,
-    },
+    heroCtaRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
     ctaPrimary: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -759,18 +692,8 @@ const s = StyleSheet.create({
         color: Colors.charcoal,
         letterSpacing: 0.2,
     },
-    ctaGhost: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-    },
-    ctaGhostText: {
-        fontSize: 12.5,
-        fontWeight: Typography.medium,
-        color: 'rgba(255,255,255,0.60)',
-    },
 
-    // Stats strip (floats at bottom of hero)
+    // Stats strip
     statsStrip: {
         position: 'absolute',
         bottom: 0,
@@ -798,7 +721,7 @@ const s = StyleSheet.create({
         marginTop: 2,
     },
 
-    // ── Search card ──────────────────────────────────────────────────────────────
+    // Search card
     searchCard: {
         backgroundColor: Colors.surface,
         marginHorizontal: Spacing.lg,
@@ -864,13 +787,9 @@ const s = StyleSheet.create({
         height: 50,
         ...Shadows.primary,
     },
-    searchBtnText: {
-        fontSize: 14.5,
-        fontWeight: Typography.extraBold,
-        color: Colors.charcoal,
-    },
+    searchBtnText: { fontSize: 14.5, fontWeight: Typography.extraBold, color: Colors.charcoal },
 
-    // ── Generic section ──────────────────────────────────────────────────────────
+    // Generic section
     section: { paddingHorizontal: Spacing.lg, paddingVertical: 26 },
     surfaceSection: { backgroundColor: Colors.surface },
     sectionHeader: {
@@ -880,12 +799,7 @@ const s = StyleSheet.create({
         marginBottom: 6,
     },
     sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-    accentBar: {
-        width: 4,
-        height: 22,
-        backgroundColor: Colors.primary,
-        borderRadius: 2,
-    },
+    accentBar: { width: 4, height: 22, backgroundColor: Colors.primary, borderRadius: 2 },
     sectionTitle: {
         fontSize: 19,
         fontWeight: Typography.extraBold,
@@ -898,14 +812,8 @@ const s = StyleSheet.create({
         marginBottom: Spacing.lg,
         marginLeft: 14,
     },
-    seeAll: {
-        fontSize: 13,
-        fontWeight: Typography.bold,
-        color: Colors.primary,
-    },
+    seeAll: { fontSize: 13, fontWeight: Typography.bold, color: Colors.primary },
     hScroll: { paddingBottom: 4 },
-
-    // Centered heading (for sections without row layout)
     centeredHead: { alignItems: 'center', marginBottom: 20 },
     eyebrow: {
         fontSize: 9.5,
@@ -930,7 +838,7 @@ const s = StyleSheet.create({
         paddingHorizontal: Spacing.xl,
     },
 
-    // ── Categories ───────────────────────────────────────────────────────────────
+    // Categories
     catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
     catCard: {
         width: CAT_W,
@@ -959,13 +867,7 @@ const s = StyleSheet.create({
         color: Colors.charcoal,
         textAlign: 'center',
     },
-    catCount: {
-        fontSize: 10.5,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.medium,
-    },
-
-    // View all
+    catCount: { fontSize: 10.5, color: Colors.charcoalLight, fontWeight: Typography.medium },
     viewAllBtn: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -976,13 +878,9 @@ const s = StyleSheet.create({
         paddingVertical: 14,
         marginTop: Spacing.lg,
     },
-    viewAllBtnText: {
-        fontSize: 14,
-        fontWeight: Typography.extraBold,
-        color: Colors.white,
-    },
+    viewAllBtnText: { fontSize: 14, fontWeight: Typography.extraBold, color: Colors.white },
 
-    // ── Amenities ────────────────────────────────────────────────────────────────
+    // Amenities
     amenGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
     amenCard: {
         width: AMEN_W,
@@ -1013,7 +911,7 @@ const s = StyleSheet.create({
         lineHeight: 16,
     },
 
-    // ── Packages (list layout) ────────────────────────────────────────────────────
+    // Packages
     pkgList: { gap: Spacing.sm },
     pkgRow: {
         flexDirection: 'row',
@@ -1025,10 +923,7 @@ const s = StyleSheet.create({
         borderWidth: 1.5,
         borderColor: Colors.border,
     },
-    pkgRowFeatured: {
-        backgroundColor: Colors.primary,
-        borderColor: Colors.primary,
-    },
+    pkgRowFeatured: { backgroundColor: Colors.primary, borderColor: Colors.primary },
     pkgIconWrap: {
         width: 44,
         height: 44,
@@ -1039,17 +934,8 @@ const s = StyleSheet.create({
     },
     pkgIconFeatured: { backgroundColor: 'rgba(255,255,255,0.25)' },
     pkgMid: { flex: 1 },
-    pkgLabelRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        marginBottom: 3,
-    },
-    pkgLabel: {
-        fontSize: 15,
-        fontWeight: Typography.bold,
-        color: Colors.charcoal,
-    },
+    pkgLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3 },
+    pkgLabel: { fontSize: 15, fontWeight: Typography.bold, color: Colors.charcoal },
     popularBadge: {
         backgroundColor: Colors.charcoal,
         paddingHorizontal: 8,
@@ -1062,11 +948,7 @@ const s = StyleSheet.create({
         color: Colors.primary,
         letterSpacing: 0.4,
     },
-    pkgSubtext: {
-        fontSize: 11,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.medium,
-    },
+    pkgSubtext: { fontSize: 11, color: Colors.charcoalLight, fontWeight: Typography.medium },
     pkgSubtextFeatured: { color: 'rgba(255,255,255,0.65)' },
     pkgRight: {
         flexDirection: 'row',
@@ -1080,14 +962,10 @@ const s = StyleSheet.create({
         color: Colors.primary,
         letterSpacing: -0.4,
     },
-    pkgPriceUnit: {
-        fontSize: 11,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.medium,
-    },
+    pkgPriceUnit: { fontSize: 11, color: Colors.charcoalLight, fontWeight: Typography.medium },
     textWhite: { color: Colors.white },
 
-    // ── Testimonials ─────────────────────────────────────────────────────────────
+    // Testimonials
     testiCard: {
         width: W * 0.76,
         backgroundColor: Colors.surface,
@@ -1098,12 +976,7 @@ const s = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.border,
     },
-    testiTop: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        marginBottom: 12,
-    },
+    testiTop: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
     testiAvatar: {
         width: 40,
         height: 40,
@@ -1113,23 +986,11 @@ const s = StyleSheet.create({
         justifyContent: 'center',
         flexShrink: 0,
     },
-    testiAvatarText: {
-        fontSize: 13,
-        fontWeight: Typography.extraBold,
-        color: Colors.primary,
-    },
-    testiName: {
-        fontSize: 13,
-        fontWeight: Typography.bold,
-        color: Colors.charcoal,
-    },
+    testiAvatarText: { fontSize: 13, fontWeight: Typography.extraBold, color: Colors.primary },
+    testiName: { fontSize: 13, fontWeight: Typography.bold, color: Colors.charcoal },
     testiRole: { fontSize: 10.5, color: Colors.charcoalLight, marginTop: 2 },
     testiStars: { flexDirection: 'row', gap: 2 },
-    testiDivider: {
-        height: 1,
-        backgroundColor: Colors.border,
-        marginBottom: 10,
-    },
+    testiDivider: { height: 1, backgroundColor: Colors.border, marginBottom: 10 },
     quoteMark: {
         fontSize: 36,
         lineHeight: 32,
@@ -1139,7 +1000,7 @@ const s = StyleSheet.create({
     },
     testiText: { fontSize: 12.5, color: Colors.charcoalMid, lineHeight: 19 },
 
-    // ── CTA banner ───────────────────────────────────────────────────────────────
+    // CTA banner
     ctaBannerWrap: { paddingHorizontal: Spacing.lg },
     ctaBanner: {
         backgroundColor: Colors.charcoal,
@@ -1230,11 +1091,7 @@ const s = StyleSheet.create({
         borderWidth: 1,
         borderColor: 'rgba(245,166,35,0.30)',
     },
-    ctaProfileInitials: {
-        fontSize: 9,
-        fontWeight: Typography.extraBold,
-        color: Colors.primary,
-    },
+    ctaProfileInitials: { fontSize: 9, fontWeight: Typography.extraBold, color: Colors.primary },
     ctaProfileText: {
         fontSize: 12.5,
         fontWeight: Typography.semiBold,

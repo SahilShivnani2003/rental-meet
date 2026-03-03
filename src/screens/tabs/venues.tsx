@@ -6,7 +6,6 @@ import {
     ScrollView,
     TouchableOpacity,
     TextInput,
-    Image,
     ActivityIndicator,
     RefreshControl,
     Dimensions,
@@ -19,15 +18,14 @@ import { venueAPI } from '../../service/apis/venues';
 import { useAuthStore } from '../../store/auth-store';
 
 const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - 56) / 2;
 
 const categories = [
-    { id: 'all', name: 'All', icon: 'apps-outline' },
-    { id: 'Conference Room', name: 'Conference', icon: 'business-outline' },
-    { id: 'Banquet Hall', name: 'Banquet', icon: 'restaurant-outline' },
-    { id: 'Wedding Venue', name: 'Wedding', icon: 'rose-outline' },
-    { id: 'Party Hall', name: 'Party', icon: 'balloon-outline' },
-    { id: 'Meeting Room', name: 'Meeting', icon: 'people-outline' },
+    { id: 'all',             name: 'All',        icon: 'apps-outline',       venueType: null },
+    { id: 'Conference Hall', name: 'Conference',  icon: 'business-outline',   venueType: 'Conference Hall' },
+    { id: 'Banquet Hall',    name: 'Banquet',     icon: 'restaurant-outline', venueType: 'Banquet Hall' },
+    { id: 'Marriage Garden', name: 'Wedding',     icon: 'rose-outline',       venueType: 'Marriage Garden' },
+    { id: 'Function Hall',   name: 'Party',       icon: 'balloon-outline',    venueType: 'Function Hall' },
+    { id: 'Meeting Hall',    name: 'Meeting',     icon: 'people-outline',     venueType: 'Meeting Hall' },
 ];
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -63,9 +61,18 @@ export default function VenuesScreen() {
         }
     };
 
-    const filteredVenues = venues.filter(v =>
-        v.businessName.toLowerCase().includes(searchQuery.toLowerCase()),
-    );
+    // ── Filter by search query AND selected category ──────────────────────────
+    const filteredVenues = venues.filter(v => {
+        const matchesSearch = v.businessName
+            .toLowerCase()
+            .includes(searchQuery.toLowerCase());
+
+        const matchesCategory =
+            selectedCategory === 'all' ||
+            (Array.isArray(v.venueType) && v.venueType.includes(selectedCategory));
+
+        return matchesSearch && matchesCategory;
+    });
 
     return (
         <View style={styles.container}>
@@ -74,7 +81,7 @@ export default function VenuesScreen() {
                 <View style={styles.headerAccentBar} />
                 <View style={styles.headerContent}>
                     <View>
-                        <Text style={styles.greetingLabel}>Venues</Text>
+                        <Text style={styles.greetingLabel}>DISCOVER</Text>
                         <Text style={styles.greeting}>Venues</Text>
                     </View>
                 </View>
@@ -187,7 +194,7 @@ export default function VenuesScreen() {
                     ) : (
                         <Animated.View style={[styles.venuesGrid, { opacity: fadeAnim }]}>
                             {filteredVenues.map(v => (
-                                <VenueCard key={v.id} venue={v} />
+                                <VenueCard key={v._id} venue={v} />
                             ))}
                         </Animated.View>
                     )}
@@ -353,7 +360,7 @@ const styles = StyleSheet.create({
         fontWeight: Typography.medium,
     },
 
-    // Venue grid cards
+    // Venue grid
     venuesGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',

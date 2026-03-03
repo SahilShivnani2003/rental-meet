@@ -15,6 +15,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows, StatusConfig } from '../../theme/theme';
 import BookingCard from '../../components/booking/booking-card';
 import { bookingAPI } from '../../service/apis/booking';
+import { useAuthStore } from '../../store/auth-store';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -74,7 +75,7 @@ const TABS = ['all', 'pending', 'confirmed', 'completed', 'cancelled'];
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function BookingsScreen() {
-    const user = MOCK_USER;
+    const {user, token} = useAuthStore();
     const [bookings, setBookings] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -87,7 +88,8 @@ export default function BookingsScreen() {
     const fetchBookings = async () => {
         try {
             setLoading(true);
-
+            console.log('TOKEN FOUNDED : ',token);
+            
             const response = await bookingAPI.getAll();
 
             if (!response?.success) {

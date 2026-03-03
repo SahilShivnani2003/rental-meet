@@ -31,11 +31,12 @@ export const useAuthStore = create<AuthStore>((set) => ({
     },
     loadUser: async () => {
 
-        const user = await AsyncStorage.getItem('user')
+        const user = await AsyncStorage.getItem('user');
+        const token = await AsyncStorage.getItem('token');
         debugger
-        if (user) {
+        if (user && token) {
             const userData = JSON.parse(user);
-            set({ user: userData, isAuthenticated: true })
+            set({ user: userData, isAuthenticated: true, token:token })
         }
     },
     logOut: async () => {

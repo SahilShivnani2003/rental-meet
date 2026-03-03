@@ -1,21 +1,21 @@
-import { apiClient, header } from "../api-client";
+import { apiClient, getAuthHeader } from "../api-client";
 
 export const bookingAPI = {
     getAll: () => apiClient.get('bookings', {
-        headers: header
+        headers: getAuthHeader()
     }),
 
     create: (data: any) => apiClient.post('bookings', data, {
-        headers: header
+        headers: getAuthHeader()
     }),
 
     getById: (id: string) => apiClient.get(`bookings/${id}`),
 
     updateStatus: (id: string, data: any) => apiClient.put(`bookings/${id}/status`, data, {
-        headers: header
+        headers: getAuthHeader()
     }),
 
     bookingCancel: (id: string, data: any) => apiClient.put(`bookings/${id}/cancel`, data, {
-        headers: header
+        headers: getAuthHeader()
     })
 }
