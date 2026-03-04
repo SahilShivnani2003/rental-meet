@@ -13,8 +13,11 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
 import { useAlert } from '../../context/AlertContext';
 import { useAuthStore } from '../../store/auth-store';
-import { NativeBottomTabBarProps, NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
-import { ClientTabParamList } from '../../navigations/ClientTabNavigation';
+import {
+    NativeBottomTabBarProps,
+    NativeBottomTabScreenProps,
+} from '@react-navigation/bottom-tabs/unstable';
+import { ClientTabParamList } from '../../navigations/tabNavigations/ClientTabNavigation';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigations/RootNavigation';
 
@@ -309,10 +312,10 @@ function MenuSection({ title, items }: { title: string; items: any[] }) {
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
-type clientProfileProps = NativeBottomTabScreenProps<ClientTabParamList, 'profile'>
+type clientProfileProps = NativeBottomTabScreenProps<ClientTabParamList, 'profile'>;
 
-export default function ClientProfile({ navigation }:clientProfileProps) {
-    const {user} = useAuthStore();
+export default function ClientProfile({ navigation }: clientProfileProps) {
+    const { user } = useAuthStore();
     const typeCfg = USER_TYPE_CONFIG[user.userType] ?? USER_TYPE_CONFIG.client;
     const alert = useAlert();
     const { logOut } = useAuthStore();
@@ -346,11 +349,14 @@ export default function ClientProfile({ navigation }:clientProfileProps) {
                 {
                     label: 'Log Out',
                     onPress: async () => {
+                        navigation
+                            .getParent<NativeStackNavigationProp<RootStackParamList>>()
+                            .reset({
+                                index: 0,
+                                routes: [{ name: 'login' }],
+                            });
                         await logOut();
-                        navigation.getParent<NativeStackNavigationProp<RootStackParamList>>().reset({
-                            index: 0 ,
-                            routes:[{name:'login'}]
-                        })
+                        alert.dismiss;
                     },
                 },
             ],

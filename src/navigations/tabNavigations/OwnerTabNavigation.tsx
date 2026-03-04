@@ -11,11 +11,11 @@ import {
     LayoutChangeEvent,
 } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
-import OwnerDashboardScreen from "../screens/owner/dashboard";
-import BookingsScreen from "../screens/tabs/bookings";
-import MessagesScreen from "../screens/tabs/messages";
-import ProfileScreen from "../screens/tabs/profile";
-import { Colors, TAB_BAR_HEIGHT, Typography, TAB_CENTER_SIZE } from "../theme/theme";
+import OwnerDashboardScreen from "../../screens/owner/dashboard";
+import BookingsScreen from "../../screens/tabs/bookings";
+import MessagesScreen from "../../screens/tabs/messages";
+import ProfileScreen from "../../screens/tabs/profile";
+import { Colors, TAB_BAR_HEIGHT, Typography, TAB_CENTER_SIZE } from "../../theme/theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 

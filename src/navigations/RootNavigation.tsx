@@ -1,15 +1,15 @@
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { TabNavigation } from './TabNavigation';
 import LoginScreen from '../screens/auth/login';
 import SplashScreen from '../screens/splashScreen';
 import RegisterTypeScreen from '../screens/auth/resigter-type';
-import { ClientTabNavigation } from './ClientTabNavigation';
-import { OwnerTabNavigation } from './OwnerTabNavigation';
+import { ClientTabNavigation } from './tabNavigations/ClientTabNavigation';
+import { OwnerTabNavigation } from './tabNavigations/OwnerTabNavigation';
 import RegisterScreen from '../screens/auth/register';
 import { AlertProvider } from '../context/AlertContext';
 import VenueDetailScreen, { Venue } from '../screens/venue-detail';
+import { TabNavigation } from './tabNavigations/TabNavigation';
 
 export type RootStackParamList = {
     splash: undefined;

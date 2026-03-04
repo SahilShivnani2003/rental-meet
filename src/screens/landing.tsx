@@ -8,16 +8,14 @@ import {
     Animated,
     Dimensions,
     TextInput,
-    StatusBar,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { useNavigation } from '@react-navigation/native';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../theme/theme';
 import { KEY_STATS, CATEGORIES, AMENITIES, PACKAGES, TESTIMONIALS } from '../Data/landingData';
 import useEntrance from '../hooks/useEntrance';
 import FeaturedCard from '../components/landing/featuredCard';
 import { useAuthStore } from '../store/auth-store';
-import { ClientTabParamList } from '../navigations/ClientTabNavigation';
+import { ClientTabParamList } from '../navigations/tabNavigations/ClientTabNavigation';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
 import { venueAPI } from '../service/apis/venues';
 import { Venue } from './venue-detail';
@@ -29,7 +27,6 @@ const { width: W, height: H } = Dimensions.get('window');
 type landingProps = NativeBottomTabScreenProps<ClientTabParamList, 'home'>;
 
 export default function LandingScreen({ navigation }: landingProps) {
-    const navigatonV2 = useNavigation();
     const { user } = useAuthStore();
     const [search, setSearch] = useState('');
 
@@ -144,10 +141,10 @@ export default function LandingScreen({ navigation }: landingProps) {
                             >
                                 <View style={s.profileAvatar}>
                                     <Text style={s.profileInitials}>
-                                        {user?.name?.slice(0, 2).toUpperCase() || ''}
+                                        {user?.name?.slice(0, 2).toUpperCase() || 'G'}
                                     </Text>
                                 </View>
-                                <Text style={s.profileName}>{user.name}</Text>
+                                <Text style={s.profileName}>{user?.name || 'Guest'}</Text>
                                 <Ionicons
                                     name="chevron-down"
                                     size={11}
@@ -517,7 +514,7 @@ export default function LandingScreen({ navigation }: landingProps) {
                             >
                                 <View style={s.ctaProfileAvatar}>
                                     <Text style={s.ctaProfileInitials}>
-                                        {user?.name?.slice(0, 2).toUpperCase() || ''}
+                                        {user?.name?.slice(0, 2).toUpperCase() || 'Guest'}
                                     </Text>
                                 </View>
                                 <Text style={s.ctaProfileText}>View your profile</Text>

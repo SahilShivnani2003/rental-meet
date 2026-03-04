@@ -94,11 +94,13 @@ export default function BookingsScreen() {
 
             if (!response?.success) {
                 console.error('FETCHING BOOKING ERROR : ', response?.message);
+                setBookings([])
                 return;
             }
 
             setBookings(response?.booking);
         } catch (error: any) {
+            setBookings([])
             console.error('FETCHING BOOKING ERROR : ', error);
         } finally {
             setLoading(false);
@@ -111,9 +113,9 @@ export default function BookingsScreen() {
         Alert.alert('Updated', `Booking marked as ${status}.`);
     };
 
-    const filtered = bookings.filter(b => activeTab === 'all' || b.status === activeTab);
+    const filtered = bookings?.filter(b => activeTab === 'all' || b.status === activeTab);
     const counts = TABS.reduce((acc, t) => {
-        acc[t] = t === 'all' ? bookings.length : bookings.filter(b => b.status === t).length;
+        acc[t] = t === 'all' ? bookings?.length : bookings?.filter(b => b.status === t).length;
         return acc;
     }, {} as Record<string, number>);
 
@@ -128,7 +130,7 @@ export default function BookingsScreen() {
                         <Text style={styles.headerTitle}>My Bookings</Text>
                     </View>
                     <View style={styles.totalBadge}>
-                        <Text style={styles.totalBadgeNum}>{bookings.length}</Text>
+                        <Text style={styles.totalBadgeNum}>{bookings?.length}</Text>
                         <Text style={styles.totalBadgeLabel}>Total</Text>
                     </View>
                 </View>
@@ -221,7 +223,7 @@ export default function BookingsScreen() {
                         <ActivityIndicator size="large" color={Colors.primary} />
                         <Text style={styles.loaderText}>Loading bookings...</Text>
                     </View>
-                ) : filtered.length === 0 ? (
+                ) : filtered?.length === 0 ? (
                     <View style={styles.emptyWrap}>
                         <View style={styles.emptyIconWrap}>
                             <Ionicons
@@ -238,7 +240,7 @@ export default function BookingsScreen() {
                         </Text>
                     </View>
                 ) : (
-                    filtered.map((booking, index) => (
+                    filtered?.map((booking, index) => (
                         <BookingCard
                             key={booking.id}
                             booking={booking}

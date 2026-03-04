@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
     View,
     Text,
-    TextInput,
     TouchableOpacity,
     StyleSheet,
     Image,
@@ -43,17 +42,29 @@ export default function LoginScreen({ navigation }: LoginProps) {
     const cardOpacity = useRef(new Animated.Value(0)).current;
     const shakeAnim = useRef(new Animated.Value(0)).current;
     const btnScale = useRef(new Animated.Value(1)).current;
+    const skipAnim = useRef(new Animated.Value(0)).current;
 
-    //Clear errors 
-    const clearError = (key: string) => setErrors((prev) => ({ ...prev, [key]: '' }));
+    const clearError = (key: string) => setErrors(prev => ({ ...prev, [key]: '' }));
 
     useEffect(() => {
         StatusBar.setBarStyle('dark-content');
         Animated.sequence([
             Animated.timing(logoAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
             Animated.parallel([
-                Animated.spring(cardAnim, { toValue: 0, useNativeDriver: true, speed: 14, bounciness: 6 }),
+                Animated.spring(cardAnim, {
+                    toValue: 0,
+                    useNativeDriver: true,
+                    speed: 14,
+                    bounciness: 6,
+                }),
                 Animated.timing(cardOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+                // Skip button fades in slightly after the card
+                Animated.timing(skipAnim, {
+                    toValue: 1,
+                    duration: 400,
+                    delay: 300,
+                    useNativeDriver: true,
+                }),
             ]),
         ]).start();
     }, []);
@@ -70,21 +81,13 @@ export default function LoginScreen({ navigation }: LoginProps) {
 
     const validate = () => {
         const e: Record<string, string> = {};
-
-        if (!email.trim()) {
-            e.email = 'Email is required';
-        } else if (!/\S+@\S+\.\S+/.test(email)) {
-            e.email = 'Enter a valid email';
-        }
-
-        if (!password) {
-            e.password = 'Password is required';
-        } else if (password.length < 6) {
-            e.password = 'Must be at least 6 characters';
-        }
-
+        if (!email.trim()) e.email = 'Email is required';
+        else if (!/\S+@\S+\.\S+/.test(email)) e.email = 'Enter a valid email';
+        if (!password) e.password = 'Password is required';
+        else if (password.length < 6) e.password = 'Must be at least 6 characters';
         return e;
-    }
+    };
+
     const handleLogin = async () => {
         const e = validate();
         setErrors(e);
@@ -93,56 +96,52 @@ export default function LoginScreen({ navigation }: LoginProps) {
             return;
         }
 
-        // Button press animation
         Animated.sequence([
-            Animated.timing(btnScale, {
-                toValue: 0.95,
-                duration: 80,
-                useNativeDriver: true
-            }),
-            Animated.spring(btnScale, {
-                toValue: 1,
-                useNativeDriver: true,
-                speed: 20
-            }),
+            Animated.timing(btnScale, { toValue: 0.95, duration: 80, useNativeDriver: true }),
+            Animated.spring(btnScale, { toValue: 1, useNativeDriver: true, speed: 20 }),
         ]).start();
 
         try {
             setLoading(true);
-
-            const loginData = {
-                email: email,
-                password: password
-            };
-
-            const response = await authAPI.login(loginData);
-
-            console.log('LOGIN RESPONSE : ', response);
-
+            const response = await authAPI.login({ email, password });
             if (!response?.success) {
                 alert.error('Login failed', response?.message || 'Something went wrong');
                 return;
             }
-
             setUser(response?.user, response?.token);
-            alert.success('Success', response?.message || 'Login Successfull');
-
-            if (response?.user?.role === 'owner') {
-                navigation.replace('owner');
-            } else {
-                navigation.replace('client');
-            }
-
+            alert.success('Success', response?.message || 'Login Successful');
+            navigation.replace(response?.user?.role === 'owner' ? 'owner' : 'client');
         } catch (error: any) {
-            console.log('LOGIN ERROR : ', error);
             alert.error('Login failed', error?.message || 'Something went wrong');
         } finally {
             setLoading(false);
         }
     };
 
+    // ── Skip — navigates as a guest client ──────────────────────────────────────
+    const handleSkip = () => {
+        alert.show({
+            title: 'Continue as Guest',
+            message: 'You can browse venues without singing in. Some features will be limited',
+            buttons: [
+                { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },
+                {
+                    label: 'Continue',
+                    onPress: () => {
+                        navigation.replace('main');
+                        alert.dismiss();
+                    },
+                    style: 'primary',
+                },
+            ],
+        });
+    };
+
     return (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
             <ScrollView
                 style={styles.container}
                 contentContainerStyle={styles.scrollContent}
@@ -153,16 +152,34 @@ export default function LoginScreen({ navigation }: LoginProps) {
                 <View style={styles.arcTop} />
                 <View style={styles.arcBottom} />
 
+                {/* ── Skip button (top-right) ── */}
+                <Animated.View style={[styles.skipWrapper, { opacity: skipAnim }]}>
+                    <TouchableOpacity
+                        style={styles.skipBtn}
+                        onPress={handleSkip}
+                        activeOpacity={0.75}
+                    >
+                        <Text style={styles.skipText}>Skip</Text>
+                        <Ionicons name="chevron-forward" size={14} color={Colors.charcoalLight} />
+                    </TouchableOpacity>
+                </Animated.View>
+
                 {/* ── Logo area ── */}
-                <Animated.View style={[styles.logoArea, {
-                    opacity: logoAnim,
-                    transform: [{
-                        translateY: logoAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [-20, 0]
-                        })
-                    }]
-                }]}
+                <Animated.View
+                    style={[
+                        styles.logoArea,
+                        {
+                            opacity: logoAnim,
+                            transform: [
+                                {
+                                    translateY: logoAnim.interpolate({
+                                        inputRange: [0, 1],
+                                        outputRange: [-20, 0],
+                                    }),
+                                },
+                            ],
+                        },
+                    ]}
                 >
                     <View style={styles.logoCard}>
                         <Image
@@ -184,43 +201,45 @@ export default function LoginScreen({ navigation }: LoginProps) {
                         styles.card,
                         {
                             opacity: cardOpacity,
-                            transform: [
-                                { translateY: cardAnim },
-                                { translateX: shakeAnim },
-                            ],
+                            transform: [{ translateY: cardAnim }, { translateX: shakeAnim }],
                         },
                     ]}
                 >
                     <Text style={styles.cardTitle}>Welcome back</Text>
                     <Text style={styles.cardSubtitle}>Sign in to continue</Text>
 
-                    {/* ── Email field ── */}
                     <Field
-                        label='Email'
+                        label="Email"
                         placeholder="you@example.com"
                         icon="mail-outline"
                         value={email}
-                        onChangeText={(t) => { setEmail(t); clearError('email') }}
+                        onChangeText={t => {
+                            setEmail(t);
+                            clearError('email');
+                        }}
                         error={errors.email}
                         keyboardType="email-address"
                     />
 
-                    {/* ── Password field ── */}
                     <Field
-                        label='Password'
+                        label="Password"
                         placeholder="Minimum 6 characters"
                         icon="lock-closed-outline"
                         value={password}
-                        onChangeText={(t) => { setPassword(t); clearError('password') }}
+                        onChangeText={t => {
+                            setPassword(t);
+                            clearError('password');
+                        }}
                         error={errors.password}
                         secureTextEntry={!showPassword}
                         trailingIcon={showPassword ? 'eye-off-outline' : 'eye-outline'}
                         onTrailingPress={() => setShowPass(!showPassword)}
                     />
 
-                    {/* Forgot password */}
-                    <TouchableOpacity style={styles.forgotRow}
-                        onPress={() => Alert.alert('Reset Password', 'A reset link has been sent.')}>
+                    <TouchableOpacity
+                        style={styles.forgotRow}
+                        onPress={() => Alert.alert('Reset Password', 'A reset link has been sent.')}
+                    >
                         <Text style={styles.forgotText}>Forgot password?</Text>
                     </TouchableOpacity>
 
@@ -240,12 +259,33 @@ export default function LoginScreen({ navigation }: LoginProps) {
                                 <>
                                     <Text style={styles.loginBtnText}>Sign In</Text>
                                     <View style={styles.loginBtnArrow}>
-                                        <Ionicons name="arrow-forward" size={18} color={Colors.primary} />
+                                        <Ionicons
+                                            name="arrow-forward"
+                                            size={18}
+                                            color={Colors.primary}
+                                        />
                                     </View>
                                 </>
                             )}
                         </TouchableOpacity>
                     </Animated.View>
+
+                    {/* ── Divider ── */}
+                    <View style={styles.dividerRow}>
+                        <View style={styles.dividerLine} />
+                        <Text style={styles.dividerText}>or</Text>
+                        <View style={styles.dividerLine} />
+                    </View>
+
+                    {/* ── Guest / Skip button (inside card, secondary style) ── */}
+                    <TouchableOpacity
+                        style={styles.guestBtn}
+                        onPress={handleSkip}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons name="person-outline" size={17} color={Colors.charcoalLight} />
+                        <Text style={styles.guestBtnText}>Continue as Guest</Text>
+                    </TouchableOpacity>
                 </Animated.View>
 
                 {/* ── Sign up nudge ── */}
@@ -263,18 +303,10 @@ export default function LoginScreen({ navigation }: LoginProps) {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: Colors.background
-    },
-    scrollContent: {
-        flexGrow: 1,
-        alignItems: 'center',
-        paddingBottom: Spacing.xxl,
-        paddingTop: 0
-    },
+    container: { flex: 1, backgroundColor: Colors.background },
+    scrollContent: { flexGrow: 1, alignItems: 'center', paddingBottom: Spacing.xxl, paddingTop: 0 },
 
-    // Decorative arcs
+    // Arcs
     arcTop: {
         position: 'absolute',
         top: -SCREEN_WIDTH * 0.5,
@@ -296,38 +328,54 @@ const styles = StyleSheet.create({
         opacity: 0.4,
     },
 
-    // Logo area
-    logoArea: {
-        alignItems: 'center',
-        paddingTop: SCREEN_HEIGHT * 0.09,
-        marginBottom: Spacing.xxl
+    // ── Skip (top-right corner) ──
+    skipWrapper: {
+        position: 'absolute',
+        top: Platform.OS === 'ios' ? 54 : 20,
+        right: Spacing.lg,
+        zIndex: 10,
     },
+    skipBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+        paddingHorizontal: 12,
+        paddingVertical: 7,
+        borderRadius: Radii.full ?? 99,
+        backgroundColor: Colors.surface,
+        borderWidth: 1,
+        borderColor: Colors.border ?? 'rgba(0,0,0,0.08)',
+        ...Shadows.card,
+    },
+    skipText: {
+        fontSize: 13,
+        fontWeight: Typography.semiBold ?? Typography.bold,
+        color: Colors.charcoalLight,
+        letterSpacing: 0.2,
+    },
+
+    // Logo
+    logoArea: { alignItems: 'center', paddingTop: SCREEN_HEIGHT * 0.09, marginBottom: Spacing.xxl },
     logoCard: {
         width: 110,
         height: 110,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: Spacing.md
+        marginBottom: Spacing.md,
     },
-    logo: {
-        width: '100%',
-        height: '100%'
-    },
-    brandRow: {
-        flexDirection: 'row',
-        alignItems: 'baseline'
-    },
+    logo: { width: '100%', height: '100%' },
+    brandRow: { flexDirection: 'row', alignItems: 'baseline' },
     brandRental: {
         fontSize: 32,
         fontWeight: Typography.bold,
         color: Colors.primary,
-        letterSpacing: -0.5
+        letterSpacing: -0.5,
     },
     brandMeet: {
         fontSize: 32,
         fontWeight: Typography.extraBold,
         color: Colors.charcoal,
-        letterSpacing: -0.5
+        letterSpacing: -0.5,
     },
     brandTagline: {
         fontSize: 9,
@@ -335,7 +383,7 @@ const styles = StyleSheet.create({
         color: Colors.charcoalLight,
         letterSpacing: 2,
         textTransform: 'uppercase',
-        marginTop: 4
+        marginTop: 4,
     },
 
     // Card
@@ -351,51 +399,36 @@ const styles = StyleSheet.create({
         fontWeight: Typography.extraBold,
         color: Colors.charcoal,
         letterSpacing: -0.4,
-        marginBottom: 4
+        marginBottom: 4,
     },
     cardSubtitle: {
         fontSize: Typography.md,
         color: Colors.charcoalLight,
         fontWeight: Typography.regular,
-        marginBottom: Spacing.lg
+        marginBottom: Spacing.lg,
     },
 
     // Forgot
-    forgotRow: {
-        alignItems: 'flex-end',
-        marginBottom: Spacing.lg,
-        marginTop: -4
-
-    },
-
-
-    forgotText: {
-        fontSize: 13,
-        color: Colors.primary,
-        fontWeight: Typography.bold
-
-    },
-
+    forgotRow: { alignItems: 'flex-end', marginBottom: Spacing.lg, marginTop: -4 },
+    forgotText: { fontSize: 13, color: Colors.primary, fontWeight: Typography.bold },
 
     // Login button
     loginBtn: {
         backgroundColor: Colors.charcoal,
         borderRadius: Radii.md,
-        height: 54, flexDirection: 'row',
+        height: 54,
+        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 12,
-        ...Shadows.floating
+        ...Shadows.floating,
     },
-    loginBtnDisabled: {
-        opacity: 0.7
-
-    },
+    loginBtnDisabled: { opacity: 0.7 },
     loginBtnText: {
         fontSize: 16,
         fontWeight: Typography.extraBold,
-        color: Colors.white, letterSpacing: 0.3
-
+        color: Colors.white,
+        letterSpacing: 0.3,
     },
     loginBtnArrow: {
         width: 30,
@@ -403,37 +436,47 @@ const styles = StyleSheet.create({
         borderRadius: 15,
         backgroundColor: Colors.surface,
         alignItems: 'center',
-        justifyContent: 'center'
-
+        justifyContent: 'center',
     },
-    loadingRow: {
+    loadingRow: { alignItems: 'center', justifyContent: 'center', height: 24 },
+
+    // Divider
+    dividerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginVertical: Spacing.md,
+        gap: Spacing.sm,
+    },
+    dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border ?? 'rgba(0,0,0,0.08)' },
+    dividerText: { fontSize: 12, color: Colors.charcoalLight, fontWeight: Typography.medium },
+
+    // Guest button
+    guestBtn: {
+        flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        height: 24
-
+        gap: 8,
+        height: 50,
+        borderRadius: Radii.md,
+        borderWidth: 1.5,
+        borderColor: Colors.border ?? 'rgba(0,0,0,0.1)',
+        backgroundColor: 'transparent',
+    },
+    guestBtnText: {
+        fontSize: 15,
+        fontWeight: Typography.semiBold ?? Typography.bold,
+        color: Colors.charcoalLight,
     },
 
     // Sign up
-    signupRow: {
-        flexDirection: 'row', alignItems: 'center',
-        marginTop: Spacing.xl
-
-    },
-    signupText: {
-        fontSize: 14,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.regular
-    },
-    signupLink: {
-        fontSize: 14,
-        color: Colors.primary,
-        fontWeight: Typography.extraBold
-    },
+    signupRow: { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.xl },
+    signupText: { fontSize: 14, color: Colors.charcoalLight, fontWeight: Typography.regular },
+    signupLink: { fontSize: 14, color: Colors.primary, fontWeight: Typography.extraBold },
 
     version: {
         marginTop: Spacing.lg,
         fontSize: 11,
         color: Colors.charcoalLight,
-        fontWeight: Typography.medium
+        fontWeight: Typography.medium,
     },
 });
