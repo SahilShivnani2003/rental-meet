@@ -26,7 +26,8 @@ const SERVICES = [
         name: 'Royal Feast Catering',
         tagline: 'Multi-cuisine corporate & wedding menus',
         icon: 'restaurant',
-        rating: 4.8, reviews: 124,
+        rating: 4.8,
+        reviews: 124,
         priceLabel: 'from Rs.350/plate',
         tags: ['Multi-Cuisine', 'Veg & Non-Veg', 'Live Counters'],
         badge: 'Top Rated',
@@ -39,7 +40,8 @@ const SERVICES = [
         name: 'Gourmet Kitchen',
         tagline: 'Continental & Indian fine dining experience',
         icon: 'fast-food',
-        rating: 4.6, reviews: 89,
+        rating: 4.6,
+        reviews: 89,
         priceLabel: 'from Rs.500/plate',
         tags: ['Continental', 'Fine Dining', 'Custom Menu'],
         badge: null,
@@ -52,7 +54,8 @@ const SERVICES = [
         name: 'Spice Route Events',
         tagline: 'Traditional Indian & street food stations',
         icon: 'flame',
-        rating: 4.4, reviews: 67,
+        rating: 4.4,
+        reviews: 67,
         priceLabel: 'from Rs.220/plate',
         tags: ['Indian', 'Street Food', 'Budget Friendly'],
         badge: null,
@@ -67,7 +70,8 @@ const SERVICES = [
         name: 'GuardPro Security',
         tagline: 'Trained officers for corporate & social events',
         icon: 'shield-checkmark',
-        rating: 4.7, reviews: 98,
+        rating: 4.7,
+        reviews: 98,
         priceLabel: 'from Rs.800/officer/day',
         tags: ['Armed', 'Unarmed', 'Crowd Control'],
         badge: 'Verified',
@@ -80,7 +84,8 @@ const SERVICES = [
         name: 'SafeZone Services',
         tagline: 'CCTV monitoring & access control setup',
         icon: 'eye',
-        rating: 4.5, reviews: 53,
+        rating: 4.5,
+        reviews: 53,
         priceLabel: 'from Rs.5,000/event',
         tags: ['CCTV', 'Access Control', 'Surveillance'],
         badge: null,
@@ -93,7 +98,8 @@ const SERVICES = [
         name: 'VIP Escort Security',
         tagline: 'Executive protection & VIP management',
         icon: 'person-circle',
-        rating: 4.9, reviews: 41,
+        rating: 4.9,
+        reviews: 41,
         priceLabel: 'from Rs.2,500/officer',
         tags: ['VIP', 'Executive', 'High-Profile'],
         badge: null,
@@ -108,7 +114,8 @@ const SERVICES = [
         name: 'Glam Studio by Priya',
         tagline: 'Bridal, party & editorial makeup artistry',
         icon: 'color-palette',
-        rating: 4.9, reviews: 212,
+        rating: 4.9,
+        reviews: 212,
         priceLabel: 'from Rs.3,500/session',
         tags: ['Bridal', 'Party Makeup', 'HD Makeup'],
         badge: 'Top Rated',
@@ -121,7 +128,8 @@ const SERVICES = [
         name: 'Aura Beauty Lounge',
         tagline: 'Hair styling, skincare & full makeovers',
         icon: 'sparkles',
-        rating: 4.6, reviews: 143,
+        rating: 4.6,
+        reviews: 143,
         priceLabel: 'from Rs.2,000/session',
         tags: ['Hair Styling', 'Skin Care', 'Makeover'],
         badge: null,
@@ -134,7 +142,8 @@ const SERVICES = [
         name: 'The Beauty Crew',
         tagline: 'Team of 4 artists for large events',
         icon: 'people',
-        rating: 4.7, reviews: 76,
+        rating: 4.7,
+        reviews: 76,
         priceLabel: 'from Rs.1,200/person',
         tags: ['Group Bookings', 'On-Location', 'Airbrush'],
         badge: null,
@@ -149,7 +158,8 @@ const SERVICES = [
         name: 'Lens & Light Studio',
         tagline: 'Cinematic event films & photography',
         icon: 'videocam',
-        rating: 4.9, reviews: 187,
+        rating: 4.9,
+        reviews: 187,
         priceLabel: 'from Rs.15,000/event',
         tags: ['Cinematic', '4K Video', 'Drone'],
         badge: 'Featured',
@@ -162,7 +172,8 @@ const SERVICES = [
         name: 'Snapshot Events',
         tagline: 'Corporate & product photography',
         icon: 'camera',
-        rating: 4.5, reviews: 94,
+        rating: 4.5,
+        reviews: 94,
         priceLabel: 'from Rs.8,000/event',
         tags: ['Corporate', 'Product', 'Headshots'],
         badge: null,
@@ -175,7 +186,8 @@ const SERVICES = [
         name: 'Reel Moments',
         tagline: 'Wedding films & same day highlight reels',
         icon: 'film',
-        rating: 4.8, reviews: 135,
+        rating: 4.8,
+        reviews: 135,
         priceLabel: 'from Rs.20,000/wedding',
         tags: ['Wedding', 'Highlight Reel', 'Same Day Edit'],
         badge: null,
@@ -198,14 +210,20 @@ function useEntrance(delay = 0) {
     useEffect(() => {
         Animated.parallel([
             Animated.timing(fade, { toValue: 1, delay, duration: 340, useNativeDriver: true }),
-            Animated.spring(slide, { toValue: 0, delay, useNativeDriver: true, speed: 16, bounciness: 6 }),
+            Animated.spring(slide, {
+                toValue: 0,
+                delay,
+                useNativeDriver: true,
+                speed: 16,
+                bounciness: 6,
+            }),
         ]).start();
     }, []);
     return { fade, slide };
 }
 
 // ─── Service card ─────────────────────────────────────────────────────────────
-function ServiceCard({ service, index }: { service: typeof SERVICES[0]; index: number }) {
+function ServiceCard({ service, index }: { service: (typeof SERVICES)[0]; index: number }) {
     const { fade, slide } = useEntrance(100 + index * 55);
     const scale = useRef(new Animated.Value(1)).current;
     const press = (v: number) =>
@@ -225,31 +243,52 @@ function ServiceCard({ service, index }: { service: typeof SERVICES[0]; index: n
 
                     <View style={sc.inner}>
                         {/* Icon */}
-                        <View style={[sc.iconWrap, { backgroundColor: service.categoryColor + '18' }]}>
-                            <Ionicons name={service.icon as any} size={26} color={service.categoryColor} />
+                        <View
+                            style={[sc.iconWrap, { backgroundColor: service.categoryColor + '18' }]}
+                        >
+                            <Ionicons
+                                name={service.icon as any}
+                                size={26}
+                                color={service.categoryColor}
+                            />
                         </View>
 
                         {/* Content */}
                         <View style={sc.content}>
                             {/* Name + badge */}
                             <View style={sc.nameRow}>
-                                <Text style={sc.name} numberOfLines={1}>{service.name}</Text>
+                                <Text style={sc.name} numberOfLines={1}>
+                                    {service.name}
+                                </Text>
                                 {service.badge && (
-                                    <View style={[sc.badge, {
-                                        backgroundColor: service.categoryColor + '18',
-                                        borderColor: service.categoryColor + '40',
-                                    }]}>
-                                        <Text style={[sc.badgeText, { color: service.categoryColor }]}>
+                                    <View
+                                        style={[
+                                            sc.badge,
+                                            {
+                                                backgroundColor: service.categoryColor + '18',
+                                                borderColor: service.categoryColor + '40',
+                                            },
+                                        ]}
+                                    >
+                                        <Text
+                                            style={[sc.badgeText, { color: service.categoryColor }]}
+                                        >
                                             {service.badge}
                                         </Text>
                                     </View>
                                 )}
                             </View>
 
-                            <Text style={sc.tagline} numberOfLines={1}>{service.tagline}</Text>
+                            <Text style={sc.tagline} numberOfLines={1}>
+                                {service.tagline}
+                            </Text>
 
                             {/* Tags */}
-                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                style={{ marginBottom: 10 }}
+                            >
                                 <View style={sc.tagRow}>
                                     {service.tags.map((t, i) => (
                                         <View key={i} style={sc.tag}>
@@ -270,7 +309,11 @@ function ServiceCard({ service, index }: { service: typeof SERVICES[0]; index: n
                                     <Text style={[sc.price, { color: service.categoryColor }]}>
                                         {service.priceLabel}
                                     </Text>
-                                    <Ionicons name="chevron-forward" size={14} color={Colors.border} />
+                                    <Ionicons
+                                        name="chevron-forward"
+                                        size={14}
+                                        color={Colors.border}
+                                    />
                                 </View>
                             </View>
                         </View>
@@ -282,18 +325,45 @@ function ServiceCard({ service, index }: { service: typeof SERVICES[0]; index: n
 }
 
 const sc = StyleSheet.create({
-    card: { backgroundColor: Colors.surface, borderRadius: Radii.xl, marginBottom: Spacing.md, overflow: 'hidden', flexDirection: 'row', ...Shadows.card },
+    card: {
+        backgroundColor: Colors.surface,
+        borderRadius: Radii.xl,
+        marginBottom: Spacing.md,
+        overflow: 'hidden',
+        flexDirection: 'row',
+        ...Shadows.card,
+    },
     accentBar: { width: 4 },
     inner: { flex: 1, flexDirection: 'row', padding: Spacing.md, gap: Spacing.md },
-    iconWrap: { width: 54, height: 54, borderRadius: Radii.lg, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+    iconWrap: {
+        width: 54,
+        height: 54,
+        borderRadius: Radii.lg,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+    },
     content: { flex: 1 },
     nameRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 3 },
-    name: { flex: 1, fontSize: 15, fontWeight: Typography.bold, color: Colors.charcoal, letterSpacing: -0.2 },
+    name: {
+        flex: 1,
+        fontSize: 15,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal,
+        letterSpacing: -0.2,
+    },
     badge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: Radii.full, borderWidth: 1 },
     badgeText: { fontSize: 9, fontWeight: Typography.bold, letterSpacing: 0.4 },
     tagline: { fontSize: 11.5, color: Colors.charcoalLight, marginBottom: 8 },
     tagRow: { flexDirection: 'row', gap: 5 },
-    tag: { backgroundColor: Colors.background, borderRadius: Radii.full, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: Colors.border },
+    tag: {
+        backgroundColor: Colors.background,
+        borderRadius: Radii.full,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
     tagText: { fontSize: 9.5, fontWeight: Typography.semiBold, color: Colors.charcoalMid },
     footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -304,12 +374,22 @@ const sc = StyleSheet.create({
 });
 
 // ─── Category section header ──────────────────────────────────────────────────
-function CategoryHeader({ label, icon, color, count }: {
-    label: string; icon: string; color: string; count: number;
+function CategoryHeader({
+    label,
+    icon,
+    color,
+    count,
+}: {
+    label: string;
+    icon: string;
+    color: string;
+    count: number;
 }) {
     return (
         <View style={ch.root}>
-            <View style={[ch.iconWrap, { backgroundColor: color + '18', borderColor: color + '40' }]}>
+            <View
+                style={[ch.iconWrap, { backgroundColor: color + '18', borderColor: color + '40' }]}
+            >
                 <Ionicons name={icon as any} size={18} color={color} />
             </View>
             <View style={{ flex: 1 }}>
@@ -323,9 +403,28 @@ function CategoryHeader({ label, icon, color, count }: {
     );
 }
 const ch = StyleSheet.create({
-    root: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginBottom: Spacing.md, marginTop: Spacing.xl },
-    iconWrap: { width: 46, height: 46, borderRadius: Radii.lg, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, flexShrink: 0 },
-    label: { fontSize: 18, fontWeight: Typography.extraBold, color: Colors.charcoal, letterSpacing: -0.3 },
+    root: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.md,
+        marginBottom: Spacing.md,
+        marginTop: Spacing.xl,
+    },
+    iconWrap: {
+        width: 46,
+        height: 46,
+        borderRadius: Radii.lg,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        flexShrink: 0,
+    },
+    label: {
+        fontSize: 18,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+        letterSpacing: -0.3,
+    },
     count: { fontSize: 11, color: Colors.charcoalLight, marginTop: 1 },
     countBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radii.full },
     countBadgeText: { fontSize: 14, fontWeight: Typography.extraBold },
@@ -340,13 +439,13 @@ export default function OtherServicesScreen() {
     const { fade: bodyFade } = useEntrance(160);
 
     const filteredGroups = CATEGORY_ORDER.reduce((acc, cat) => {
-        const items = (GROUPED[cat] || []).filter((sv) => {
+        const items = (GROUPED[cat] || []).filter(sv => {
             if (!search) return true;
             const q = search.toLowerCase();
             return (
                 sv.name.toLowerCase().includes(q) ||
                 sv.tagline.toLowerCase().includes(q) ||
-                sv.tags.some((t) => t.toLowerCase().includes(q))
+                sv.tags.some(t => t.toLowerCase().includes(q))
             );
         });
         if (items.length > 0) acc.push({ cat, items });
@@ -357,9 +456,13 @@ export default function OtherServicesScreen() {
 
     return (
         <View style={s.root}>
-
             {/* ── Header ─────────────────────────────────────────────────────────── */}
-            <Animated.View style={[s.header, { opacity: headerFade, transform: [{ translateY: headerSlide }] }]}>
+            <Animated.View
+                style={[
+                    s.header,
+                    { opacity: headerFade, transform: [{ translateY: headerSlide }] },
+                ]}
+            >
                 <View style={s.headerAccentBar} />
                 <View style={s.headerContent}>
                     <View>
@@ -367,16 +470,25 @@ export default function OtherServicesScreen() {
                         <Text style={s.headerTitle}>Other Services</Text>
                     </View>
                     <View style={s.headerRight}>
-                        <TouchableOpacity style={s.iconBtn} onPress={() => navigation.navigate('profile')}>
+                        <TouchableOpacity
+                            style={s.iconBtn}
+                            onPress={() => navigation.navigate('profile')}
+                        >
                             <Ionicons name="person-outline" size={19} color={Colors.charcoalMid} />
                         </TouchableOpacity>
                         <TouchableOpacity style={s.iconBtn}>
-                            <Ionicons name="notifications-outline" size={19} color={Colors.charcoalMid} />
+                            <Ionicons
+                                name="notifications-outline"
+                                size={19}
+                                color={Colors.charcoalMid}
+                            />
                             <View style={s.notifDot} />
                         </TouchableOpacity>
                     </View>
                 </View>
-                <Text style={s.headerSub}>Catering, security, beauty & photography for your event.</Text>
+                <Text style={s.headerSub}>
+                    Catering, security, beauty & photography for your event.
+                </Text>
 
                 {/* Search bar */}
                 <View style={s.searchWrap}>
@@ -392,7 +504,11 @@ export default function OtherServicesScreen() {
                         />
                         {search.length > 0 && (
                             <TouchableOpacity onPress={() => setSearch('')}>
-                                <Ionicons name="close-circle" size={16} color={Colors.charcoalLight} />
+                                <Ionicons
+                                    name="close-circle"
+                                    size={16}
+                                    color={Colors.charcoalLight}
+                                />
                             </TouchableOpacity>
                         )}
                     </View>
@@ -424,7 +540,6 @@ export default function OtherServicesScreen() {
 
                 {/* ── Services list with section headers ──────────────────────────── */}
                 <Animated.View style={[s.listWrap, { opacity: bodyFade }]}>
-
                     {/* Result count when searching */}
                     {search.length > 0 && (
                         <View style={s.searchResult}>
@@ -437,7 +552,11 @@ export default function OtherServicesScreen() {
 
                     {filteredGroups.length === 0 ? (
                         <View style={s.emptyState}>
-                            <Ionicons name="search-outline" size={48} color={Colors.primaryBorder} />
+                            <Ionicons
+                                name="search-outline"
+                                size={48}
+                                color={Colors.primaryBorder}
+                            />
                             <Text style={s.emptyTitle}>No services found</Text>
                             <Text style={s.emptySub}>Try a different keyword</Text>
                         </View>
@@ -473,16 +592,20 @@ export default function OtherServicesScreen() {
                             </View>
                             <Text style={s.ctaTitle}>Can't find what{'\n'}you need?</Text>
                             <Text style={s.ctaSub}>
-                                Tell us your requirements and we'll connect you with the right vendor.
+                                Tell us your requirements and we'll connect you with the right
+                                vendor.
                             </Text>
                             <TouchableOpacity style={s.ctaBtn} activeOpacity={0.88}>
-                                <Ionicons name="chatbubble-ellipses" size={16} color={Colors.charcoal} />
+                                <Ionicons
+                                    name="chatbubble-ellipses"
+                                    size={16}
+                                    color={Colors.charcoal}
+                                />
                                 <Text style={s.ctaBtnText}>Request a Custom Service</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
                 </View>
-
             </ScrollView>
         </View>
     );
@@ -494,30 +617,126 @@ const s = StyleSheet.create({
     scroll: { paddingBottom: 120 },
 
     // ── Header ──────────────────────────────────────────────────────────────────
-    header: { backgroundColor: Colors.surface, borderBottomLeftRadius: Radii.xxl, borderBottomRightRadius: Radii.xxl, paddingBottom: Spacing.xl, ...Shadows.header, zIndex: 10 },
+    header: {
+        backgroundColor: Colors.surface,
+        borderBottomLeftRadius: Radii.xxl,
+        borderBottomRightRadius: Radii.xxl,
+        paddingBottom: Spacing.xl,
+        ...Shadows.header,
+        zIndex: 10,
+    },
     headerAccentBar: { height: 4, backgroundColor: Colors.primary },
-    headerContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', paddingHorizontal: Spacing.xl, paddingTop: Spacing.xl },
-    headerEyebrow: { fontSize: Typography.sm, fontWeight: Typography.bold, color: Colors.primary, letterSpacing: Typography.wider, marginBottom: Spacing.xxs },
-    headerTitle: { fontSize: Typography.xxl, fontWeight: Typography.extraBold, color: Colors.charcoal, letterSpacing: Typography.tight },
-    headerSub: { fontSize: Typography.base, color: Colors.charcoalLight, paddingHorizontal: Spacing.xl, marginTop: Spacing.xs, marginBottom: Spacing.lg },
+    headerContent: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        paddingHorizontal: Spacing.xl,
+        paddingTop: Spacing.xl,
+    },
+    headerEyebrow: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.primary,
+        letterSpacing: Typography.wider,
+        marginBottom: Spacing.xxs,
+    },
+    headerTitle: {
+        fontSize: Typography.xxl,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+        letterSpacing: Typography.tight,
+    },
+    headerSub: {
+        fontSize: Typography.base,
+        color: Colors.charcoalLight,
+        paddingHorizontal: Spacing.xl,
+        marginTop: Spacing.xs,
+        marginBottom: Spacing.lg,
+    },
     headerRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
-    iconBtn: { width: 42, height: 42, borderRadius: Radii.md, backgroundColor: Colors.background, alignItems: 'center', justifyContent: 'center' },
-    notifDot: { position: 'absolute', top: 9, right: 9, width: 7, height: 7, borderRadius: 3.5, backgroundColor: Colors.primary, borderWidth: 1.5, borderColor: Colors.surface },
-    searchWrap: { flexDirection: 'row', paddingHorizontal: Spacing.xl, gap: Spacing.md, alignItems: 'center' },
-    searchBar: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.background, borderRadius: Radii.md, paddingHorizontal: 14, height: 50, borderWidth: 1.5, borderColor: Colors.border },
+    iconBtn: {
+        width: 42,
+        height: 42,
+        borderRadius: Radii.md,
+        backgroundColor: Colors.background,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    notifDot: {
+        position: 'absolute',
+        top: 9,
+        right: 9,
+        width: 7,
+        height: 7,
+        borderRadius: 3.5,
+        backgroundColor: Colors.primary,
+        borderWidth: 1.5,
+        borderColor: Colors.surface,
+    },
+    searchWrap: {
+        flexDirection: 'row',
+        paddingHorizontal: Spacing.xl,
+        gap: Spacing.md,
+        alignItems: 'center',
+    },
+    searchBar: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: Colors.background,
+        borderRadius: Radii.md,
+        paddingHorizontal: 14,
+        height: 50,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+    },
     searchInput: { flex: 1, fontSize: 14, color: Colors.charcoal },
-    filterBtn: { width: 50, height: 50, borderRadius: Radii.md, backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center', ...Shadows.primary },
+    filterBtn: {
+        width: 50,
+        height: 50,
+        borderRadius: Radii.md,
+        backgroundColor: Colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        ...Shadows.primary,
+    },
 
     // ── Summary strip ────────────────────────────────────────────────────────────
-    summaryStrip: { flexDirection: 'row', backgroundColor: Colors.surface, marginHorizontal: Spacing.lg, marginTop: Spacing.xl, borderRadius: Radii.xl, paddingVertical: 14, ...Shadows.card, marginBottom: Spacing.sm },
+    summaryStrip: {
+        flexDirection: 'row',
+        backgroundColor: Colors.surface,
+        marginHorizontal: Spacing.lg,
+        marginTop: Spacing.xl,
+        borderRadius: Radii.xl,
+        paddingVertical: 14,
+        ...Shadows.card,
+        marginBottom: Spacing.sm,
+    },
     statItem: { flex: 1, alignItems: 'center' },
     statBorder: { borderRightWidth: 1, borderRightColor: Colors.border },
-    statValue: { fontSize: 17, fontWeight: Typography.extraBold, color: Colors.charcoal, letterSpacing: -0.4 },
-    statLabel: { fontSize: 10, color: Colors.charcoalLight, fontWeight: Typography.medium, marginTop: 2 },
+    statValue: {
+        fontSize: 17,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+        letterSpacing: -0.4,
+    },
+    statLabel: {
+        fontSize: 10,
+        color: Colors.charcoalLight,
+        fontWeight: Typography.medium,
+        marginTop: 2,
+    },
 
     // ── List ─────────────────────────────────────────────────────────────────────
     listWrap: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm },
-    searchResult: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: Spacing.md, marginTop: Spacing.sm },
+    searchResult: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginBottom: Spacing.md,
+        marginTop: Spacing.sm,
+    },
     searchResultText: { fontSize: 13, color: Colors.charcoalLight, fontWeight: Typography.medium },
 
     // ── Empty state ──────────────────────────────────────────────────────────────
@@ -527,13 +746,72 @@ const s = StyleSheet.create({
 
     // ── CTA banner ───────────────────────────────────────────────────────────────
     ctaWrap: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.md },
-    ctaBanner: { backgroundColor: Colors.charcoal, borderRadius: Radii.xxl, overflow: 'hidden', ...Shadows.floating },
-    ctaOrb1: { position: 'absolute', top: -40, right: -40, width: 140, height: 140, borderRadius: 70, backgroundColor: 'rgba(245,166,35,0.09)' },
-    ctaOrb2: { position: 'absolute', bottom: -30, left: -30, width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(245,166,35,0.06)' },
+    ctaBanner: {
+        backgroundColor: Colors.charcoal,
+        borderRadius: Radii.xxl,
+        overflow: 'hidden',
+        ...Shadows.floating,
+    },
+    ctaOrb1: {
+        position: 'absolute',
+        top: -40,
+        right: -40,
+        width: 140,
+        height: 140,
+        borderRadius: 70,
+        backgroundColor: 'rgba(245,166,35,0.09)',
+    },
+    ctaOrb2: {
+        position: 'absolute',
+        bottom: -30,
+        left: -30,
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: 'rgba(245,166,35,0.06)',
+    },
     ctaInner: { padding: 28, alignItems: 'center' },
-    ctaIconCircle: { width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(245,166,35,0.14)', alignItems: 'center', justifyContent: 'center', marginBottom: 14, borderWidth: 1, borderColor: 'rgba(245,166,35,0.24)' },
-    ctaTitle: { fontSize: 22, fontWeight: Typography.extraBold, color: Colors.white, textAlign: 'center', letterSpacing: -0.4, lineHeight: 30, marginBottom: 10 },
-    ctaSub: { fontSize: 13, color: 'rgba(255,255,255,0.50)', textAlign: 'center', lineHeight: 20, marginBottom: 22 },
-    ctaBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: Colors.primary, paddingHorizontal: 22, paddingVertical: 14, borderRadius: Radii.full, ...Shadows.primary },
-    ctaBtnText: { fontSize: 14, fontWeight: Typography.extraBold, color: Colors.charcoal, letterSpacing: 0.2 },
+    ctaIconCircle: {
+        width: 60,
+        height: 60,
+        borderRadius: 30,
+        backgroundColor: 'rgba(245,166,35,0.14)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 14,
+        borderWidth: 1,
+        borderColor: 'rgba(245,166,35,0.24)',
+    },
+    ctaTitle: {
+        fontSize: 22,
+        fontWeight: Typography.extraBold,
+        color: Colors.white,
+        textAlign: 'center',
+        letterSpacing: -0.4,
+        lineHeight: 30,
+        marginBottom: 10,
+    },
+    ctaSub: {
+        fontSize: 13,
+        color: 'rgba(255,255,255,0.50)',
+        textAlign: 'center',
+        lineHeight: 20,
+        marginBottom: 22,
+    },
+    ctaBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: Colors.primary,
+        paddingHorizontal: 22,
+        paddingVertical: 14,
+        borderRadius: Radii.full,
+        ...Shadows.primary,
+    },
+    ctaBtnText: {
+        fontSize: 14,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+        letterSpacing: 0.2,
+    },
 });

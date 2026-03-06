@@ -20,17 +20,22 @@ import { useAuthStore } from '../../store/auth-store';
 const { width } = Dimensions.get('window');
 
 const categories = [
-    { id: 'all',             name: 'All',        icon: 'apps-outline',       venueType: null },
-    { id: 'Conference Hall', name: 'Conference',  icon: 'business-outline',   venueType: 'Conference Hall' },
-    { id: 'Banquet Hall',    name: 'Banquet',     icon: 'restaurant-outline', venueType: 'Banquet Hall' },
-    { id: 'Marriage Garden', name: 'Wedding',     icon: 'rose-outline',       venueType: 'Marriage Garden' },
-    { id: 'Function Hall',   name: 'Party',       icon: 'balloon-outline',    venueType: 'Function Hall' },
-    { id: 'Meeting Hall',    name: 'Meeting',     icon: 'people-outline',     venueType: 'Meeting Hall' },
+    { id: 'all', name: 'All', icon: 'apps-outline', venueType: null },
+    {
+        id: 'Conference Hall',
+        name: 'Conference',
+        icon: 'business-outline',
+        venueType: 'Conference Hall',
+    },
+    { id: 'Banquet Hall', name: 'Banquet', icon: 'restaurant-outline', venueType: 'Banquet Hall' },
+    { id: 'Marriage Garden', name: 'Wedding', icon: 'rose-outline', venueType: 'Marriage Garden' },
+    { id: 'Function Hall', name: 'Party', icon: 'balloon-outline', venueType: 'Function Hall' },
+    { id: 'Meeting Hall', name: 'Meeting', icon: 'people-outline', venueType: 'Meeting Hall' },
 ];
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 export default function VenuesScreen() {
-    const { user } = useAuthStore();
+    const { user, isAuthenticated } = useAuthStore();
     const [venues, setVenues] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -63,9 +68,7 @@ export default function VenuesScreen() {
 
     // ── Filter by search query AND selected category ──────────────────────────
     const filteredVenues = venues.filter(v => {
-        const matchesSearch = v.businessName
-            .toLowerCase()
-            .includes(searchQuery.toLowerCase());
+        const matchesSearch = v.businessName.toLowerCase().includes(searchQuery.toLowerCase());
 
         const matchesCategory =
             selectedCategory === 'all' ||
@@ -84,6 +87,11 @@ export default function VenuesScreen() {
                         <Text style={styles.greetingLabel}>DISCOVER</Text>
                         <Text style={styles.greeting}>Venues</Text>
                     </View>
+                    {!isAuthenticated || user?.userType === 'owner'}
+                    <TouchableOpacity style={styles.addVenueButton} activeOpacity={0.85}>
+                        <Ionicons name="add" size={18} color={Colors.white} />
+                        <Text style={styles.addVenueLabel}>Add Venue</Text>
+                    </TouchableOpacity>
                 </View>
                 <Text style={styles.headerSubtitle}>Book your premium meeting venues.</Text>
             </View>
@@ -202,14 +210,12 @@ export default function VenuesScreen() {
             </ScrollView>
 
             {/* ── FAB ── */}
-            {user.userType === 'owner' && (
-                <TouchableOpacity style={styles.fab} activeOpacity={0.85}>
-                    <View style={styles.fabInner}>
-                        <Ionicons name="add" size={26} color={Colors.white} />
-                    </View>
-                    <Text style={styles.fabLabel}>Add Venue</Text>
-                </TouchableOpacity>
-            )}
+            <TouchableOpacity style={styles.fab} activeOpacity={0.85}>
+                <View style={styles.fabInner}>
+                    <Ionicons name="add" size={26} color={Colors.white} />
+                </View>
+                <Text style={styles.fabLabel}>Add Venue</Text>
+            </TouchableOpacity>
         </View>
     );
 }
@@ -251,6 +257,23 @@ const styles = StyleSheet.create({
         color: Colors.charcoalLight,
         paddingHorizontal: Spacing.xl,
         marginTop: Spacing.xs,
+    },
+    addVenueButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.primary,
+        borderRadius: Radii.full,
+        paddingLeft: 8,
+        paddingRight: 14,
+        paddingVertical: 8,
+        gap: Spacing.xs,
+        ...Shadows.primary,
+    },
+    addVenueLabel: {
+        fontSize: Typography.base,
+        fontWeight: Typography.extraBold,
+        color: Colors.white,
+        letterSpacing: 0.3,
     },
     notificationButton: {
         width: 46,

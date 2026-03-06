@@ -15,6 +15,8 @@ import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstab
 import { ClientTabParamList } from '../../navigations/tabNavigations/ClientTabNavigation';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigations/RootNavigation';
+import { useAlert } from '../../context/AlertContext';
+import DeviceInfo from 'react-native-device-info';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -27,6 +29,16 @@ interface FeatureRow {
     title: string;
     subtitle: string;
 }
+interface openPreference  {
+        id:string;
+        icon:string;
+        iconColor:string;
+        iconBg:string;
+        title:string;
+        subtitle: string;
+        onPress:()=>void;
+
+    }
 
 // ── Locked feature rows ───────────────────────────────────────────────────────
 const LOCKED_ACCOUNT: FeatureRow[] = [
@@ -56,28 +68,6 @@ const LOCKED_PREFERENCES: FeatureRow[] = [
         iconBg: Colors.warningLight,
         title: 'Notifications',
         subtitle: 'Alerts & reminders',
-    },
-];
-
-const OPEN_PREFERENCES = [
-    {
-        id: 'help',
-        icon: 'help-circle-outline',
-        iconColor: Colors.charcoalLight,
-        iconBg: Colors.border,
-        title: 'Help & Support',
-        subtitle: 'support@rentalmeet.com',
-        onPress: () => Alert.alert('Help', 'Contact us at support@rentalmeet.com'),
-    },
-    {
-        id: 'about',
-        icon: 'information-circle-outline',
-        iconColor: Colors.charcoalLight,
-        iconBg: Colors.border,
-        title: 'About RentalMeet',
-        subtitle: 'Version 1.0.0',
-        onPress: () =>
-            Alert.alert('RentalMeet', 'Version 1.0.0\n\nBook your perfect space with ease.'),
     },
 ];
 
@@ -140,7 +130,7 @@ function LockedRow({ item, onPress }: { item: FeatureRow; onPress: () => void })
 }
 
 // ── Open feature row ──────────────────────────────────────────────────────────
-function OpenRow({ item }: { item: (typeof OPEN_PREFERENCES)[0] }) {
+function OpenRow({ item }: { item: openPreference }) {
     const scale = useRef(new Animated.Value(1)).current;
     return (
         <Animated.View style={{ transform: [{ scale }] }}>
@@ -180,10 +170,38 @@ function OpenRow({ item }: { item: (typeof OPEN_PREFERENCES)[0] }) {
 type GuestProfileProps = NativeBottomTabScreenProps<ClientTabParamList, 'profile'>;
 
 export default function GuestProfile({ navigation }: GuestProfileProps) {
+    const alert = useAlert();
+    const version = DeviceInfo.getVersion();
     const headerFade = useRef(new Animated.Value(0)).current;
     const heroSlide = useRef(new Animated.Value(-16)).current;
     const { fade: ctaFade, slide: ctaSlide } = useEntrance(300);
     const { fade: menuFade, slide: menuSlide } = useEntrance(480);
+
+    
+    const OPEN_PREFERENCES = [
+        {
+            id: 'help',
+            icon: 'help-circle-outline',
+            iconColor: Colors.charcoalLight,
+            iconBg: Colors.border,
+            title: 'Help & Support',
+            subtitle: 'support@rentalmeet.com',
+            onPress: () => alert.info('Help', 'Contact us at support@rentalmeet.com'),
+        },
+        {
+            id: 'about',
+            icon: 'information-circle-outline',
+            iconColor: Colors.charcoalLight,
+            iconBg: Colors.border,
+            title: 'About RentalMeet',
+            subtitle: 'Version 1.0.0',
+            onPress: () =>
+                alert.info(
+                    'Rental Meet',
+                    `App Version ${version} \n\n Book your perfect space ease`,
+                ),
+        },
+    ];
 
     useEffect(() => {
         Animated.parallel([

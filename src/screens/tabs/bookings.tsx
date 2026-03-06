@@ -16,6 +16,15 @@ import { Colors, Typography, Spacing, Radii, Shadows, StatusConfig } from '../..
 import BookingCard from '../../components/booking/booking-card';
 import { bookingAPI } from '../../service/apis/booking';
 import { useAuthStore } from '../../store/auth-store';
+import NotAuthenticatedScreen from '../../components/not-authenticated';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../navigations/RootNavigation';
+import {
+    NativeBottomTabBarProps,
+    NativeBottomTabNavigatorProps,
+    NativeBottomTabScreenProps,
+} from '@react-navigation/bottom-tabs/unstable';
+import { ClientTabParamList } from '../../navigations/tabNavigations/ClientTabNavigation';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -71,11 +80,10 @@ const STATIC_BOOKINGS = [
 const MOCK_USER = { userType: 'owner' };
 const TABS = ['all', 'pending', 'confirmed', 'completed', 'cancelled'];
 
-// ─── Booking card ──────────────────────────────────────────────────────────────
-
+type bookinProps = NativeBottomTabScreenProps<ClientTabParamList, 'bookings'>;
 // ─── Screen ───────────────────────────────────────────────────────────────────
-export default function BookingsScreen() {
-    const {user, token} = useAuthStore();
+export default function BookingsScreen({ navigation }: bookinProps) {
+    const { user, token, isAuthenticated } = useAuthStore();
     const [bookings, setBookings] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -86,21 +94,22 @@ export default function BookingsScreen() {
     }, []);
 
     const fetchBookings = async () => {
+        if (!isAuthenticated) return;
         try {
             setLoading(true);
-            console.log('TOKEN FOUNDED : ',token);
-            
+            console.log('TOKEN FOUNDED : ', token);
+
             const response = await bookingAPI.getAll();
 
             if (!response?.success) {
                 console.error('FETCHING BOOKING ERROR : ', response?.message);
-                setBookings([])
+                setBookings([]);
                 return;
             }
 
             setBookings(response?.booking);
         } catch (error: any) {
-            setBookings([])
+            setBookings([]);
             console.error('FETCHING BOOKING ERROR : ', error);
         } finally {
             setLoading(false);
@@ -119,6 +128,11 @@ export default function BookingsScreen() {
         return acc;
     }, {} as Record<string, number>);
 
+    if (!isAuthenticated) {
+        return (
+            <NotAuthenticatedScreen navigation={navigation.getParent()} featureLabel="Booking" />
+        );
+    }
     return (
         <View style={styles.container}>
             {/* ── Header ── */}

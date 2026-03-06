@@ -8,6 +8,9 @@ import {
     Animated,
     Dimensions,
     TextInput,
+    Modal,
+    FlatList,
+    Platform,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../theme/theme';
@@ -24,6 +27,25 @@ import { RootStackParamList } from '../navigations/RootNavigation';
 
 const { width: W, height: H } = Dimensions.get('window');
 
+const CAPACITY_OPTIONS = [
+    { label: 'Any Capacity', value: null },
+    { label: 'Up to 50 guests', value: 50 },
+    { label: 'Up to 100 guests', value: 100 },
+    { label: 'Up to 200 guests', value: 200 },
+    { label: 'Up to 500 guests', value: 500 },
+    { label: '500+ guests', value: 999 },
+];
+
+// ── Simple date helpers ───────────────────────────────────────────────────────
+function getDaysInMonth(year: number, month: number) {
+    return new Date(year, month + 1, 0).getDate();
+}
+function formatDate(date: Date) {
+    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+type DropdownType = 'city' | 'capacity' | 'date' | null;
+
 type landingProps = NativeBottomTabScreenProps<ClientTabParamList, 'home'>;
 
 export default function LandingScreen({ navigation }: landingProps) {
@@ -31,20 +53,32 @@ export default function LandingScreen({ navigation }: landingProps) {
     const [search, setSearch] = useState('');
 
     // ── API data ───────────────────────────────────────────────────────────────
-    // cities: string[]  e.g. ["Bhopal"]
-    // locations: { city: string; areas: string[] }[]
     const [cities, setCities] = useState<string[]>([]);
     const [locations, setLocations] = useState<{ city: string; areas: string[] }[]>([]);
     const [venues, setVenues] = useState<any[]>([]);
 
+    // ── Filter state ───────────────────────────────────────────────────────────
+    const [openDropdown, setOpenDropdown] = useState<DropdownType>(null);
+    const [selectedCity, setSelectedCity] = useState<string | null>(null);
+    const [selectedCapacity, setSelectedCapacity] = useState<{
+        label: string;
+        value: number | null;
+    } | null>(null);
+    const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+
+    // Calendar state
+    const today = new Date();
+    const [calYear, setCalYear] = useState(today.getFullYear());
+    const [calMonth, setCalMonth] = useState(today.getMonth());
+
     const { fade: heroFade, slide: heroSlide } = useEntrance(0);
     const { fade: bodyFade } = useEntrance(180);
     const heroScale = useRef(new Animated.Value(1.06)).current;
+    const slideAnim = useRef(new Animated.Value(300)).current;
 
     useEffect(() => {
         getAllVenueLoc();
         getAllVenue();
-
         Animated.spring(heroScale, {
             toValue: 1,
             useNativeDriver: true,
@@ -53,10 +87,24 @@ export default function LandingScreen({ navigation }: landingProps) {
         }).start();
     }, []);
 
+    // Animate modal slide-up
+    useEffect(() => {
+        if (openDropdown) {
+            slideAnim.setValue(300);
+            Animated.spring(slideAnim, {
+                toValue: 0,
+                useNativeDriver: true,
+                speed: 18,
+                bounciness: 4,
+            }).start();
+        }
+    }, [openDropdown]);
+
+    const closeDropdown = () => setOpenDropdown(null);
+
     const goToVenues = () => navigation.navigate('venues');
     const goToProfile = () => navigation.navigate('profile');
 
-    // ── Navigate to venue detail, passing the full venue object ──────────────
     const goToVenueDetail = (venue: Venue) => {
         navigation
             .getParent<NativeStackNavigationProp<RootStackParamList>>()
@@ -66,13 +114,7 @@ export default function LandingScreen({ navigation }: landingProps) {
     const getAllVenueLoc = async () => {
         try {
             const response = await venueAPI.getVenueLocations();
-
-            if (!response?.success) {
-                console.error('FETCHING LOCATION ERROR : ', response?.message);
-                return;
-            }
-
-            // API shape: { success, cities: string[], locations: { city, areas }[] }
+            if (!response?.success) return;
             setCities(response.cities ?? []);
             setLocations(response.locations ?? []);
         } catch (error: any) {
@@ -83,26 +125,232 @@ export default function LandingScreen({ navigation }: landingProps) {
     const getAllVenue = async () => {
         try {
             const response = await venueAPI.getVenues({ limit: 6 });
-
-            if (!response?.success) {
-                console.error('FETCHING VENUES ERROR : ', response?.message);
-                return;
-            }
-
+            if (!response?.success) return;
             setVenues(response.venues ?? []);
         } catch (error: any) {
             console.error('FETCHING VENUES ERROR : ', error);
         }
     };
 
-    // ── Active city display (first from API or fallback) ─────────────────────
     const activeCity = cities.length > 0 ? cities[0].toUpperCase() : 'YOUR CITY';
+
+    // ── Filter chip labels ─────────────────────────────────────────────────────
+    const cityLabel = selectedCity ?? (cities.length > 0 ? cities[0] : 'City');
+    const capacityLabel = selectedCapacity?.label ?? 'Capacity';
+    const dateLabel = selectedDate ? formatDate(selectedDate) : 'Date';
+
+    // ── Calendar helpers ───────────────────────────────────────────────────────
+    const daysInMonth = getDaysInMonth(calYear, calMonth);
+    const firstDayOfWeek = new Date(calYear, calMonth, 1).getDay();
+    const monthName = new Date(calYear, calMonth).toLocaleString('en-IN', {
+        month: 'long',
+        year: 'numeric',
+    });
+
+    const prevMonth = () => {
+        if (calMonth === 0) {
+            setCalMonth(11);
+            setCalYear(y => y - 1);
+        } else setCalMonth(m => m - 1);
+    };
+    const nextMonth = () => {
+        if (calMonth === 11) {
+            setCalMonth(0);
+            setCalYear(y => y + 1);
+        } else setCalMonth(m => m + 1);
+    };
+
+    const selectCalDate = (day: number) => {
+        setSelectedDate(new Date(calYear, calMonth, day));
+        closeDropdown();
+    };
+
+    const isPastDay = (day: number) => {
+        const d = new Date(calYear, calMonth, day);
+        d.setHours(0, 0, 0, 0);
+        const t = new Date();
+        t.setHours(0, 0, 0, 0);
+        return d < t;
+    };
+
+    const isSelectedDay = (day: number) => {
+        if (!selectedDate) return false;
+        return (
+            selectedDate.getFullYear() === calYear &&
+            selectedDate.getMonth() === calMonth &&
+            selectedDate.getDate() === day
+        );
+    };
+
+    // ── Dropdown content ───────────────────────────────────────────────────────
+    const renderDropdownContent = () => {
+        if (openDropdown === 'city') {
+            const allCities = cities.length > 0 ? cities : ['Bhopal', 'Indore', 'Jabalpur'];
+            return (
+                <>
+                    <Text style={ds.sheetTitle}>Select City</Text>
+                    <TouchableOpacity
+                        style={[ds.optionRow, !selectedCity && ds.optionRowActive]}
+                        onPress={() => {
+                            setSelectedCity(null);
+                            closeDropdown();
+                        }}
+                    >
+                        <Ionicons
+                            name="location-outline"
+                            size={16}
+                            color={!selectedCity ? Colors.primary : Colors.charcoalLight}
+                        />
+                        <Text style={[ds.optionText, !selectedCity && ds.optionTextActive]}>
+                            All Cities
+                        </Text>
+                        {!selectedCity && (
+                            <Ionicons name="checkmark" size={16} color={Colors.primary} />
+                        )}
+                    </TouchableOpacity>
+                    {allCities.map(city => (
+                        <TouchableOpacity
+                            key={city}
+                            style={[ds.optionRow, selectedCity === city && ds.optionRowActive]}
+                            onPress={() => {
+                                setSelectedCity(city);
+                                closeDropdown();
+                            }}
+                        >
+                            <Ionicons
+                                name="location-outline"
+                                size={16}
+                                color={
+                                    selectedCity === city ? Colors.primary : Colors.charcoalLight
+                                }
+                            />
+                            <Text
+                                style={[
+                                    ds.optionText,
+                                    selectedCity === city && ds.optionTextActive,
+                                ]}
+                            >
+                                {city}
+                            </Text>
+                            {selectedCity === city && (
+                                <Ionicons name="checkmark" size={16} color={Colors.primary} />
+                            )}
+                        </TouchableOpacity>
+                    ))}
+                </>
+            );
+        }
+
+        if (openDropdown === 'capacity') {
+            return (
+                <>
+                    <Text style={ds.sheetTitle}>Select Capacity</Text>
+                    {CAPACITY_OPTIONS.map(opt => {
+                        const isActive = selectedCapacity?.value === opt.value;
+                        return (
+                            <TouchableOpacity
+                                key={opt.label}
+                                style={[ds.optionRow, isActive && ds.optionRowActive]}
+                                onPress={() => {
+                                    setSelectedCapacity(opt.value === null ? null : opt);
+                                    closeDropdown();
+                                }}
+                            >
+                                <Ionicons
+                                    name="people-outline"
+                                    size={16}
+                                    color={isActive ? Colors.primary : Colors.charcoalLight}
+                                />
+                                <Text style={[ds.optionText, isActive && ds.optionTextActive]}>
+                                    {opt.label}
+                                </Text>
+                                {isActive && (
+                                    <Ionicons name="checkmark" size={16} color={Colors.primary} />
+                                )}
+                            </TouchableOpacity>
+                        );
+                    })}
+                </>
+            );
+        }
+
+        if (openDropdown === 'date') {
+            const cells = Array.from({ length: firstDayOfWeek + daysInMonth }, (_, i) =>
+                i < firstDayOfWeek ? null : i - firstDayOfWeek + 1,
+            );
+            return (
+                <>
+                    <Text style={ds.sheetTitle}>Select Date</Text>
+                    {/* Month nav */}
+                    <View style={ds.calNav}>
+                        <TouchableOpacity onPress={prevMonth} style={ds.calNavBtn}>
+                            <Ionicons name="chevron-back" size={18} color={Colors.charcoal} />
+                        </TouchableOpacity>
+                        <Text style={ds.calMonthLabel}>{monthName}</Text>
+                        <TouchableOpacity onPress={nextMonth} style={ds.calNavBtn}>
+                            <Ionicons name="chevron-forward" size={18} color={Colors.charcoal} />
+                        </TouchableOpacity>
+                    </View>
+                    {/* Day labels */}
+                    <View style={ds.calDayRow}>
+                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+                            <Text key={i} style={ds.calDayLabel}>
+                                {d}
+                            </Text>
+                        ))}
+                    </View>
+                    {/* Days grid */}
+                    <View style={ds.calGrid}>
+                        {cells.map((day, idx) => {
+                            if (!day) return <View key={idx} style={ds.calCell} />;
+                            const past = isPastDay(day);
+                            const active = isSelectedDay(day);
+                            return (
+                                <TouchableOpacity
+                                    key={idx}
+                                    style={[
+                                        ds.calCell,
+                                        active && ds.calCellActive,
+                                        past && ds.calCellDisabled,
+                                    ]}
+                                    onPress={() => !past && selectCalDate(day)}
+                                    disabled={past}
+                                    activeOpacity={0.75}
+                                >
+                                    <Text
+                                        style={[
+                                            ds.calDayNum,
+                                            active && ds.calDayNumActive,
+                                            past && ds.calDayNumDisabled,
+                                        ]}
+                                    >
+                                        {day}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                    {selectedDate && (
+                        <TouchableOpacity
+                            style={ds.clearDateBtn}
+                            onPress={() => {
+                                setSelectedDate(null);
+                                closeDropdown();
+                            }}
+                        >
+                            <Text style={ds.clearDateText}>Clear Date</Text>
+                        </TouchableOpacity>
+                    )}
+                </>
+            );
+        }
+        return null;
+    };
 
     return (
         <View style={s.root}>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
                 <View style={s.hero}>
-                    {/* Dark background */}
                     <Animated.View
                         style={[StyleSheet.absoluteFill, { transform: [{ scale: heroScale }] }]}
                     >
@@ -112,7 +360,7 @@ export default function LandingScreen({ navigation }: landingProps) {
                         <View style={s.heroGlow} />
                     </Animated.View>
 
-                    {/* ── Navbar ── */}
+                    {/* Navbar */}
                     <Animated.View style={[s.navbar, { opacity: heroFade }]}>
                         <View style={s.brand}>
                             <View style={s.brandDot}>
@@ -123,7 +371,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                                 <Text style={{ color: Colors.white }}>Meet</Text>
                             </Text>
                         </View>
-
                         <View style={s.navIcons}>
                             <TouchableOpacity style={s.navIconBtn}>
                                 <Ionicons
@@ -133,7 +380,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                                 />
                                 <View style={s.notifDot} />
                             </TouchableOpacity>
-
                             <TouchableOpacity
                                 style={s.profilePill}
                                 onPress={goToProfile}
@@ -154,26 +400,23 @@ export default function LandingScreen({ navigation }: landingProps) {
                         </View>
                     </Animated.View>
 
-                    {/* ── Hero copy ── */}
+                    {/* Hero copy */}
                     <Animated.View
                         style={[
                             s.heroBody,
                             { opacity: heroFade, transform: [{ translateY: heroSlide }] },
                         ]}
                     >
-                        {/* Dynamic city pill from API */}
                         <View style={s.locationPill}>
                             <Ionicons name="location" size={11} color={Colors.primary} />
                             <Text style={s.locationPillText}>{activeCity}, MADHYA PRADESH</Text>
                         </View>
-
                         <Text style={s.heroTitle}>Book Your{'\n'}Perfect Space</Text>
                         <Text style={s.heroHighlight}>with RentalMeet</Text>
                         <Text style={s.heroSub}>
                             Premium venues for 1000+ guests.{'\n'}Hourly bookings, world-class
                             hospitality.
                         </Text>
-
                         <View style={s.heroCtaRow}>
                             <TouchableOpacity
                                 style={s.ctaPrimary}
@@ -186,7 +429,7 @@ export default function LandingScreen({ navigation }: landingProps) {
                         </View>
                     </Animated.View>
 
-                    {/* ── Stats strip ── */}
+                    {/* Stats strip */}
                     <Animated.View style={[s.statsStrip, { opacity: heroFade }]}>
                         {KEY_STATS.map((st, i) => (
                             <View
@@ -205,7 +448,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                     <View style={s.searchAccent} />
                     <View style={s.searchBody}>
                         <Text style={s.searchHeading}>Find Your Venue</Text>
-
                         <View style={s.searchInputWrap}>
                             <Ionicons
                                 name="search-outline"
@@ -232,34 +474,108 @@ export default function LandingScreen({ navigation }: landingProps) {
                             )}
                         </View>
 
-                        {/* Dynamic filter chips — city from API, rest static */}
+                        {/* ── Filter chips ── */}
                         <View style={s.filterRow}>
-                            {[
-                                {
-                                    icon: 'location-outline',
-                                    label: cities.length > 0 ? cities[0] : 'City',
-                                },
-                                { icon: 'people-outline', label: 'Capacity' },
-                                { icon: 'calendar-outline', label: 'Date' },
-                            ].map(f => (
-                                <TouchableOpacity
-                                    key={f.label}
-                                    style={s.filterChip}
-                                    activeOpacity={0.75}
+                            {/* City */}
+                            <TouchableOpacity
+                                style={[
+                                    s.filterChip,
+                                    openDropdown === 'city' && s.filterChipOpen,
+                                    selectedCity && s.filterChipSelected,
+                                ]}
+                                onPress={() =>
+                                    setOpenDropdown(openDropdown === 'city' ? null : 'city')
+                                }
+                                activeOpacity={0.75}
+                            >
+                                <Ionicons
+                                    name="location-outline"
+                                    size={13}
+                                    color={selectedCity ? Colors.white : Colors.primary}
+                                />
+                                <Text
+                                    style={[
+                                        s.filterChipText,
+                                        selectedCity && s.filterChipTextSelected,
+                                    ]}
+                                    numberOfLines={1}
                                 >
-                                    <Ionicons
-                                        name={f.icon as any}
-                                        size={13}
-                                        color={Colors.primary}
-                                    />
-                                    <Text style={s.filterChipText}>{f.label}</Text>
-                                    <Ionicons
-                                        name="chevron-down"
-                                        size={11}
-                                        color={Colors.charcoalLight}
-                                    />
-                                </TouchableOpacity>
-                            ))}
+                                    {cityLabel}
+                                </Text>
+                                <Ionicons
+                                    name={openDropdown === 'city' ? 'chevron-up' : 'chevron-down'}
+                                    size={11}
+                                    color={selectedCity ? Colors.white : Colors.charcoalLight}
+                                />
+                            </TouchableOpacity>
+
+                            {/* Capacity */}
+                            <TouchableOpacity
+                                style={[
+                                    s.filterChip,
+                                    openDropdown === 'capacity' && s.filterChipOpen,
+                                    selectedCapacity && s.filterChipSelected,
+                                ]}
+                                onPress={() =>
+                                    setOpenDropdown(openDropdown === 'capacity' ? null : 'capacity')
+                                }
+                                activeOpacity={0.75}
+                            >
+                                <Ionicons
+                                    name="people-outline"
+                                    size={13}
+                                    color={selectedCapacity ? Colors.white : Colors.primary}
+                                />
+                                <Text
+                                    style={[
+                                        s.filterChipText,
+                                        selectedCapacity && s.filterChipTextSelected,
+                                    ]}
+                                    numberOfLines={1}
+                                >
+                                    {capacityLabel}
+                                </Text>
+                                <Ionicons
+                                    name={
+                                        openDropdown === 'capacity' ? 'chevron-up' : 'chevron-down'
+                                    }
+                                    size={11}
+                                    color={selectedCapacity ? Colors.white : Colors.charcoalLight}
+                                />
+                            </TouchableOpacity>
+
+                            {/* Date */}
+                            <TouchableOpacity
+                                style={[
+                                    s.filterChip,
+                                    openDropdown === 'date' && s.filterChipOpen,
+                                    selectedDate && s.filterChipSelected,
+                                ]}
+                                onPress={() =>
+                                    setOpenDropdown(openDropdown === 'date' ? null : 'date')
+                                }
+                                activeOpacity={0.75}
+                            >
+                                <Ionicons
+                                    name="calendar-outline"
+                                    size={13}
+                                    color={selectedDate ? Colors.white : Colors.primary}
+                                />
+                                <Text
+                                    style={[
+                                        s.filterChipText,
+                                        selectedDate && s.filterChipTextSelected,
+                                    ]}
+                                    numberOfLines={1}
+                                >
+                                    {dateLabel}
+                                </Text>
+                                <Ionicons
+                                    name={openDropdown === 'date' ? 'chevron-up' : 'chevron-down'}
+                                    size={11}
+                                    color={selectedDate ? Colors.white : Colors.charcoalLight}
+                                />
+                            </TouchableOpacity>
                         </View>
 
                         <TouchableOpacity
@@ -284,7 +600,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                             <Text style={s.seeAll}>See all →</Text>
                         </TouchableOpacity>
                     </View>
-
                     <View style={s.catGrid}>
                         {CATEGORIES.map((cat, i) => (
                             <TouchableOpacity
@@ -319,18 +634,15 @@ export default function LandingScreen({ navigation }: landingProps) {
                         </TouchableOpacity>
                     </View>
                     <Text style={s.sectionSub}>Handpicked premium spaces for your events</Text>
-
                     <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={s.hScroll}
                     >
                         {venues.map((v, i) => (
-                            // ✅ Fix: key uses v._id; onPress passes venue to detail screen
                             <FeaturedCard key={v._id} v={v} index={i} onPress={goToVenueDetail} />
                         ))}
                     </ScrollView>
-
                     <TouchableOpacity
                         style={s.viewAllBtn}
                         onPress={goToVenues}
@@ -350,7 +662,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                             Every space comes equipped to ensure your meeting runs flawlessly.
                         </Text>
                     </View>
-
                     <View style={s.amenGrid}>
                         {AMENITIES.map((a, i) => (
                             <View key={i} style={s.amenCard}>
@@ -376,7 +687,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                             Choose a duration that fits your schedule.
                         </Text>
                     </View>
-
                     <View style={s.pkgList}>
                         {PACKAGES.map((p, i) => (
                             <TouchableOpacity
@@ -438,7 +748,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                         <Text style={s.eyebrow}>TESTIMONIALS</Text>
                         <Text style={s.centeredTitle}>What Clients Say</Text>
                     </View>
-
                     <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
@@ -478,18 +787,15 @@ export default function LandingScreen({ navigation }: landingProps) {
                     <View style={s.ctaBanner}>
                         <View style={s.orb1} />
                         <View style={s.orb2} />
-
                         <View style={s.ctaInner}>
                             <View style={s.ctaIconCircle}>
                                 <Ionicons name="business" size={28} color={Colors.primary} />
                             </View>
-
                             <Text style={s.ctaTitle}>Ready to Book{'\n'}Your Venue?</Text>
                             <Text style={s.ctaSub}>
                                 Browse our collection and find the perfect space for your next
                                 event.
                             </Text>
-
                             <View style={s.ctaBtnRow}>
                                 <TouchableOpacity
                                     style={s.ctaMainBtn}
@@ -506,7 +812,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                                     </View>
                                 </TouchableOpacity>
                             </View>
-
                             <TouchableOpacity
                                 style={s.ctaProfileLink}
                                 onPress={goToProfile}
@@ -524,19 +829,176 @@ export default function LandingScreen({ navigation }: landingProps) {
                     </View>
                 </View>
             </ScrollView>
+
+            {/* ── Bottom sheet modal ─────────────────────────────────────────────── */}
+            <Modal
+                visible={!!openDropdown}
+                transparent
+                animationType="none"
+                onRequestClose={closeDropdown}
+            >
+                <TouchableOpacity style={ds.overlay} activeOpacity={1} onPress={closeDropdown} />
+                <Animated.View style={[ds.sheet, { transform: [{ translateY: slideAnim }] }]}>
+                    <View style={ds.sheetHandle} />
+                    <ScrollView
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={{ paddingBottom: 32 }}
+                    >
+                        {renderDropdownContent()}
+                    </ScrollView>
+                </Animated.View>
+            </Modal>
         </View>
     );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Bottom-sheet styles ──────────────────────────────────────────────────────
+const ds = StyleSheet.create({
+    overlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.45)',
+    },
+    sheet: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: Colors.surface,
+        borderTopLeftRadius: Radii.xxl,
+        borderTopRightRadius: Radii.xxl,
+        paddingHorizontal: Spacing.xl,
+        paddingTop: 12,
+        maxHeight: H * 0.6,
+        ...Shadows.floating,
+    },
+    sheetHandle: {
+        width: 40,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: Colors.border,
+        alignSelf: 'center',
+        marginBottom: 16,
+    },
+    sheetTitle: {
+        fontSize: 17,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+        marginBottom: 14,
+        letterSpacing: -0.3,
+    },
+    optionRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        paddingVertical: 14,
+        paddingHorizontal: 12,
+        borderRadius: Radii.md,
+        marginBottom: 4,
+        backgroundColor: Colors.background,
+        borderWidth: 1.5,
+        borderColor: 'transparent',
+    },
+    optionRowActive: {
+        borderColor: Colors.primaryBorder,
+        backgroundColor: Colors.primaryLight,
+    },
+    optionText: {
+        flex: 1,
+        fontSize: 14,
+        color: Colors.charcoalMid,
+        fontWeight: Typography.medium,
+    },
+    optionTextActive: {
+        color: Colors.primary,
+        fontWeight: Typography.bold,
+    },
+    // Calendar
+    calNav: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 12,
+    },
+    calNavBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: Colors.background,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
+    calMonthLabel: {
+        fontSize: 15,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal,
+    },
+    calDayRow: {
+        flexDirection: 'row',
+        marginBottom: 6,
+    },
+    calDayLabel: {
+        flex: 1,
+        textAlign: 'center',
+        fontSize: 11,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalLight,
+        letterSpacing: 0.5,
+    },
+    calGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+    },
+    calCell: {
+        width: `${100 / 7}%`,
+        aspectRatio: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: Radii.md,
+        marginBottom: 2,
+    },
+    calCellActive: {
+        backgroundColor: Colors.primary,
+    },
+    calCellDisabled: {
+        opacity: 0.3,
+    },
+    calDayNum: {
+        fontSize: 13,
+        fontWeight: Typography.medium,
+        color: Colors.charcoal,
+    },
+    calDayNumActive: {
+        color: Colors.charcoal,
+        fontWeight: Typography.extraBold,
+    },
+    calDayNumDisabled: {
+        color: Colors.charcoalLight,
+    },
+    clearDateBtn: {
+        marginTop: 12,
+        alignSelf: 'center',
+        paddingVertical: 8,
+        paddingHorizontal: 20,
+        borderRadius: Radii.full,
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
+    clearDateText: {
+        fontSize: 13,
+        color: Colors.charcoalLight,
+        fontWeight: Typography.medium,
+    },
+});
+
+// ─── Main styles (unchanged from original) ───────────────────────────────────
 const CAT_W = (W - Spacing.lg * 2 - Spacing.sm * 2) / 3;
 const AMEN_W = (W - Spacing.lg * 2 - Spacing.sm) / 2;
 
 const s = StyleSheet.create({
     root: { flex: 1, backgroundColor: Colors.background },
     scroll: { paddingBottom: 120 },
-
-    // ── Hero ──────────────────────────────────────────────────────────────────
     hero: { height: H * 0.6, justifyContent: 'flex-end', overflow: 'hidden' },
     heroBg: { ...StyleSheet.absoluteFillObject, backgroundColor: '#1A1208' },
     diag1: {
@@ -565,8 +1027,6 @@ const s = StyleSheet.create({
         height: 150,
         backgroundColor: 'rgba(245,166,35,0.05)',
     },
-
-    // Navbar
     navbar: {
         position: 'absolute',
         top: 52,
@@ -629,8 +1089,6 @@ const s = StyleSheet.create({
     },
     profileInitials: { fontSize: 10, fontWeight: Typography.extraBold, color: Colors.charcoal },
     profileName: { fontSize: 12, fontWeight: Typography.bold, color: Colors.white },
-
-    // Hero body
     heroBody: { paddingHorizontal: Spacing.xl, paddingBottom: 80 },
     locationPill: {
         flexDirection: 'row',
@@ -666,12 +1124,7 @@ const s = StyleSheet.create({
         letterSpacing: -0.8,
         marginBottom: 12,
     },
-    heroSub: {
-        fontSize: 13,
-        color: 'rgba(255,255,255,0.50)',
-        lineHeight: 20,
-        marginBottom: 24,
-    },
+    heroSub: { fontSize: 13, color: 'rgba(255,255,255,0.50)', lineHeight: 20, marginBottom: 24 },
     heroCtaRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
     ctaPrimary: {
         flexDirection: 'row',
@@ -689,8 +1142,6 @@ const s = StyleSheet.create({
         color: Colors.charcoal,
         letterSpacing: 0.2,
     },
-
-    // Stats strip
     statsStrip: {
         position: 'absolute',
         bottom: 0,
@@ -717,8 +1168,6 @@ const s = StyleSheet.create({
         fontWeight: Typography.medium,
         marginTop: 2,
     },
-
-    // Search card
     searchCard: {
         backgroundColor: Colors.surface,
         marginHorizontal: Spacing.lg,
@@ -768,12 +1217,15 @@ const s = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.primaryBorder,
     },
+    filterChipOpen: { borderColor: Colors.primary, borderWidth: 1.5 },
+    filterChipSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
     filterChipText: {
         flex: 1,
         fontSize: 10.5,
         color: Colors.primaryDark,
         fontWeight: Typography.semiBold,
     },
+    filterChipTextSelected: { color: Colors.white },
     searchBtn: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -785,8 +1237,6 @@ const s = StyleSheet.create({
         ...Shadows.primary,
     },
     searchBtnText: { fontSize: 14.5, fontWeight: Typography.extraBold, color: Colors.charcoal },
-
-    // Generic section
     section: { paddingHorizontal: Spacing.lg, paddingVertical: 26 },
     surfaceSection: { backgroundColor: Colors.surface },
     sectionHeader: {
@@ -834,8 +1284,6 @@ const s = StyleSheet.create({
         lineHeight: 19,
         paddingHorizontal: Spacing.xl,
     },
-
-    // Categories
     catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
     catCard: {
         width: CAT_W,
@@ -876,8 +1324,6 @@ const s = StyleSheet.create({
         marginTop: Spacing.lg,
     },
     viewAllBtnText: { fontSize: 14, fontWeight: Typography.extraBold, color: Colors.white },
-
-    // Amenities
     amenGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
     amenCard: {
         width: AMEN_W,
@@ -907,8 +1353,6 @@ const s = StyleSheet.create({
         color: Colors.charcoal,
         lineHeight: 16,
     },
-
-    // Packages
     pkgList: { gap: Spacing.sm },
     pkgRow: {
         flexDirection: 'row',
@@ -947,12 +1391,7 @@ const s = StyleSheet.create({
     },
     pkgSubtext: { fontSize: 11, color: Colors.charcoalLight, fontWeight: Typography.medium },
     pkgSubtextFeatured: { color: 'rgba(255,255,255,0.65)' },
-    pkgRight: {
-        flexDirection: 'row',
-        alignItems: 'baseline',
-        gap: 1,
-        marginRight: Spacing.xs,
-    },
+    pkgRight: { flexDirection: 'row', alignItems: 'baseline', gap: 1, marginRight: Spacing.xs },
     pkgPrice: {
         fontSize: 17,
         fontWeight: Typography.extraBold,
@@ -961,8 +1400,6 @@ const s = StyleSheet.create({
     },
     pkgPriceUnit: { fontSize: 11, color: Colors.charcoalLight, fontWeight: Typography.medium },
     textWhite: { color: Colors.white },
-
-    // Testimonials
     testiCard: {
         width: W * 0.76,
         backgroundColor: Colors.surface,
@@ -996,8 +1433,6 @@ const s = StyleSheet.create({
         marginBottom: 4,
     },
     testiText: { fontSize: 12.5, color: Colors.charcoalMid, lineHeight: 19 },
-
-    // CTA banner
     ctaBannerWrap: { paddingHorizontal: Spacing.lg },
     ctaBanner: {
         backgroundColor: Colors.charcoal,
