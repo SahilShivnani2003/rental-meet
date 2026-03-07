@@ -10,6 +10,7 @@ import RegisterScreen from '../screens/auth/register';
 import { AlertProvider } from '../context/AlertContext';
 import VenueDetailScreen, { Venue } from '../screens/venue-detail';
 import { TabNavigation } from './tabNavigations/TabNavigation';
+import RegisterVenueScreen from '../screens/auth/register-venue';
 
 export type RootStackParamList = {
     splash: undefined;
@@ -18,11 +19,12 @@ export type RootStackParamList = {
     registerType: undefined;
     client: undefined;
     owner: undefined;
+    registerVenue: undefined;
     register: {
         role: string;
     };
     venueDetail: {
-        venue:Venue
+        venue: Venue;
     };
 };
 
@@ -40,20 +42,23 @@ export default function RootNavigator() {
                     <Stack.Screen name="login" component={LoginScreen} />
                     <Stack.Screen name="registerType" component={RegisterTypeScreen} />
                     <Stack.Screen name="register" component={RegisterScreen} />
+                    <Stack.Screen name="registerVenue" component={RegisterVenueScreen} />
                     <Stack.Screen
                         name="main"
                         component={TabNavigation}
                         options={{ animation: 'fade' }}
                     />
-                    <Stack.Screen name="client"
+                    <Stack.Screen
+                        name="client"
                         component={ClientTabNavigation}
                         options={{ animation: 'fade' }}
                     />
-                    <Stack.Screen name="owner"
+                    <Stack.Screen
+                        name="owner"
                         component={OwnerTabNavigation}
                         options={{ animation: 'fade' }}
                     />
-                    <Stack.Screen name="venueDetail" component={VenueDetailScreen}/>
+                    <Stack.Screen name="venueDetail" component={VenueDetailScreen} />
                 </Stack.Navigator>
             </NavigationContainer>
         </AlertProvider>

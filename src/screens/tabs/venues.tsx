@@ -16,8 +16,12 @@ import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
 import VenueCard from '../../components/venues/venueCard';
 import { venueAPI } from '../../service/apis/venues';
 import { useAuthStore } from '../../store/auth-store';
-
-const { width } = Dimensions.get('window');
+import { OwnerTabParamList } from '../../navigations/tabNavigations/OwnerTabNavigation';
+import { ClientTabParamList } from '../../navigations/tabNavigations/ClientTabNavigation';
+import { tabParamList } from '../../navigations/tabNavigations/TabNavigation';
+import { RootStackParamList } from '../../navigations/RootNavigation';
+import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useAlert } from '../../context/AlertContext';
 
 const categories = [
     { id: 'all', name: 'All', icon: 'apps-outline', venueType: null },
@@ -33,8 +37,12 @@ const categories = [
     { id: 'Meeting Hall', name: 'Meeting', icon: 'people-outline', venueType: 'Meeting Hall' },
 ];
 
+type appParamList = OwnerTabParamList | ClientTabParamList | tabParamList;
+type venueProps = NativeStackScreenProps<appParamList, 'venues'>;
+
 // ── Screen ────────────────────────────────────────────────────────────────────
-export default function VenuesScreen() {
+export default function VenuesScreen({ navigation }: venueProps) {
+    const alert = useAlert();
     const { user, isAuthenticated } = useAuthStore();
     const [venues, setVenues] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -66,6 +74,32 @@ export default function VenuesScreen() {
         }
     };
 
+    const handleAddVenue = () => {
+        if (!isAuthenticated) {
+            alert.show({
+                title: 'Login Reguired',
+                message: 'Sign in is required to add venue.',
+                buttons: [
+                    { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },
+                    {
+                        label: 'Login',
+                        onPress: () => {
+                            navigation
+                                .getParent<NativeStackNavigationProp<RootStackParamList>>()
+                                .navigate('login');
+                            alert.dismiss();
+                        },
+                    },
+                ],
+            });
+
+            return;
+        }
+
+        navigation
+            .getParent<NativeStackNavigationProp<RootStackParamList>>()
+            .navigate('registerVenue');
+    };
     // ── Filter by search query AND selected category ──────────────────────────
     const filteredVenues = venues.filter(v => {
         const matchesSearch = v.businessName.toLowerCase().includes(searchQuery.toLowerCase());
@@ -88,7 +122,11 @@ export default function VenuesScreen() {
                         <Text style={styles.greeting}>Venues</Text>
                     </View>
                     {!isAuthenticated || user?.userType === 'owner'}
-                    <TouchableOpacity style={styles.addVenueButton} activeOpacity={0.85}>
+                    <TouchableOpacity
+                        style={styles.addVenueButton}
+                        activeOpacity={0.85}
+                        onPress={handleAddVenue}
+                    >
                         <Ionicons name="add" size={18} color={Colors.white} />
                         <Text style={styles.addVenueLabel}>Add Venue</Text>
                     </TouchableOpacity>
