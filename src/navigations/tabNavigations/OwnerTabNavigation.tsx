@@ -2,7 +2,7 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import OwnerDashboardScreen from '../../screens/owner/dashboard';
 import BookingsScreen from '../../screens/tabs/bookings';
-import MessagesScreen from '../../screens/tabs/messages';
+import MessagesScreen from '../../screens/messages';
 import ProfileScreen from '../../screens/tabs/profile';
 import VenuesScreen from '../../screens/tabs/venues';
 import CustomTabBar from '../../components/bottomTab/custom-tabBar';

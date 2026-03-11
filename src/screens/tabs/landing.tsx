@@ -11,17 +11,17 @@ import {
     Modal,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { Colors, Typography, Spacing, Radii, Shadows } from '../theme/theme';
-import { KEY_STATS, CATEGORIES, AMENITIES, PACKAGES, TESTIMONIALS } from '../Data/landingData';
-import useEntrance from '../hooks/useEntrance';
-import FeaturedCard from '../components/landing/featuredCard';
-import { useAuthStore } from '../store/auth-store';
-import { ClientTabParamList } from '../navigations/tabNavigations/ClientTabNavigation';
+import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
+import { KEY_STATS, CATEGORIES, AMENITIES, PACKAGES, TESTIMONIALS } from '../../Data/landingData';
+import useEntrance from '../../hooks/useEntrance';
+import FeaturedCard from '../../components/landing/featuredCard';
+import { useAuthStore } from '../../store/auth-store';
+import { ClientTabParamList } from '../../navigations/tabNavigations/ClientTabNavigation';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
-import { venueAPI } from '../service/apis/venues';
-import { Venue } from './venue-detail';
+import { venueAPI } from '../../service/apis/venues';
+import { Venue } from '../venue-detail';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../navigations/RootNavigation';
+import { RootStackParamList } from '../../navigations/RootNavigation';
 
 const { width: W, height: H } = Dimensions.get('window');
 

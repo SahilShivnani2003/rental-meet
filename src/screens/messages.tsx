@@ -9,7 +9,7 @@ import {
   Animated,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
+import { Colors, Typography, Spacing, Radii, Shadows } from '../theme/theme';
 
 const CONVERSATIONS = [
   { id: '1', name: 'John Doe',    initials: 'JD', role: 'Venue Enquiry',      lastMessage: 'Is the venue available on Friday?',       time: '2h ago', unread: 2, online: true  },
