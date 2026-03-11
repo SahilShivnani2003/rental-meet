@@ -14,7 +14,7 @@ export const venueAPI = {
         headers: getAuthHeader()
     }),
 
-    getVenueLocations: () => apiClient.get('/venues/locations/all'),
+    getVenueLocations: () => apiClient.get('venues/locations/all'),
 
     getSku: (sku: string) => apiClient.get(`venues/sku/${sku}`),
 

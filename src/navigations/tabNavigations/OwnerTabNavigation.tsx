@@ -16,12 +16,12 @@ export type OwnerTabParamList = {
 };
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
-const TABS = [
+const ownerTabs = [
     { name: 'dashboard', label: 'Dashboard', icon: 'grid', iconOff: 'grid-outline' },
-    { name: 'bookings', label: 'Bookings', icon: 'calendar', iconOff: 'calendar-outline' },
+    { name: 'bookings', label: 'My Bookings', icon: 'calendar', iconOff: 'calendar-outline' },
     {
-        name: 'addVenue',
-        label: 'Add Venue',
+        name: 'venues',
+        label: 'My Venues',
         icon: 'add-circle',
         iconOff: 'add-circle-outline',
         center: true,
@@ -36,7 +36,7 @@ const Tabs = createBottomTabNavigator<OwnerTabParamList>();
 export function OwnerTabNavigation() {
     return (
         <Tabs.Navigator
-            tabBar={props => <CustomTabBar {...props} tabs={TABS} />}
+            tabBar={props => <CustomTabBar {...props} tabs={ownerTabs} />}
             screenOptions={{ headerShown: false }}
         >
             <Tabs.Screen name="dashboard" component={OwnerDashboardScreen} />

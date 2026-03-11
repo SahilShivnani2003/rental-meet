@@ -194,7 +194,7 @@ export default function GuestProfile({ navigation }: GuestProfileProps) {
             iconColor: Colors.charcoalLight,
             iconBg: Colors.border,
             title: 'About RentalMeet',
-            subtitle: 'Version 1.0.0',
+            subtitle: `Version ${version}`,
             onPress: () =>
                 alert.info(
                     'Rental Meet',
@@ -414,35 +414,6 @@ export default function GuestProfile({ navigation }: GuestProfileProps) {
                         ))}
                     </View>
                 </Animated.View>
-
-                {/* ── Browse CTA banner ─────────────────────────────────────────── */}
-                <Animated.View
-                    style={[
-                        styles.browseBanner,
-                        { opacity: menuFade, transform: [{ translateY: menuSlide }] },
-                    ]}
-                >
-                    <View style={{ flex: 1 }}>
-                        <Ionicons
-                            name="location"
-                            size={16}
-                            color={Colors.primary}
-                            style={{ marginBottom: 4 }}
-                        />
-                        <Text style={styles.ctaBannerTitle}>Find your next space</Text>
-                        <Text style={styles.ctaBannerSub}>Hundreds of premium venues near you</Text>
-                    </View>
-                    <TouchableOpacity
-                        style={styles.ctaBannerBtn}
-                        onPress={() => navigation.navigate('home')}
-                        activeOpacity={0.85}
-                    >
-                        <Ionicons name="search" size={15} color={Colors.white} />
-                        <Text style={styles.ctaBannerBtnText}>Browse</Text>
-                    </TouchableOpacity>
-                </Animated.View>
-
-                <Text style={styles.versionText}>RentalMeet v1.0.0</Text>
             </ScrollView>
         </View>
     );

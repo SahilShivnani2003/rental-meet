@@ -300,7 +300,6 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
 
     return (
         <View style={s.container}>
-            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
             {/* Sticky header */}
             <Animated.View style={[s.stickyHeader, { opacity: headerOpacity }]}>

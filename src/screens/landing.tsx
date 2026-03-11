@@ -9,8 +9,6 @@ import {
     Dimensions,
     TextInput,
     Modal,
-    FlatList,
-    Platform,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../theme/theme';
@@ -812,19 +810,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                                     </View>
                                 </TouchableOpacity>
                             </View>
-                            <TouchableOpacity
-                                style={s.ctaProfileLink}
-                                onPress={goToProfile}
-                                activeOpacity={0.8}
-                            >
-                                <View style={s.ctaProfileAvatar}>
-                                    <Text style={s.ctaProfileInitials}>
-                                        {user?.name?.slice(0, 2).toUpperCase() || 'Guest'}
-                                    </Text>
-                                </View>
-                                <Text style={s.ctaProfileText}>View your profile</Text>
-                                <Ionicons name="arrow-forward" size={13} color={Colors.primary} />
-                            </TouchableOpacity>
                         </View>
                     </View>
                 </View>
@@ -1029,7 +1014,7 @@ const s = StyleSheet.create({
     },
     navbar: {
         position: 'absolute',
-        top: 52,
+        top: 39,
         left: 0,
         right: 0,
         flexDirection: 'row',

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
 import Step3Amenities from '../../components/registerVenue/amenities-info';
@@ -10,11 +10,12 @@ import Step4Pricing from '../../components/registerVenue/pricing-info';
 import StepIndicator from '../../components/registerVenue/step-indicator';
 import Step7Terms from '../../components/registerVenue/terms-info';
 import Step5Photos from '../../components/registerVenue/photos-upload';
-interface Props {
-    onClose?: () => void;
-}
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../navigations/RootNavigation';
 
-export default function RegisterVenueScreen({ onClose }: Props) {
+type registerVenueProps = NativeStackScreenProps<RootStackParamList, 'registerVenue'>;
+
+export default function RegisterVenueScreen({ navigation }: registerVenueProps) {
     const [step, setStep] = useState(1);
     const [successModal, setSuccessModal] = useState(false);
 
@@ -42,11 +43,14 @@ export default function RegisterVenueScreen({ onClose }: Props) {
         }
     };
 
+    const handleClose = () => {
+        navigation.goBack();
+    };
     return (
-        <SafeAreaView style={s.root}>
+        <View style={s.root}>
             {/* Top bar */}
             <View style={s.topBar}>
-                <TouchableOpacity style={s.closeBtn} onPress={onClose} activeOpacity={0.8}>
+                <TouchableOpacity style={s.closeBtn} onPress={handleClose} activeOpacity={0.8}>
                     <Ionicons name="close" size={20} color={Colors.charcoalMid} />
                 </TouchableOpacity>
                 <View style={s.titleWrap}>
@@ -79,7 +83,7 @@ export default function RegisterVenueScreen({ onClose }: Props) {
                             style={s.modalBtn}
                             onPress={() => {
                                 setSuccessModal(false);
-                                onClose?.();
+                                handleClose();
                             }}
                             activeOpacity={0.85}
                         >
@@ -88,7 +92,7 @@ export default function RegisterVenueScreen({ onClose }: Props) {
                     </View>
                 </View>
             </Modal>
-        </SafeAreaView>
+        </View>
     );
 }
 

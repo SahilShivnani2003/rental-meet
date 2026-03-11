@@ -10,13 +10,11 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigations/RootNavigation';
-
-const MOCK_USER = {
-    name: 'Alex Johnson',
-    email: 'alex.johnson@email.com',
-    userType: 'owner',
-};
+import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
+import { OwnerTabParamList } from '../../navigations/tabNavigations/OwnerTabNavigation';
+import { useAuthStore } from '../../store/auth-store';
 
 const USER_TYPE_CONFIG: Record<string, { label: string; icon: string; color: string; bg: string }> =
     {
@@ -97,9 +95,10 @@ function MenuSection({ title, items }: { title: string; items: any[] }) {
     );
 }
 
+type profileProps = NativeBottomTabScreenProps<OwnerTabParamList, 'profile'>;
 // ─── Screen ───────────────────────────────────────────────────────────────────
-export default function ProfileScreen({ navigation }: any) {
-    const user = MOCK_USER;
+export default function ProfileScreen({ navigation }: profileProps) {
+    const { user } = useAuthStore();
     const typeCfg = USER_TYPE_CONFIG[user.userType] ?? USER_TYPE_CONFIG.client;
     const initials = user.name
         .split(' ')
@@ -116,7 +115,11 @@ export default function ProfileScreen({ navigation }: any) {
                 {
                     text: 'Log out',
                     style: 'destructive',
-                    onPress: () => navigation.replace('login'),
+                    onPress: () => {
+                        navigation
+                            .getParent<NativeStackNavigationProp<RootStackParamList>>()
+                            .navigate('login');
+                    },
                 },
             ],
             { cancelable: true },

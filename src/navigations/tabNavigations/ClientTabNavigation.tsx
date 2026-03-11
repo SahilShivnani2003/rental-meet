@@ -16,7 +16,7 @@ export type ClientTabParamList = {
 };
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
-const TABS = [
+const clientTabs = [
     { name: 'home', label: 'Home', icon: 'grid', iconOff: 'grid-outline' },
     { name: 'venues', label: 'Browse', icon: 'search', iconOff: 'search-outline' },
     {
@@ -41,7 +41,7 @@ const Tabs = createBottomTabNavigator<ClientTabParamList>();
 export function ClientTabNavigation() {
     return (
         <Tabs.Navigator
-            tabBar={props => <CustomTabBar {...props} tabs={TABS} />}
+            tabBar={props => <CustomTabBar {...props} tabs={clientTabs} />}
             screenOptions={{ headerShown: false }}
         >
             <Tabs.Screen name="home" component={LandingScreen} />

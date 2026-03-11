@@ -1,4 +1,4 @@
-import { Animated, TouchableOpacity, View, Text, StyleSheet, Dimensions } from 'react-native';
+import { Animated, TouchableOpacity, View, Text, StyleSheet, Dimensions, ImageBackground } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Spacing, Colors, Radii, Shadows, Typography } from '../../theme/theme';
 import { useRef } from 'react';
@@ -6,7 +6,6 @@ import useEntrance from '../../hooks/useEntrance';
 
 const { width: W } = Dimensions.get('window');
 
-// ── Venue type → accent color map ─────────────────────────────────────────────
 const TYPE_ACCENT: Record<string, string> = {
     'Meeting Hall': Colors.primary,
     'Conference Hall': '#4A90E2',
@@ -25,22 +24,8 @@ function usePressScale(to = 0.96) {
     return { scale, onIn, onOut };
 }
 
-// ── Props: accepts real venue object from API ─────────────────────────────────
 interface Props {
-    v: {
-        _id: string;
-        businessName: string;
-        venueType: string[];
-        capacity: string;
-        rating: number;
-        totalBookings: number;
-        pricing: {
-            perHour: { weekday: number; weekend: number };
-        };
-        images: Array<{ url: string; isFeatured: boolean }>;
-        location: { city: string; area: string };
-        status: string;
-    };
+    v: any;
     index: number;
     onPress: (venue: any) => void;
 }
@@ -48,13 +33,18 @@ interface Props {
 export default function FeaturedCard({ v, index, onPress }: Props) {
     const { fade, slide } = useEntrance(200 + index * 80);
     const { scale, onIn, onOut } = usePressScale();
-
-    // ── Derived values ────────────────────────────────────────────────────────
+    debugger
     const primaryType = v.venueType?.[0] ?? 'Venue';
     const accent = TYPE_ACCENT[primaryType] ?? Colors.primary;
     const pricePerHour = v.pricing?.perHour?.weekday ?? 0;
     const hasRating = v.rating > 0;
     const isVerified = v.status === 'approved';
+
+    // ── Pick featured image, fallback to first image ──────────────────────────
+    const bgImage =
+        v.images?.find((img:any) => img.isFeatured)?.url ??
+        v.images?.[0]?.url ??
+        null;
 
     return (
         <Animated.View
@@ -71,15 +61,21 @@ export default function FeaturedCard({ v, index, onPress }: Props) {
                 onPressOut={onOut}
             >
                 <Animated.View style={[fc.card, { transform: [{ scale }] }]}>
-                    {/* ── Coloured top section ── */}
-                    <View style={[fc.top, { backgroundColor: Colors.charcoal }]}>
-                        {/* Left accent bar in venue-type color */}
+                    {/* ── Image top section ── */}
+                    <ImageBackground
+                        source={bgImage ? { uri: bgImage } : undefined}
+                        style={fc.top}
+                        imageStyle={fc.topImage}
+                        // Fallback bg if no image
+                        defaultSource={undefined}
+                    >
+                        {/* Dark gradient scrim so text stays readable */}
+                        <View style={fc.scrim} />
+
+                        {/* Left accent bar */}
                         <View style={[fc.accentBar, { backgroundColor: accent }]} />
 
-                        {/* Decorative orb */}
-                        <View style={[fc.orb, { backgroundColor: accent + '22' }]} />
-
-                        {/* Verified / Top badge */}
+                        {/* Verified badge */}
                         {isVerified && (
                             <View style={fc.badge}>
                                 <Ionicons name="shield-checkmark" size={9} color={Colors.primary} />
@@ -89,7 +85,7 @@ export default function FeaturedCard({ v, index, onPress }: Props) {
 
                         {/* Type chip + Rating */}
                         <View style={fc.topBottom}>
-                            <View style={[fc.typeChip, { borderColor: accent + '55' }]}>
+                            <View style={[fc.typeChip, { borderColor: accent + '99' }]}>
                                 <Text style={fc.typeText}>{primaryType}</Text>
                             </View>
                             <View style={fc.ratingChip}>
@@ -99,16 +95,14 @@ export default function FeaturedCard({ v, index, onPress }: Props) {
                                 </Text>
                             </View>
                         </View>
-                    </View>
+                    </ImageBackground>
 
                     {/* ── Body ── */}
                     <View style={fc.body}>
-                        {/* Name */}
                         <Text style={fc.name} numberOfLines={1}>
                             {v.businessName}
                         </Text>
 
-                        {/* Location */}
                         <View style={fc.metaRow}>
                             <Ionicons name="location-outline" size={12} color={Colors.primary} />
                             <Text style={fc.metaText} numberOfLines={1}>
@@ -116,17 +110,11 @@ export default function FeaturedCard({ v, index, onPress }: Props) {
                             </Text>
                         </View>
 
-                        {/* Capacity */}
                         <View style={fc.metaRow}>
-                            <Ionicons
-                                name="people-outline"
-                                size={12}
-                                color={Colors.charcoalLight}
-                            />
+                            <Ionicons name="people-outline" size={12} color={Colors.charcoalLight} />
                             <Text style={fc.metaText}>Up to {v.capacity} guests</Text>
                         </View>
 
-                        {/* Price + CTA */}
                         <View style={fc.footer}>
                             <View>
                                 <Text style={fc.priceCaption}>from</Text>
@@ -160,16 +148,17 @@ const fc = StyleSheet.create({
         padding: Spacing.md,
         justifyContent: 'space-between',
         overflow: 'hidden',
+        backgroundColor: Colors.charcoal, // fallback if no image
+    },
+    topImage: {
+        resizeMode: 'cover',
+    },
+    // Dark scrim over the image so text/badges remain legible
+    scrim: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.38)',
     },
     accentBar: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4 },
-    orb: {
-        position: 'absolute',
-        top: -30,
-        right: -30,
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-    },
     badge: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -192,17 +181,16 @@ const fc = StyleSheet.create({
         alignItems: 'center',
     },
     typeChip: {
-        backgroundColor: 'rgba(255,255,255,0.10)',
+        backgroundColor: 'rgba(0,0,0,0.40)',
         paddingHorizontal: 8,
         paddingVertical: 4,
         borderRadius: Radii.full,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.16)',
     },
     typeText: {
         fontSize: 10,
         fontWeight: Typography.semiBold,
-        color: 'rgba(255,255,255,0.80)',
+        color: 'rgba(255,255,255,0.90)',
     },
     ratingChip: {
         flexDirection: 'row',

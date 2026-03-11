@@ -469,22 +469,6 @@ export default function OtherServicesScreen() {
                         <Text style={s.headerEyebrow}>SERVICES</Text>
                         <Text style={s.headerTitle}>Other Services</Text>
                     </View>
-                    <View style={s.headerRight}>
-                        <TouchableOpacity
-                            style={s.iconBtn}
-                            onPress={() => navigation.navigate('profile')}
-                        >
-                            <Ionicons name="person-outline" size={19} color={Colors.charcoalMid} />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={s.iconBtn}>
-                            <Ionicons
-                                name="notifications-outline"
-                                size={19}
-                                color={Colors.charcoalMid}
-                            />
-                            <View style={s.notifDot} />
-                        </TouchableOpacity>
-                    </View>
                 </View>
                 <Text style={s.headerSub}>
                     Catering, security, beauty & photography for your event.
