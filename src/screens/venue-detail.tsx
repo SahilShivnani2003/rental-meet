@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import {
     View,
     Text,
@@ -10,8 +10,8 @@ import {
     Animated,
     FlatList,
     Linking,
-    StatusBar,
     Platform,
+    Modal,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -19,68 +19,81 @@ import { RootStackParamList } from '../navigations/RootNavigation';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../theme/theme';
 
 const { width, height } = Dimensions.get('window');
-const HERO_HEIGHT = height * 0.42;
-
-// ── Venue type — exported so RootNavigator & other files can import it ────────
-export interface Venue {
-    _id: string;
-    businessName: string;
-    venueType: string[];
-    description: string;
-    capacity: string;
-    areaSqft: number;
-    rating: number;
-    reviewCount: number;
-    totalBookings: number;
-    location: {
-        address: string;
-        landmark: string;
-        city: string;
-        area: string;
-        pincode: string;
-        googleMapLink: string;
-        parkingAvailability: string;
-        nearestBusAuto: string;
-        nearestMetroTrain: string;
-    };
-    pricing: {
-        perHour: { weekday: number; weekend: number };
-        halfDay: { weekday: number; weekend: number };
-        fullDay: { weekday: number; weekend: number };
-        extraHourRate: { weekday: number; weekend: number };
-    };
-    availability: {
-        openingTime: string;
-        closingTime: string;
-        availableDays: string[];
-        advanceBookingRule: string;
-    };
-    amenities: {
-        kitchenAccess: { available: boolean; type: string; charges: number };
-        diningArea: { available: boolean; type: string; charges: number };
-        basic: Array<{ name: string; available: boolean; type: string; rate: number }>;
-        beverages: Array<{ name: string; available: boolean; ratePerUnit: number; brand: string }>;
-        refreshmentFood: Array<{
-            name: string;
-            available: boolean;
-            ratePerPlate: number;
-            items: string;
-        }>;
-        lunchThalis: Array<{
-            type: string;
-            available: boolean;
-            ratePerPlate: number;
-            itemNames: string;
-        }>;
-        additional: Array<{ name: string; available: boolean; type: string; charges: number }>;
-    };
-    images: Array<{ url: string; category: string; isFeatured: boolean }>;
-    ownerInfo: { fullName: string; email: string; mobile: string; role: string };
-    status: string;
-}
+const HERO_HEIGHT = height * 0.38;
+const THUMB_SIZE = 60;
 
 type Props = NativeStackScreenProps<RootStackParamList, 'venueDetail'>;
 
+// ─── Domain types ─────────────────────────────────────────────────────────────
+
+type BasicAmenity = { name: string; type: string; rate: number };
+type AdditionalAmenity = { name: string; charges: number };
+type Beverage = { name: string; ratePerUnit: number };
+type RefreshmentFood = { name: string; ratePerPlate: number };
+type LunchThali = { type: string; itemNames: string; ratePerPlate: number };
+type FacilityItem = { available: boolean; type: string; charges: number };
+
+type Amenities = {
+    basic: BasicAmenity[];
+    additional: AdditionalAmenity[];
+    beverages: Beverage[];
+    refreshmentFood: RefreshmentFood[];
+    lunchThalis: LunchThali[];
+    kitchenAccess: FacilityItem;
+    diningArea: FacilityItem;
+};
+
+type VenueImage = { url: string; isFeatured: boolean };
+type Pricing = {
+    perHour: { weekday: number; weekend: number };
+    halfDay: { weekday: number; weekend: number };
+    fullDay: { weekday: number; weekend: number };
+    extraHourRate: { weekday: number; weekend: number };
+};
+type Availability = {
+    openingTime: string;
+    closingTime: string;
+    availableDays: string[];
+    advanceBookingRule: string;
+};
+type Location = {
+    address: string;
+    landmark: string;
+    city: string;
+    area: string;
+    pincode: string;
+    parkingAvailability: string;
+    googleMapLink: string;
+    nearestBusAuto: number;
+    nearestMetroTrain: string;
+};
+type Venue = {
+    businessName: string;
+    status: string;
+    images: VenueImage[];
+    rating: number;
+    capacity: number;
+    areaSqft: number;
+    totalBookings: number;
+    reviewCount: number;
+    venueType: string[];
+    description: string;
+    pricing: Pricing;
+    availability: Availability;
+    amenities: Amenities;
+    location: Location;
+};
+
+// Helper row types (typed inline arrays)
+type StatItem = { icon: string; value: string };
+type PricingCard = { icon: string; label: string; price: number; sub: string };
+type TransitItem = { icon: string; label: string; value: string };
+type LocationRow = { label: string; value: string | number | undefined };
+type FacilityDef = { icon: string; label: string; data: FacilityItem };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const ALL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const DAY_ABBR: Record<string, string> = {
     Monday: 'M',
     Tuesday: 'T',
@@ -90,217 +103,394 @@ const DAY_ABBR: Record<string, string> = {
     Saturday: 'S',
     Sunday: 'S',
 };
-const ALL_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
-function SectionHeader({ title, icon }: { title: string; icon: string }) {
+function formatTime(t: string): string {
+    const [h, m] = t.split(':');
+    const hour = parseInt(h, 10);
+    return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
+}
+
+// ─── Small reusable pieces ────────────────────────────────────────────────────
+
+function SectionTitle({ icon, label }: { icon: string; label: string }) {
     return (
-        <View style={shStyles.row}>
-            <View style={shStyles.iconWrap}>
-                <Ionicons name={icon as any} size={16} color={Colors.primary} />
+        <View style={util.sectionTitleRow}>
+            <View style={util.sectionIconWrap}>
+                <Ionicons name={icon as any} size={15} color={Colors.primary} />
             </View>
-            <Text style={shStyles.title}>{title}</Text>
+            <Text style={util.sectionTitleText}>{label}</Text>
         </View>
     );
 }
-const shStyles = StyleSheet.create({
-    row: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
-    iconWrap: {
-        width: 32,
-        height: 32,
-        borderRadius: 10,
+
+function Divider() {
+    return <View style={util.divider} />;
+}
+
+const util = StyleSheet.create({
+    sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+    sectionIconWrap: {
+        width: 30,
+        height: 30,
+        borderRadius: 9,
         backgroundColor: Colors.primaryDim,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    title: {
+    sectionTitleText: {
         fontSize: Typography.lg,
         fontWeight: Typography.bold,
         color: Colors.charcoal,
         letterSpacing: -0.3,
     },
+    divider: { height: 1, backgroundColor: Colors.divider, marginVertical: Spacing.lg },
 });
 
-function PriceRow({
-    label,
-    weekday,
-    weekend,
-}: {
-    label: string;
-    weekday: number;
-    weekend: number;
-}) {
-    return (
-        <View style={prStyles.row}>
-            <Text style={prStyles.label}>{label}</Text>
-            <View style={prStyles.right}>
-                <View style={prStyles.pill}>
-                    <Text style={prStyles.pillLabel}>Weekday</Text>
-                    <Text style={prStyles.amount}>₹{weekday.toLocaleString()}</Text>
-                </View>
-                {weekend !== weekday && (
-                    <View style={[prStyles.pill, prStyles.weekendPill]}>
-                        <Text style={[prStyles.pillLabel, { color: Colors.charcoalLight }]}>
-                            Weekend
-                        </Text>
-                        <Text style={[prStyles.amount, { color: Colors.charcoal }]}>
-                            ₹{weekend.toLocaleString()}
-                        </Text>
-                    </View>
-                )}
-            </View>
-        </View>
-    );
-}
-const prStyles = StyleSheet.create({
-    row: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.divider,
-    },
-    label: {
-        fontSize: Typography.base,
-        fontWeight: Typography.semiBold,
-        color: Colors.charcoalMid,
-    },
-    right: { flexDirection: 'row', gap: 8 },
-    pill: {
-        alignItems: 'flex-end',
-        backgroundColor: Colors.primaryLight,
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        borderRadius: Radii.sm,
-    },
-    weekendPill: { backgroundColor: Colors.background },
-    pillLabel: {
-        fontSize: 9,
-        fontWeight: Typography.bold,
-        color: Colors.primaryDark,
-        letterSpacing: 0.5,
-    },
-    amount: {
-        fontSize: Typography.base,
-        fontWeight: Typography.extraBold,
-        color: Colors.primaryDark,
-    },
-});
+// ─── IncludedItem ─────────────────────────────────────────────────────────────
 
-function AmenityChip({ name, type, rate }: { name: string; type: string; rate?: number }) {
-    const isPaid = type === 'Paid';
+function IncludedItem({ name }: { name: string }) {
     return (
-        <View style={[acStyles.chip, isPaid && acStyles.chipPaid]}>
-            <Ionicons
-                name={isPaid ? 'card-outline' : 'checkmark-circle'}
-                size={11}
-                color={isPaid ? Colors.primary : Colors.success}
-            />
-            <Text style={[acStyles.name, isPaid && acStyles.namePaid]}>{name}</Text>
-            {isPaid && rate && rate > 0 && <Text style={acStyles.rate}>₹{rate}</Text>}
-        </View>
-    );
-}
-const acStyles = StyleSheet.create({
-    chip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: Radii.full,
-        backgroundColor: Colors.successLight,
-        marginBottom: 8,
-    },
-    chipPaid: { backgroundColor: Colors.primaryDim },
-    name: { fontSize: Typography.sm, fontWeight: Typography.semiBold, color: Colors.success },
-    namePaid: { color: Colors.primaryDark },
-    rate: {
-        fontSize: 9,
-        fontWeight: Typography.bold,
-        color: Colors.primary,
-        backgroundColor: Colors.primaryLight,
-        paddingHorizontal: 5,
-        paddingVertical: 1,
-        borderRadius: 6,
-    },
-});
-
-function ThaliCard({ thali }: { thali: any }) {
-    return (
-        <View style={tcStyles.card}>
-            <View style={tcStyles.header}>
-                <Text style={tcStyles.type}>{thali.type}</Text>
-                <Text style={tcStyles.price}>₹{thali.ratePerPlate}</Text>
-            </View>
-            <Text style={tcStyles.items} numberOfLines={2}>
-                {thali.itemNames}
+        <View style={am.includedItem}>
+            <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
+            <Text style={am.includedName} numberOfLines={1}>
+                {name}
             </Text>
+            <View style={am.freeBadge}>
+                <Text style={am.freeText}>Free</Text>
+            </View>
         </View>
     );
 }
-const tcStyles = StyleSheet.create({
-    card: {
-        width: 180,
-        backgroundColor: Colors.surface,
-        borderRadius: Radii.md,
-        padding: 14,
-        marginRight: 10,
-        borderWidth: 1.5,
-        borderColor: Colors.border,
-        ...Shadows.card,
-    },
-    header: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 6,
-    },
-    type: {
-        fontSize: Typography.base,
-        fontWeight: Typography.bold,
-        color: Colors.charcoal,
-        flex: 1,
-    },
-    price: { fontSize: Typography.md, fontWeight: Typography.extraBold, color: Colors.primary },
-    items: { fontSize: Typography.sm, color: Colors.charcoalLight, lineHeight: 16 },
-});
 
-// ── Main Screen ───────────────────────────────────────────────────────────────
+// ─── PaidItem ─────────────────────────────────────────────────────────────────
+
+type PaidItemProps = {
+    name: string;
+    charge: number;
+    qty: number;
+    checked: boolean;
+    onToggle: () => void;
+    onIncrement: () => void;
+    onDecrement: () => void;
+};
+function PaidItem({
+    name,
+    charge,
+    qty,
+    checked,
+    onToggle,
+    onIncrement,
+    onDecrement,
+}: PaidItemProps) {
+    return (
+        <View style={am.paidRow}>
+            <TouchableOpacity
+                style={[am.checkbox, checked && am.checkboxOn]}
+                onPress={onToggle}
+                activeOpacity={0.75}
+            >
+                {checked && <Ionicons name="checkmark" size={11} color={Colors.white} />}
+            </TouchableOpacity>
+            <Text style={am.paidName}>{name}</Text>
+            {checked ? (
+                <View style={am.stepper}>
+                    <TouchableOpacity onPress={onDecrement} style={am.stepBtn}>
+                        <Text style={am.stepBtnText}>−</Text>
+                    </TouchableOpacity>
+                    <Text style={am.stepQty}>{qty}</Text>
+                    <TouchableOpacity onPress={onIncrement} style={am.stepBtn}>
+                        <Text style={am.stepBtnText}>+</Text>
+                    </TouchableOpacity>
+                </View>
+            ) : (
+                <Text style={am.paidPrice}>₹{charge}</Text>
+            )}
+        </View>
+    );
+}
+
+// ─── BeverageItem ─────────────────────────────────────────────────────────────
+
+type BeverageItemProps = {
+    name: string;
+    rate: number;
+    qty: number;
+    checked: boolean;
+    onToggle: () => void;
+    onIncrement: () => void;
+    onDecrement: () => void;
+};
+function BeverageItem({
+    name,
+    rate,
+    qty,
+    checked,
+    onToggle,
+    onIncrement,
+    onDecrement,
+}: BeverageItemProps) {
+    return (
+        <View style={am.paidRow}>
+            <TouchableOpacity
+                style={[am.checkbox, checked && am.checkboxOn]}
+                onPress={onToggle}
+                activeOpacity={0.75}
+            >
+                {checked && <Ionicons name="checkmark" size={11} color={Colors.white} />}
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+                <Text style={am.paidName}>{name}</Text>
+            </View>
+            {checked ? (
+                <View style={am.stepper}>
+                    <TouchableOpacity onPress={onDecrement} style={am.stepBtn}>
+                        <Text style={am.stepBtnText}>−</Text>
+                    </TouchableOpacity>
+                    <Text style={am.stepQty}>{qty}</Text>
+                    <TouchableOpacity onPress={onIncrement} style={am.stepBtn}>
+                        <Text style={am.stepBtnText}>+</Text>
+                    </TouchableOpacity>
+                </View>
+            ) : (
+                <Text style={am.paidPrice}>₹{rate}/person</Text>
+            )}
+        </View>
+    );
+}
+
+// ─── RefreshmentItem ──────────────────────────────────────────────────────────
+
+type RefreshmentItemProps = { name: string; rate: number; checked: boolean; onToggle: () => void };
+function RefreshmentItem({ name, rate, checked, onToggle }: RefreshmentItemProps) {
+    return (
+        <View style={am.paidRow}>
+            <TouchableOpacity
+                style={[am.checkbox, checked && am.checkboxOn]}
+                onPress={onToggle}
+                activeOpacity={0.75}
+            >
+                {checked && <Ionicons name="checkmark" size={11} color={Colors.white} />}
+            </TouchableOpacity>
+            <Text style={am.paidName}>{name}</Text>
+            <Text style={am.paidPrice}>₹{rate}/plate</Text>
+        </View>
+    );
+}
+
+// ─── ThaliGroup ───────────────────────────────────────────────────────────────
+
+type ThaliGroupProps = {
+    groupName: string;
+    thalis: LunchThali[];
+    selectedThalis: Set<string>;
+    onToggle: (key: string) => void;
+};
+function ThaliGroup({ groupName, thalis, selectedThalis, onToggle }: ThaliGroupProps) {
+    return (
+        <View style={am.thaliGroup}>
+            <Text style={am.thaliGroupName}>{groupName}</Text>
+            {thalis.map((t: LunchThali, i: number) => {
+                const key = `${groupName}_${t.type}`;
+                const checked = selectedThalis.has(key);
+                return (
+                    <TouchableOpacity
+                        key={i}
+                        style={[am.thaliRow, checked && am.thaliRowActive]}
+                        onPress={() => onToggle(key)}
+                        activeOpacity={0.8}
+                    >
+                        <View style={[am.checkbox, checked && am.checkboxOn]}>
+                            {checked && (
+                                <Ionicons name="checkmark" size={11} color={Colors.white} />
+                            )}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                            <Text style={am.thaliType}>{t.type}</Text>
+                            <Text style={am.thaliItems} numberOfLines={1}>
+                                {t.itemNames}
+                            </Text>
+                        </View>
+                        <Text style={am.thaliPrice}>₹{t.ratePerPlate}/plate</Text>
+                    </TouchableOpacity>
+                );
+            })}
+        </View>
+    );
+}
+
+// ─── BookingSheet ─────────────────────────────────────────────────────────────
+
+const DURATIONS: Array<{ label: string; hours: number }> = [
+    { label: '1H', hours: 1 },
+    { label: '2H', hours: 2 },
+    { label: '4H', hours: 4 },
+    { label: 'Full Day', hours: 8 },
+];
+
+type BookingSheetProps = { visible: boolean; venue: Venue; onClose: () => void };
+function BookingSheet({ visible, venue, onClose }: BookingSheetProps) {
+    const [duration, setDuration] = useState(0);
+    const weekdayPrice = venue.pricing.perHour.weekday;
+    const estimated = weekdayPrice * DURATIONS[duration].hours;
+
+    return (
+        <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+            <View style={sheet.overlay}>
+                <TouchableOpacity
+                    style={StyleSheet.absoluteFillObject}
+                    onPress={onClose}
+                    activeOpacity={1}
+                />
+                <View style={sheet.container}>
+                    <View style={sheet.handle} />
+                    <View style={sheet.header}>
+                        <View>
+                            <Text style={sheet.headerTitle}>Book This Venue</Text>
+                            <View style={sheet.priceRow}>
+                                <Text style={sheet.startingFrom}>Starting from </Text>
+                                <Text style={sheet.price}>₹{weekdayPrice.toLocaleString()}</Text>
+                                <Text style={sheet.perHour}>/hour</Text>
+                            </View>
+                        </View>
+                        <TouchableOpacity onPress={onClose} style={sheet.closeBtn}>
+                            <Ionicons name="close" size={20} color={Colors.charcoalMid} />
+                        </TouchableOpacity>
+                    </View>
+                    <Divider />
+                    <Text style={sheet.fieldLabel}>Duration</Text>
+                    <View style={sheet.durationRow}>
+                        {DURATIONS.map((d, i) => (
+                            <TouchableOpacity
+                                key={d.label}
+                                style={[
+                                    sheet.durationBtn,
+                                    i === duration && sheet.durationBtnActive,
+                                ]}
+                                onPress={() => setDuration(i)}
+                                activeOpacity={0.8}
+                            >
+                                <Text
+                                    style={[
+                                        sheet.durationText,
+                                        i === duration && sheet.durationTextActive,
+                                    ]}
+                                >
+                                    {d.label}
+                                </Text>
+                            </TouchableOpacity>
+                        ))}
+                    </View>
+                    <View style={sheet.summaryBox}>
+                        <View style={sheet.summaryRow}>
+                            <Text style={sheet.summaryLabel}>Base Price</Text>
+                            <Text style={sheet.summaryValue}>
+                                ₹{(weekdayPrice * DURATIONS[duration].hours).toLocaleString()}
+                            </Text>
+                        </View>
+                        <View style={[sheet.summaryRow, { marginTop: 6 }]}>
+                            <Text style={[sheet.summaryLabel, { fontWeight: Typography.bold }]}>
+                                Estimated Total
+                            </Text>
+                            <Text style={sheet.estimatedTotal}>₹{estimated.toLocaleString()}</Text>
+                        </View>
+                    </View>
+                    <TouchableOpacity style={sheet.reserveBtn} activeOpacity={0.85}>
+                        <Ionicons
+                            name="calendar"
+                            size={18}
+                            color={Colors.white}
+                            style={{ marginRight: 8 }}
+                        />
+                        <Text style={sheet.reserveText}>Reserve Now</Text>
+                    </TouchableOpacity>
+                    <View style={sheet.infoStrip}>
+                        {(
+                            [
+                                {
+                                    icon: 'time-outline',
+                                    text: `${formatTime(
+                                        venue.availability.openingTime,
+                                    )} – ${formatTime(venue.availability.closingTime)}`,
+                                },
+                                { icon: 'people-outline', text: `Capacity: ${venue.capacity}` },
+                            ] as Array<{ icon: string; text: string }>
+                        ).map((info, i) => (
+                            <View key={i} style={sheet.infoItem}>
+                                <Ionicons
+                                    name={info.icon as any}
+                                    size={13}
+                                    color={Colors.primary}
+                                />
+                                <Text style={sheet.infoText}>{info.text}</Text>
+                            </View>
+                        ))}
+                    </View>
+                    <TouchableOpacity style={sheet.shareBtn} activeOpacity={0.8}>
+                        <Ionicons name="share-social-outline" size={16} color={Colors.primary} />
+                        <Text style={sheet.shareText}>Share Venue</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </Modal>
+    );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
+
 export default function VenueDetailScreen({ route, navigation }: Props) {
-    const { venue } = route.params;
+    const { venue } = route.params as { venue: Venue };
     const scrollY = useRef(new Animated.Value(0)).current;
     const [activeImageIndex, setActiveImageIndex] = useState(0);
-    const [activeTab, setActiveTab] = useState<'overview' | 'amenities' | 'food'>('overview');
-
+    const [bookingVisible, setBookingVisible] = useState(false);
     const { pricing, availability, amenities, location } = venue;
+
+    const [paidChecked, setPaidChecked] = useState<Set<string>>(new Set());
+    const [paidQty, setPaidQty] = useState<Record<string, number>>({});
+    const [bevChecked, setBevChecked] = useState<Set<string>>(new Set());
+    const [bevQty, setBevQty] = useState<Record<string, number>>({});
+    const [refChecked, setRefChecked] = useState<Set<string>>(new Set());
+    const [thaliChecked, setThaliChecked] = useState<Set<string>>(new Set());
+
+    const toggleSet = useCallback((set: Set<string>, key: string): Set<string> => {
+        const next = new Set(set);
+        next.has(key) ? next.delete(key) : next.add(key);
+        return next;
+    }, []);
 
     const heroTranslate = scrollY.interpolate({
         inputRange: [0, HERO_HEIGHT],
-        outputRange: [0, -HERO_HEIGHT * 0.3],
+        outputRange: [0, -HERO_HEIGHT * 0.28],
         extrapolate: 'clamp',
     });
     const headerOpacity = scrollY.interpolate({
-        inputRange: [HERO_HEIGHT - 80, HERO_HEIGHT - 40],
+        inputRange: [HERO_HEIGHT - 80, HERO_HEIGHT - 30],
         outputRange: [0, 1],
         extrapolate: 'clamp',
     });
     const heroOverlayOpacity = scrollY.interpolate({
         inputRange: [0, HERO_HEIGHT * 0.5],
-        outputRange: [0.35, 0.7],
+        outputRange: [0.25, 0.6],
         extrapolate: 'clamp',
     });
 
-    const formatTime = (t: string) => {
-        const [h, m] = t.split(':');
-        const hour = parseInt(h);
-        const ampm = hour >= 12 ? 'PM' : 'AM';
-        return `${hour % 12 || 12}:${m} ${ampm}`;
-    };
+    // Thali grouping — fully typed reduce
+    const thaliGroups = amenities.lunchThalis.reduce<Record<string, LunchThali[]>>(
+        (acc: Record<string, LunchThali[]>, t: LunchThali) => {
+            const type = t?.type ?? ''; // ← guard against undefined
+            const group = type.includes('Rajasthani')
+                ? 'Rajasthani Thali'
+                : type.includes('South')
+                ? 'South Indian Thali'
+                : 'North Indian Thali';
+            if (!acc[group]) acc[group] = [];
+            acc[group].push(t);
+            return acc;
+        },
+        {},
+    );
 
     return (
         <View style={s.container}>
-
             {/* Sticky header */}
             <Animated.View style={[s.stickyHeader, { opacity: headerOpacity }]}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={s.stickyBack}>
@@ -324,7 +514,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                     <Animated.View
                         style={[s.heroInner, { transform: [{ translateY: heroTranslate }] }]}
                     >
-                        <FlatList
+                        <FlatList<VenueImage>
                             data={venue.images}
                             horizontal
                             pagingEnabled
@@ -334,8 +524,8 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                     Math.round(e.nativeEvent.contentOffset.x / width),
                                 )
                             }
-                            keyExtractor={(_, i) => String(i)}
-                            renderItem={({ item }) => (
+                            keyExtractor={(_item: VenueImage, i: number) => String(i)}
+                            renderItem={({ item }: { item: VenueImage }) => (
                                 <Image source={{ uri: item.url }} style={s.heroImage} />
                             )}
                         />
@@ -344,395 +534,517 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                     <TouchableOpacity style={s.backButton} onPress={() => navigation.goBack()}>
                         <Ionicons name="chevron-back" size={22} color={Colors.white} />
                     </TouchableOpacity>
+                    {venue.status === 'approved' && (
+                        <View style={s.approvedBadge}>
+                            <Ionicons name="shield-checkmark" size={11} color={Colors.white} />
+                            <Text style={s.approvedText}>Approved</Text>
+                        </View>
+                    )}
+                    {venue.images[activeImageIndex]?.isFeatured && (
+                        <View style={s.featuredBadge}>
+                            <Ionicons name="star" size={11} color={Colors.white} />
+                            <Text style={s.featuredText}>Featured</Text>
+                        </View>
+                    )}
                     <View style={s.imageCounter}>
-                        <Ionicons name="images-outline" size={12} color={Colors.white} />
                         <Text style={s.imageCountText}>
                             {activeImageIndex + 1}/{venue.images.length}
                         </Text>
                     </View>
-                    <View style={s.dotsRow}>
-                        {venue.images.slice(0, 6).map((_, i) => (
-                            <View key={i} style={[s.dot, i === activeImageIndex && s.dotActive]} />
-                        ))}
-                    </View>
-                    {venue.status === 'approved' && (
-                        <View style={s.verifiedBadge}>
-                            <Ionicons name="shield-checkmark" size={12} color={Colors.white} />
-                            <Text style={s.verifiedText}>Verified</Text>
-                        </View>
-                    )}
                 </View>
 
-                {/* Content card */}
-                <View style={s.contentCard}>
-                    {/* Title block */}
-                    <View style={s.titleBlock}>
-                        <View style={s.titleRow}>
-                            <Text style={s.venueName}>{venue.businessName}</Text>
-                            <View style={s.ratingBadge}>
-                                <Ionicons name="star" size={13} color={Colors.primary} />
-                                <Text style={s.ratingText}>
-                                    {venue.rating > 0 ? venue.rating.toFixed(1) : 'New'}
-                                </Text>
-                            </View>
-                        </View>
-                        <View style={s.typeTags}>
-                            {venue.venueType.map(t => (
-                                <View key={t} style={s.typeTag}>
-                                    <Text style={s.typeTagText}>{t}</Text>
-                                </View>
-                            ))}
-                        </View>
-                        <View style={s.statsRow}>
-                            <View style={s.statItem}>
-                                <Ionicons name="people-outline" size={15} color={Colors.primary} />
-                                <Text style={s.statValue}>{venue.capacity}</Text>
-                                <Text style={s.statLabel}>Capacity</Text>
-                            </View>
-                            <View style={s.statDivider} />
-                            <View style={s.statItem}>
-                                <Ionicons name="grid-outline" size={15} color={Colors.primary} />
-                                <Text style={s.statValue}>{venue.areaSqft.toLocaleString()}</Text>
-                                <Text style={s.statLabel}>Sq. Ft.</Text>
-                            </View>
-                            <View style={s.statDivider} />
-                            <View style={s.statItem}>
-                                <Ionicons
-                                    name="bookmark-outline"
-                                    size={15}
-                                    color={Colors.primary}
-                                />
-                                <Text style={s.statValue}>{venue.totalBookings}</Text>
-                                <Text style={s.statLabel}>Bookings</Text>
-                            </View>
-                            <View style={s.statDivider} />
-                            <View style={s.statItem}>
-                                <Ionicons name="star-outline" size={15} color={Colors.primary} />
-                                <Text style={s.statValue}>{venue.reviewCount}</Text>
-                                <Text style={s.statLabel}>Reviews</Text>
-                            </View>
-                        </View>
-                    </View>
-
-                    {/* Tabs */}
-                    <View style={s.tabRow}>
-                        {(['overview', 'amenities', 'food'] as const).map(tab => (
+                {/* Thumbnail strip */}
+                <View style={s.thumbStrip}>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={s.thumbScroll}
+                    >
+                        {venue.images.map((img: VenueImage, i: number) => (
                             <TouchableOpacity
-                                key={tab}
-                                style={[s.tab, activeTab === tab && s.tabActive]}
-                                onPress={() => setActiveTab(tab)}
+                                key={i}
+                                style={[s.thumb, i === activeImageIndex && s.thumbActive]}
+                                onPress={() => setActiveImageIndex(i)}
+                                activeOpacity={0.8}
                             >
-                                <Text style={[s.tabText, activeTab === tab && s.tabTextActive]}>
-                                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                                </Text>
+                                <Image source={{ uri: img.url }} style={s.thumbImage} />
                             </TouchableOpacity>
                         ))}
-                    </View>
+                    </ScrollView>
+                </View>
 
-                    {/* Overview */}
-                    {activeTab === 'overview' && (
-                        <View style={s.tabContent}>
-                            <View style={s.section}>
-                                <SectionHeader title="About" icon="information-circle-outline" />
-                                <Text style={s.description}>{venue.description}</Text>
-                            </View>
-                            <View style={s.section}>
-                                <SectionHeader title="Location" icon="location-outline" />
-                                <View style={s.locationCard}>
-                                    <View style={s.locationMain}>
-                                        <Text style={s.locationAddress}>{location.address}</Text>
-                                        {!!location.landmark && (
-                                            <Text style={s.locationLandmark}>
-                                                {location.landmark}
-                                            </Text>
-                                        )}
-                                        <Text style={s.locationCity}>
-                                            {location.area}, {location.city} – {location.pincode}
-                                        </Text>
-                                    </View>
-                                    <TouchableOpacity
-                                        style={s.mapButton}
-                                        onPress={() => Linking.openURL(location.googleMapLink)}
-                                    >
-                                        <Ionicons name="navigate" size={16} color={Colors.white} />
-                                        <Text style={s.mapButtonText}>Maps</Text>
-                                    </TouchableOpacity>
+                {/* Info card */}
+                <View style={s.infoCard}>
+                    <View style={s.nameRow}>
+                        <Text style={s.venueName}>{venue.businessName}</Text>
+                        <View style={s.ratingBadge}>
+                            <Ionicons name="star" size={13} color={Colors.primary} />
+                            <Text style={s.ratingText}>
+                                {venue.rating > 0 ? venue.rating.toFixed(1) : 'New'}
+                            </Text>
+                        </View>
+                    </View>
+                    <View style={s.metaRow}>
+                        <View style={s.metaItem}>
+                            <Ionicons name="location-outline" size={14} color={Colors.primary} />
+                            <Text style={s.metaText}>
+                                {location.city}, {location.area}
+                            </Text>
+                        </View>
+                        <View style={s.metaDot} />
+                        <View style={s.metaItem}>
+                            <Ionicons name="people-outline" size={14} color={Colors.primary} />
+                            <Text style={s.metaText}>Up to {venue.capacity} guests</Text>
+                        </View>
+                    </View>
+                    <View style={s.statsStrip}>
+                        {(
+                            [
+                                {
+                                    icon: 'grid-outline',
+                                    value: `${venue.areaSqft.toLocaleString()} sqft`,
+                                },
+                                {
+                                    icon: 'bookmark-outline',
+                                    value: `${venue.totalBookings} bookings`,
+                                },
+                                {
+                                    icon: 'chatbubble-outline',
+                                    value: `${venue.reviewCount} reviews`,
+                                },
+                            ] as StatItem[]
+                        ).map((st, i) => (
+                            <React.Fragment key={i}>
+                                {i > 0 && <View style={s.statsDivider} />}
+                                <View style={s.statItem}>
+                                    <Ionicons
+                                        name={st.icon as any}
+                                        size={13}
+                                        color={Colors.primary}
+                                    />
+                                    <Text style={s.statText}>{st.value}</Text>
                                 </View>
-                                <View style={s.transitRow}>
-                                    {[
-                                        {
-                                            icon: 'bus-outline',
-                                            label: 'Bus / Auto',
-                                            value: `${location.nearestBusAuto}m`,
-                                        },
-                                        {
-                                            icon: 'train-outline',
-                                            label: 'Metro / Rail',
-                                            value: location.nearestMetroTrain,
-                                        },
-                                        {
-                                            icon: 'car-outline',
-                                            label: 'Parking',
-                                            value: location.parkingAvailability,
-                                        },
-                                    ].map(tr => (
-                                        <View key={tr.label} style={s.transitItem}>
-                                            <View style={s.transitIcon}>
-                                                <Ionicons
-                                                    name={tr.icon as any}
-                                                    size={14}
-                                                    color={Colors.primary}
-                                                />
-                                            </View>
-                                            <View>
-                                                <Text style={s.transitLabel}>{tr.label}</Text>
-                                                <Text style={s.transitValue}>{tr.value}</Text>
-                                            </View>
+                            </React.Fragment>
+                        ))}
+                    </View>
+                </View>
+
+                {/* Venue Types */}
+                <View style={s.section}>
+                    <View style={s.venueTypesHeader}>
+                        <Text style={s.venueTypesLabel}>VENUE TYPES</Text>
+                    </View>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={s.typeChips}
+                    >
+                        {venue.venueType.map((t: string) => (
+                            <View key={t} style={s.typeChip}>
+                                <Text style={s.typeChipText}>{t}</Text>
+                            </View>
+                        ))}
+                    </ScrollView>
+                </View>
+
+                {/* About */}
+                <View style={s.section}>
+                    <SectionTitle icon="information-circle-outline" label="About This Venue" />
+                    <Text style={s.description}>{venue.description}</Text>
+                </View>
+
+                {/* Amenities */}
+                <View style={s.section}>
+                    <SectionTitle icon="options-outline" label="Select Amenities & Services" />
+
+                    {amenities.basic.filter((a: BasicAmenity) => a.type !== 'Paid').length > 0 && (
+                        <View style={am.subSection}>
+                            <View style={am.subHeader}>
+                                <View style={am.subDot} />
+                                <Text style={am.subTitle}>Basic Amenities</Text>
+                            </View>
+                            <Text style={am.subLabel}>Included</Text>
+                            <View style={am.includedGrid}>
+                                {amenities.basic
+                                    .filter((a: BasicAmenity) => a.type !== 'Paid')
+                                    .map((item: BasicAmenity, i: number) => (
+                                        <View key={i} style={am.includedCell}>
+                                            <IncludedItem name={item.name} />
                                         </View>
                                     ))}
-                                </View>
                             </View>
-                            <View style={s.section}>
-                                <SectionHeader title="Pricing" icon="pricetag-outline" />
-                                <PriceRow
-                                    label="Per Hour"
-                                    weekday={pricing.perHour.weekday}
-                                    weekend={pricing.perHour.weekend}
-                                />
-                                <PriceRow
-                                    label="Half Day (4 hrs)"
-                                    weekday={pricing.halfDay.weekday}
-                                    weekend={pricing.halfDay.weekend}
-                                />
-                                <PriceRow
-                                    label="Full Day (8 hrs)"
-                                    weekday={pricing.fullDay.weekday}
-                                    weekend={pricing.fullDay.weekend}
-                                />
-                                {pricing.extraHourRate.weekday > 0 && (
-                                    <PriceRow
-                                        label="Extra Hour"
-                                        weekday={pricing.extraHourRate.weekday}
-                                        weekend={pricing.extraHourRate.weekend}
+                        </View>
+                    )}
+
+                    {amenities.basic.filter((a: BasicAmenity) => a.type === 'Paid').length > 0 && (
+                        <View style={am.subSection}>
+                            <Text style={am.subLabel}>Paid</Text>
+                            {amenities.basic
+                                .filter((a: BasicAmenity) => a.type === 'Paid')
+                                .map((item: BasicAmenity, i: number) => (
+                                    <PaidItem
+                                        key={i}
+                                        name={item.name}
+                                        charge={item.rate}
+                                        qty={paidQty[item.name] ?? 0}
+                                        checked={paidChecked.has(item.name)}
+                                        onToggle={() => {
+                                            setPaidChecked(prev => toggleSet(prev, item.name));
+                                            if (!paidQty[item.name])
+                                                setPaidQty(p => ({ ...p, [item.name]: 1 }));
+                                        }}
+                                        onIncrement={() =>
+                                            setPaidQty(p => ({
+                                                ...p,
+                                                [item.name]: (p[item.name] ?? 1) + 1,
+                                            }))
+                                        }
+                                        onDecrement={() =>
+                                            setPaidQty(p => ({
+                                                ...p,
+                                                [item.name]: Math.max(1, (p[item.name] ?? 1) - 1),
+                                            }))
+                                        }
                                     />
-                                )}
+                                ))}
+                        </View>
+                    )}
+
+                    {amenities.additional.length > 0 && (
+                        <View style={am.subSection}>
+                            <View style={am.subHeader}>
+                                <View style={[am.subDot, { backgroundColor: Colors.info }]} />
+                                <Text style={am.subTitle}>Additional Services</Text>
                             </View>
-                            <View style={s.section}>
-                                <SectionHeader title="Availability" icon="calendar-outline" />
-                                <View style={s.timeRow}>
-                                    <View style={s.timeBox}>
-                                        <Text style={s.timeLabel}>Opens</Text>
-                                        <Text style={s.timeValue}>
-                                            {formatTime(availability.openingTime)}
-                                        </Text>
-                                    </View>
-                                    <View style={s.timeDash}>
-                                        <View style={s.timeLine} />
-                                        <Ionicons
-                                            name="time-outline"
-                                            size={18}
-                                            color={Colors.primary}
-                                        />
-                                        <View style={s.timeLine} />
-                                    </View>
-                                    <View style={s.timeBox}>
-                                        <Text style={s.timeLabel}>Closes</Text>
-                                        <Text style={s.timeValue}>
-                                            {formatTime(availability.closingTime)}
-                                        </Text>
-                                    </View>
-                                </View>
-                                <View style={s.daysRow}>
-                                    {ALL_DAYS.map(day => {
-                                        const active = availability.availableDays.includes(day);
-                                        return (
-                                            <View
-                                                key={day}
-                                                style={[s.dayCircle, active && s.dayCircleActive]}
-                                            >
-                                                <Text
-                                                    style={[s.dayAbbr, active && s.dayAbbrActive]}
-                                                >
-                                                    {DAY_ABBR[day]}
-                                                </Text>
-                                            </View>
-                                        );
-                                    })}
-                                </View>
-                                <View style={s.bookingRule}>
+                            {amenities.additional.map((item: AdditionalAmenity, i: number) => (
+                                <PaidItem
+                                    key={i}
+                                    name={item.name}
+                                    charge={item.charges}
+                                    qty={paidQty[`add_${item.name}`] ?? 0}
+                                    checked={paidChecked.has(`add_${item.name}`)}
+                                    onToggle={() => {
+                                        setPaidChecked(prev => toggleSet(prev, `add_${item.name}`));
+                                        if (!paidQty[`add_${item.name}`])
+                                            setPaidQty(p => ({ ...p, [`add_${item.name}`]: 1 }));
+                                    }}
+                                    onIncrement={() =>
+                                        setPaidQty(p => ({
+                                            ...p,
+                                            [`add_${item.name}`]: (p[`add_${item.name}`] ?? 1) + 1,
+                                        }))
+                                    }
+                                    onDecrement={() =>
+                                        setPaidQty(p => ({
+                                            ...p,
+                                            [`add_${item.name}`]: Math.max(
+                                                1,
+                                                (p[`add_${item.name}`] ?? 1) - 1,
+                                            ),
+                                        }))
+                                    }
+                                />
+                            ))}
+                        </View>
+                    )}
+
+                    {amenities.beverages.length > 0 && (
+                        <View style={am.subSection}>
+                            <View style={am.subHeader}>
+                                <Ionicons name="cafe-outline" size={14} color={Colors.primary} />
+                                <Text style={am.subTitle}>Beverages</Text>
+                            </View>
+                            {amenities.beverages.map((b: Beverage, i: number) => (
+                                <BeverageItem
+                                    key={i}
+                                    name={b.name}
+                                    rate={b.ratePerUnit}
+                                    qty={bevQty[b.name] ?? 0}
+                                    checked={bevChecked.has(b.name)}
+                                    onToggle={() => {
+                                        setBevChecked(prev => toggleSet(prev, b.name));
+                                        if (!bevQty[b.name])
+                                            setBevQty(p => ({ ...p, [b.name]: 1 }));
+                                    }}
+                                    onIncrement={() =>
+                                        setBevQty(p => ({ ...p, [b.name]: (p[b.name] ?? 1) + 1 }))
+                                    }
+                                    onDecrement={() =>
+                                        setBevQty(p => ({
+                                            ...p,
+                                            [b.name]: Math.max(1, (p[b.name] ?? 1) - 1),
+                                        }))
+                                    }
+                                />
+                            ))}
+                        </View>
+                    )}
+
+                    {amenities.refreshmentFood.length > 0 && (
+                        <View style={am.subSection}>
+                            <View style={am.subHeader}>
+                                <Ionicons
+                                    name="fast-food-outline"
+                                    size={14}
+                                    color={Colors.primary}
+                                />
+                                <Text style={am.subTitle}>Refreshments & Snacks</Text>
+                            </View>
+                            {amenities.refreshmentFood.map((food: RefreshmentFood, i: number) => (
+                                <RefreshmentItem
+                                    key={i}
+                                    name={food.name}
+                                    rate={food.ratePerPlate}
+                                    checked={refChecked.has(food.name)}
+                                    onToggle={() =>
+                                        setRefChecked(prev => toggleSet(prev, food.name))
+                                    }
+                                />
+                            ))}
+                        </View>
+                    )}
+
+                    {amenities.lunchThalis.length > 0 && (
+                        <View style={am.subSection}>
+                            <View style={am.subHeader}>
+                                <Ionicons
+                                    name="nutrition-outline"
+                                    size={14}
+                                    color={Colors.primary}
+                                />
+                                <Text style={am.subTitle}>Lunch Thalis</Text>
+                            </View>
+                            {Object.entries(thaliGroups).map(
+                                ([group, thalis]: [string, LunchThali[]]) => (
+                                    <ThaliGroup
+                                        key={group}
+                                        groupName={group}
+                                        thalis={thalis}
+                                        selectedThalis={thaliChecked}
+                                        onToggle={(key: string) =>
+                                            setThaliChecked(prev => toggleSet(prev, key))
+                                        }
+                                    />
+                                ),
+                            )}
+                        </View>
+                    )}
+
+                    <View style={am.facilityRow}>
+                        {(
+                            [
+                                {
+                                    icon: 'restaurant-outline',
+                                    label: 'Kitchen Access',
+                                    data: amenities.kitchenAccess,
+                                },
+                                {
+                                    icon: 'cafe-outline',
+                                    label: 'Dining Area',
+                                    data: amenities.diningArea,
+                                },
+                            ] as FacilityDef[]
+                        ).map((f: FacilityDef) => (
+                            <View
+                                key={f.label}
+                                style={[am.facilityCard, f.data.available && am.facilityCardActive]}
+                            >
+                                <Ionicons
+                                    name={f.icon as any}
+                                    size={20}
+                                    color={f.data.available ? Colors.primary : Colors.charcoalLight}
+                                />
+                                <Text style={am.facilityName}>{f.label}</Text>
+                                <Text
+                                    style={[
+                                        am.facilityStatus,
+                                        !f.data.available && { color: Colors.charcoalLight },
+                                    ]}
+                                >
+                                    {f.data.available
+                                        ? f.data.type === 'Paid'
+                                            ? `₹${f.data.charges}`
+                                            : 'Included in booking'
+                                        : 'Not available'}
+                                </Text>
+                            </View>
+                        ))}
+                    </View>
+                </View>
+
+                {/* Location */}
+                <View style={s.section}>
+                    <SectionTitle icon="location-outline" label="Location" />
+                    {(
+                        [
+                            { label: 'Address', value: location.address },
+                            { label: 'Landmark', value: location.landmark },
+                            { label: 'City', value: location.city },
+                            { label: 'Area', value: location.area },
+                            { label: 'Pincode', value: location.pincode },
+                            { label: 'Parking', value: location.parkingAvailability },
+                        ] as LocationRow[]
+                    )
+                        .filter((r: LocationRow) => !!r.value)
+                        .map((row: LocationRow, i: number) => (
+                            <View key={i} style={loc.row}>
+                                <Text style={loc.label}>{row.label}:</Text>
+                                <Text style={loc.value}>{row.value}</Text>
+                            </View>
+                        ))}
+                    <TouchableOpacity
+                        style={loc.mapsLink}
+                        onPress={() => Linking.openURL(location.googleMapLink)}
+                        activeOpacity={0.75}
+                    >
+                        <Ionicons name="navigate-circle" size={16} color={Colors.primary} />
+                        <Text style={loc.mapsText}>View on Google Maps</Text>
+                    </TouchableOpacity>
+                    <View style={loc.transitRow}>
+                        {(
+                            [
+                                {
+                                    icon: 'bus-outline',
+                                    label: 'Bus / Auto',
+                                    value: `${location.nearestBusAuto}m`,
+                                },
+                                {
+                                    icon: 'train-outline',
+                                    label: 'Metro / Rail',
+                                    value: location.nearestMetroTrain,
+                                },
+                            ] as TransitItem[]
+                        ).map((tr: TransitItem) => (
+                            <View key={tr.label} style={loc.transitItem}>
+                                <View style={loc.transitIcon}>
                                     <Ionicons
-                                        name="alert-circle-outline"
+                                        name={tr.icon as any}
                                         size={14}
                                         color={Colors.primary}
                                     />
-                                    <Text style={s.bookingRuleText}>
-                                        {availability.advanceBookingRule}
+                                </View>
+                                <View>
+                                    <Text style={loc.transitLabel}>{tr.label}</Text>
+                                    <Text style={loc.transitValue}>{tr.value}</Text>
+                                </View>
+                            </View>
+                        ))}
+                    </View>
+                </View>
+
+                {/* Pricing */}
+                <View style={s.section}>
+                    <SectionTitle icon="pricetag-outline" label="Pricing (Weekday)" />
+                    <View style={pr.cardsRow}>
+                        {(
+                            [
+                                {
+                                    icon: 'time-outline',
+                                    label: '1 Hour',
+                                    price: pricing.perHour.weekday,
+                                    sub: '',
+                                },
+                                {
+                                    icon: 'sunny-outline',
+                                    label: '4 Hours',
+                                    price: pricing.halfDay.weekday,
+                                    sub: 'Half Day',
+                                },
+                                {
+                                    icon: 'calendar-outline',
+                                    label: 'Full Day',
+                                    price: pricing.fullDay.weekday,
+                                    sub: '8 Hours',
+                                },
+                            ] as PricingCard[]
+                        ).map((p: PricingCard, i: number) => (
+                            <View key={i} style={pr.card}>
+                                <View style={pr.iconWrap}>
+                                    <Ionicons
+                                        name={p.icon as any}
+                                        size={18}
+                                        color={Colors.primary}
+                                    />
+                                </View>
+                                <Text style={pr.cardLabel}>{p.label}</Text>
+                                {!!p.sub && <Text style={pr.cardSub}>{p.sub}</Text>}
+                                <Text style={pr.cardPrice}>₹{p.price.toLocaleString()}</Text>
+                            </View>
+                        ))}
+                    </View>
+                    {pricing.extraHourRate.weekday > 0 && (
+                        <View style={pr.extraRow}>
+                            <Ionicons name="add-circle-outline" size={14} color={Colors.primary} />
+                            <Text style={pr.extraLabel}>Extra Hour</Text>
+                            <Text style={pr.extraPrice}>
+                                ₹{pricing.extraHourRate.weekday.toLocaleString()}/hr
+                            </Text>
+                        </View>
+                    )}
+                </View>
+
+                {/* Availability */}
+                <View style={s.section}>
+                    <SectionTitle icon="calendar-outline" label="Availability" />
+                    <View style={av.timeRow}>
+                        <View style={av.timeBox}>
+                            <Text style={av.timeLabel}>Opens</Text>
+                            <Text style={av.timeValue}>{formatTime(availability.openingTime)}</Text>
+                        </View>
+                        <View style={av.timeSep}>
+                            <View style={av.timeLine} />
+                            <Ionicons name="time-outline" size={18} color={Colors.primary} />
+                            <View style={av.timeLine} />
+                        </View>
+                        <View style={av.timeBox}>
+                            <Text style={av.timeLabel}>Closes</Text>
+                            <Text style={av.timeValue}>{formatTime(availability.closingTime)}</Text>
+                        </View>
+                    </View>
+                    <View style={av.daysRow}>
+                        {ALL_DAYS.map((day: string) => {
+                            const active = availability.availableDays.includes(day);
+                            return (
+                                <View
+                                    key={day}
+                                    style={[av.dayCircle, active && av.dayCircleActive]}
+                                >
+                                    <Text style={[av.dayAbbr, active && av.dayAbbrActive]}>
+                                        {DAY_ABBR[day]}
                                     </Text>
                                 </View>
-                            </View>
+                            );
+                        })}
+                    </View>
+                    {!!availability.advanceBookingRule && (
+                        <View style={av.ruleBox}>
+                            <Ionicons
+                                name="alert-circle-outline"
+                                size={14}
+                                color={Colors.primary}
+                            />
+                            <Text style={av.ruleText}>{availability.advanceBookingRule}</Text>
                         </View>
                     )}
-
-                    {/* Amenities */}
-                    {activeTab === 'amenities' && (
-                        <View style={s.tabContent}>
-                            <View style={s.section}>
-                                <SectionHeader title="Facilities" icon="home-outline" />
-                                <View style={s.facilityRow}>
-                                    {[
-                                        {
-                                            icon: 'restaurant-outline',
-                                            label: 'Kitchen',
-                                            data: amenities.kitchenAccess,
-                                        },
-                                        {
-                                            icon: 'cafe-outline',
-                                            label: 'Dining',
-                                            data: amenities.diningArea,
-                                        },
-                                    ].map(f => (
-                                        <View
-                                            key={f.label}
-                                            style={[
-                                                s.facilityCard,
-                                                f.data.available && s.facilityCardActive,
-                                            ]}
-                                        >
-                                            <Ionicons
-                                                name={f.icon as any}
-                                                size={22}
-                                                color={
-                                                    f.data.available
-                                                        ? Colors.primary
-                                                        : Colors.charcoalLight
-                                                }
-                                            />
-                                            <Text style={s.facilityName}>{f.label}</Text>
-                                            <Text
-                                                style={[
-                                                    s.facilityStatus,
-                                                    !f.data.available && {
-                                                        color: Colors.charcoalLight,
-                                                    },
-                                                ]}
-                                            >
-                                                {f.data.available
-                                                    ? f.data.type === 'Paid'
-                                                        ? `₹${f.data.charges}`
-                                                        : 'Included'
-                                                    : 'N/A'}
-                                            </Text>
-                                        </View>
-                                    ))}
-                                </View>
-                            </View>
-                            <View style={s.section}>
-                                <SectionHeader
-                                    title="Basic Amenities"
-                                    icon="checkmark-done-outline"
-                                />
-                                <View style={s.chipsWrap}>
-                                    {amenities.basic.map((item, i) => (
-                                        <AmenityChip
-                                            key={i}
-                                            name={item.name}
-                                            type={item.type}
-                                            rate={item.rate}
-                                        />
-                                    ))}
-                                </View>
-                            </View>
-                            {amenities.additional.length > 0 && (
-                                <View style={s.section}>
-                                    <SectionHeader
-                                        title="Additional Services"
-                                        icon="sparkles-outline"
-                                    />
-                                    <View style={s.chipsWrap}>
-                                        {amenities.additional.map((item, i) => (
-                                            <AmenityChip
-                                                key={i}
-                                                name={item.name}
-                                                type={item.type}
-                                                rate={item.charges}
-                                            />
-                                        ))}
-                                    </View>
-                                </View>
-                            )}
-                            {amenities.beverages.length > 0 && (
-                                <View style={s.section}>
-                                    <SectionHeader title="Beverages" icon="water-outline" />
-                                    <View style={s.beverageGrid}>
-                                        {amenities.beverages.map((b, i) => (
-                                            <View key={i} style={s.beverageItem}>
-                                                <Text style={s.beverageName}>{b.name}</Text>
-                                                {!!b.brand && (
-                                                    <Text style={s.beverageBrand}>{b.brand}</Text>
-                                                )}
-                                                <Text style={s.beveragePrice}>
-                                                    ₹{b.ratePerUnit}
-                                                </Text>
-                                            </View>
-                                        ))}
-                                    </View>
-                                </View>
-                            )}
-                        </View>
-                    )}
-
-                    {/* Food */}
-                    {activeTab === 'food' && (
-                        <View style={s.tabContent}>
-                            {amenities.lunchThalis.length > 0 && (
-                                <View style={s.section}>
-                                    <SectionHeader title="Lunch Thalis" icon="nutrition-outline" />
-                                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                                        {amenities.lunchThalis.map((t, i) => (
-                                            <ThaliCard key={i} thali={t} />
-                                        ))}
-                                    </ScrollView>
-                                </View>
-                            )}
-                            {amenities.refreshmentFood.length > 0 && (
-                                <View style={s.section}>
-                                    <SectionHeader
-                                        title="Refreshment Packs"
-                                        icon="fast-food-outline"
-                                    />
-                                    {amenities.refreshmentFood.map((food, i) => (
-                                        <View key={i} style={s.foodItem}>
-                                            <View style={s.foodLeft}>
-                                                <Text style={s.foodName}>{food.name}</Text>
-                                                <Text style={s.foodItems}>{food.items}</Text>
-                                            </View>
-                                            <View style={s.foodPricePill}>
-                                                <Text style={s.foodPriceLabel}>per plate</Text>
-                                                <Text style={s.foodPrice}>
-                                                    ₹{food.ratePerPlate}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                    ))}
-                                </View>
-                            )}
-                        </View>
-                    )}
-
-                    <View style={{ height: 110 }} />
                 </View>
+
+                <View style={{ height: 120 }} />
             </Animated.ScrollView>
 
             {/* CTA bar */}
             <View style={s.ctaBar}>
                 <View>
-                    <Text style={s.ctaPriceLabel}>Starting from</Text>
+                    <Text style={s.ctaFromLabel}>Starting from</Text>
                     <View style={s.ctaPriceRow}>
                         <Text style={s.ctaPrice}>₹{pricing.perHour.weekday.toLocaleString()}</Text>
-                        <Text style={s.ctaPriceUnit}>/hr</Text>
+                        <Text style={s.ctaPerHour}>/hr</Text>
                     </View>
                 </View>
-                <TouchableOpacity style={s.ctaButton} activeOpacity={0.85}>
+                <TouchableOpacity
+                    style={s.ctaButton}
+                    onPress={() => setBookingVisible(true)}
+                    activeOpacity={0.85}
+                >
                     <Ionicons
                         name="calendar"
                         size={18}
@@ -742,9 +1054,17 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                     <Text style={s.ctaButtonText}>Book Now</Text>
                 </TouchableOpacity>
             </View>
+
+            <BookingSheet
+                visible={bookingVisible}
+                venue={venue}
+                onClose={() => setBookingVisible(false)}
+            />
         </View>
     );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
@@ -758,7 +1078,7 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: Spacing.lg,
-        paddingTop: Platform.OS === 'ios' ? 54 : 42,
+        paddingTop: Platform.OS === 'ios' ? 54 : 21,
         paddingBottom: Spacing.md,
         backgroundColor: Colors.surface,
         ...Shadows.header,
@@ -794,51 +1114,66 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    imageCounter: {
+    approvedBadge: {
         position: 'absolute',
-        top: Platform.OS === 'ios' ? 54 : 42,
-        right: Spacing.lg,
+        top: Platform.OS === 'ios' ? 60 : 48,
+        left: 66,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
-        backgroundColor: 'rgba(0,0,0,0.45)',
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: Radii.full,
-    },
-    imageCountText: { fontSize: Typography.sm, fontWeight: Typography.bold, color: Colors.white },
-    dotsRow: {
-        position: 'absolute',
-        bottom: 16,
-        alignSelf: 'center',
-        flexDirection: 'row',
-        gap: 5,
-    },
-    dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.45)' },
-    dotActive: { width: 18, backgroundColor: Colors.primary },
-    verifiedBadge: {
-        position: 'absolute',
-        bottom: 20,
-        left: Spacing.lg,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
+        gap: 4,
         backgroundColor: Colors.success,
         paddingHorizontal: 10,
         paddingVertical: 5,
         borderRadius: Radii.full,
     },
-    verifiedText: { fontSize: Typography.sm, fontWeight: Typography.bold, color: Colors.white },
-    contentCard: {
-        backgroundColor: Colors.background,
-        borderTopLeftRadius: Radii.xxl,
-        borderTopRightRadius: Radii.xxl,
-        marginTop: -Radii.xxl,
-        paddingTop: Spacing.xl,
-        minHeight: height,
+    approvedText: { fontSize: Typography.sm, fontWeight: Typography.bold, color: Colors.white },
+    featuredBadge: {
+        position: 'absolute',
+        bottom: 16,
+        left: Spacing.lg,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: Colors.primary,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: Radii.full,
     },
-    titleBlock: { paddingHorizontal: Spacing.xl, marginBottom: Spacing.lg },
-    titleRow: {
+    featuredText: { fontSize: Typography.sm, fontWeight: Typography.bold, color: Colors.white },
+    imageCounter: {
+        position: 'absolute',
+        top: Platform.OS === 'ios' ? 60 : 48,
+        right: Spacing.lg,
+        backgroundColor: 'rgba(0,0,0,0.50)',
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: Radii.full,
+    },
+    imageCountText: { fontSize: Typography.sm, fontWeight: Typography.bold, color: Colors.white },
+    thumbStrip: { backgroundColor: Colors.tabBar, paddingVertical: 8 },
+    thumbScroll: { paddingHorizontal: Spacing.lg, gap: 6 },
+    thumb: {
+        borderRadius: Radii.sm,
+        overflow: 'hidden',
+        borderWidth: 2,
+        borderColor: 'transparent',
+    },
+    thumbActive: { borderColor: Colors.primary },
+    thumbImage: {
+        width: THUMB_SIZE,
+        height: THUMB_SIZE,
+        resizeMode: 'cover',
+        borderRadius: Radii.sm - 2,
+    },
+    infoCard: {
+        backgroundColor: Colors.surface,
+        marginHorizontal: Spacing.lg,
+        marginTop: Spacing.lg,
+        borderRadius: Radii.lg,
+        padding: Spacing.lg,
+        ...Shadows.card,
+    },
+    nameRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
@@ -866,64 +1201,68 @@ const s = StyleSheet.create({
         fontWeight: Typography.extraBold,
         color: Colors.primaryDark,
     },
-    typeTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: Spacing.lg },
-    typeTag: {
-        paddingHorizontal: 10,
-        paddingVertical: 4,
+    metaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: 6,
+        marginBottom: Spacing.md,
+    },
+    metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    metaText: {
+        fontSize: Typography.base,
+        color: Colors.charcoalMid,
+        fontWeight: Typography.medium,
+    },
+    metaDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: Colors.border },
+    statsStrip: {
+        flexDirection: 'row',
+        backgroundColor: Colors.background,
+        borderRadius: Radii.md,
+        padding: Spacing.md,
+        gap: 4,
+    },
+    statItem: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        justifyContent: 'center',
+    },
+    statText: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoalMid,
+    },
+    statsDivider: { width: 1, backgroundColor: Colors.divider },
+    section: {
         backgroundColor: Colors.surface,
+        marginHorizontal: Spacing.lg,
+        marginTop: Spacing.lg,
+        borderRadius: Radii.lg,
+        padding: Spacing.lg,
+        ...Shadows.card,
+    },
+    venueTypesHeader: { marginBottom: Spacing.sm },
+    venueTypesLabel: {
+        fontSize: Typography.xs,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalLight,
+        letterSpacing: Typography.wider,
+    },
+    typeChips: { gap: 8, paddingRight: 2 },
+    typeChip: {
+        paddingHorizontal: 14,
+        paddingVertical: 7,
+        backgroundColor: Colors.background,
         borderRadius: Radii.full,
         borderWidth: 1.5,
         borderColor: Colors.primaryBorder,
     },
-    typeTagText: {
+    typeChipText: {
         fontSize: Typography.sm,
         fontWeight: Typography.semiBold,
         color: Colors.primary,
-    },
-    statsRow: {
-        flexDirection: 'row',
-        backgroundColor: Colors.surface,
-        borderRadius: Radii.lg,
-        padding: Spacing.md,
-        ...Shadows.card,
-    },
-    statItem: { flex: 1, alignItems: 'center', gap: 3 },
-    statValue: {
-        fontSize: Typography.md,
-        fontWeight: Typography.extraBold,
-        color: Colors.charcoal,
-    },
-    statLabel: {
-        fontSize: 9,
-        fontWeight: Typography.semiBold,
-        color: Colors.charcoalLight,
-        letterSpacing: 0.3,
-    },
-    statDivider: { width: 1, backgroundColor: Colors.divider, marginVertical: 4 },
-    tabRow: {
-        flexDirection: 'row',
-        marginHorizontal: Spacing.xl,
-        backgroundColor: Colors.surface,
-        borderRadius: Radii.lg,
-        padding: 4,
-        marginBottom: Spacing.lg,
-        ...Shadows.card,
-    },
-    tab: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: Radii.md },
-    tabActive: { backgroundColor: Colors.primary },
-    tabText: {
-        fontSize: Typography.base,
-        fontWeight: Typography.semiBold,
-        color: Colors.charcoalLight,
-    },
-    tabTextActive: { color: Colors.white },
-    tabContent: { paddingHorizontal: Spacing.xl },
-    section: {
-        backgroundColor: Colors.surface,
-        borderRadius: Radii.lg,
-        padding: Spacing.lg,
-        marginBottom: Spacing.lg,
-        ...Shadows.card,
     },
     description: {
         fontSize: Typography.md,
@@ -931,41 +1270,227 @@ const s = StyleSheet.create({
         lineHeight: 22,
         letterSpacing: 0.1,
     },
-    locationCard: {
+    ctaBar: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         justifyContent: 'space-between',
-        gap: Spacing.md,
-        marginBottom: Spacing.md,
+        backgroundColor: Colors.surface,
+        paddingHorizontal: Spacing.xl,
+        paddingTop: Spacing.lg,
+        paddingBottom: Platform.OS === 'ios' ? 34 : Spacing.lg,
+        borderTopWidth: 1,
+        borderTopColor: Colors.border,
+        ...Shadows.floating,
     },
-    locationMain: { flex: 1 },
-    locationAddress: {
+    ctaFromLabel: {
+        fontSize: 10,
+        color: Colors.charcoalLight,
+        fontWeight: Typography.semiBold,
+        letterSpacing: 0.5,
+    },
+    ctaPriceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 2 },
+    ctaPrice: {
+        fontSize: Typography.xxl,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+    },
+    ctaPerHour: {
+        fontSize: Typography.base,
+        color: Colors.charcoalLight,
+        fontWeight: Typography.medium,
+    },
+    ctaButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.primary,
+        paddingHorizontal: 28,
+        paddingVertical: 14,
+        borderRadius: Radii.full,
+        ...Shadows.primary,
+    },
+    ctaButtonText: {
+        fontSize: Typography.lg,
+        fontWeight: Typography.extraBold,
+        color: Colors.white,
+        letterSpacing: 0.2,
+    },
+});
+
+const am = StyleSheet.create({
+    subSection: { marginBottom: Spacing.lg },
+    subHeader: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 10 },
+    subDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.success },
+    subTitle: { fontSize: Typography.md, fontWeight: Typography.bold, color: Colors.charcoal },
+    subLabel: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoalLight,
+        letterSpacing: 0.3,
+        marginBottom: 8,
+    },
+    includedGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    includedCell: { width: '48%' },
+    includedItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: Colors.successLight,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        borderRadius: Radii.md,
+    },
+    includedName: {
+        flex: 1,
+        fontSize: Typography.sm,
+        fontWeight: Typography.medium,
+        color: Colors.charcoal,
+    },
+    freeBadge: {
+        backgroundColor: Colors.success,
+        paddingHorizontal: 6,
+        paddingVertical: 2,
+        borderRadius: 6,
+    },
+    freeText: { fontSize: 9, fontWeight: Typography.bold, color: Colors.white },
+    paidRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 10,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.divider,
+        gap: 10,
+    },
+    checkbox: {
+        width: 20,
+        height: 20,
+        borderRadius: 6,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        backgroundColor: Colors.background,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    checkboxOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+    paidName: {
+        flex: 1,
+        fontSize: Typography.base,
+        fontWeight: Typography.medium,
+        color: Colors.charcoal,
+    },
+    paidPrice: { fontSize: Typography.sm, fontWeight: Typography.bold, color: Colors.primary },
+    stepper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+        backgroundColor: Colors.primaryLight,
+        borderRadius: Radii.md,
+        paddingHorizontal: 4,
+    },
+    stepBtn: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center' },
+    stepBtnText: {
+        fontSize: 18,
+        fontWeight: Typography.bold,
+        color: Colors.primary,
+        lineHeight: 22,
+    },
+    stepQty: {
+        fontSize: Typography.base,
+        fontWeight: Typography.bold,
+        color: Colors.primaryDark,
+        minWidth: 20,
+        textAlign: 'center',
+    },
+    thaliGroup: {
+        backgroundColor: Colors.background,
+        borderRadius: Radii.md,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        overflow: 'hidden',
+        marginBottom: 10,
+    },
+    thaliGroupName: {
+        backgroundColor: Colors.primaryLight,
+        paddingHorizontal: 14,
+        paddingVertical: 8,
+        fontSize: Typography.base,
+        fontWeight: Typography.bold,
+        color: Colors.primaryDark,
+    },
+    thaliRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        gap: 10,
+        borderTopWidth: 1,
+        borderTopColor: Colors.divider,
+    },
+    thaliRowActive: { backgroundColor: Colors.primaryDim },
+    thaliType: {
         fontSize: Typography.base,
         fontWeight: Typography.semiBold,
         color: Colors.charcoal,
-        marginBottom: 4,
     },
-    locationLandmark: { fontSize: Typography.sm, color: Colors.charcoalLight, marginBottom: 2 },
-    locationCity: { fontSize: Typography.sm, color: Colors.charcoalLight },
-    mapButton: {
+    thaliItems: { fontSize: Typography.sm, color: Colors.charcoalLight, marginTop: 1 },
+    thaliPrice: { fontSize: Typography.sm, fontWeight: Typography.bold, color: Colors.primary },
+    facilityRow: { flexDirection: 'row', gap: 10, marginTop: Spacing.md },
+    facilityCard: {
+        flex: 1,
+        alignItems: 'center',
+        padding: Spacing.md,
+        borderRadius: Radii.md,
+        backgroundColor: Colors.background,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        gap: 4,
+    },
+    facilityCardActive: { backgroundColor: Colors.primaryDim, borderColor: Colors.primaryBorder },
+    facilityName: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal,
+        textAlign: 'center',
+    },
+    facilityStatus: {
+        fontSize: Typography.xs,
+        fontWeight: Typography.medium,
+        color: Colors.primary,
+        textAlign: 'center',
+    },
+});
+
+const loc = StyleSheet.create({
+    row: { flexDirection: 'row', paddingVertical: 5, gap: 6 },
+    label: {
+        fontSize: Typography.base,
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoalMid,
+        width: 70,
+    },
+    value: { flex: 1, fontSize: Typography.base, color: Colors.charcoal },
+    mapsLink: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
-        backgroundColor: Colors.primary,
-        paddingHorizontal: 14,
-        paddingVertical: 8,
-        borderRadius: Radii.md,
-        ...Shadows.primary,
-    },
-    mapButtonText: { fontSize: Typography.sm, fontWeight: Typography.bold, color: Colors.white },
-    transitRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
+        gap: 6,
+        marginTop: Spacing.md,
         paddingTop: Spacing.md,
         borderTopWidth: 1,
         borderTopColor: Colors.divider,
     },
-    transitItem: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+    mapsText: { fontSize: Typography.base, fontWeight: Typography.semiBold, color: Colors.primary },
+    transitRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginTop: Spacing.md,
+        paddingTop: Spacing.md,
+        borderTopWidth: 1,
+        borderTopColor: Colors.divider,
+    },
+    transitItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
     transitIcon: {
         width: 30,
         height: 30,
@@ -976,12 +1501,67 @@ const s = StyleSheet.create({
     },
     transitLabel: { fontSize: 9, color: Colors.charcoalLight, fontWeight: Typography.medium },
     transitValue: { fontSize: Typography.sm, color: Colors.charcoal, fontWeight: Typography.bold },
+});
+
+const pr = StyleSheet.create({
+    cardsRow: { flexDirection: 'row', gap: 10 },
+    card: {
+        flex: 1,
+        backgroundColor: Colors.background,
+        borderRadius: Radii.lg,
+        padding: Spacing.md,
+        alignItems: 'center',
+        gap: 4,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+    },
+    iconWrap: {
+        width: 36,
+        height: 36,
+        borderRadius: Radii.md,
+        backgroundColor: Colors.primaryLight,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 4,
+    },
+    cardLabel: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal,
+        textAlign: 'center',
+    },
+    cardSub: { fontSize: 9, color: Colors.charcoalLight, fontWeight: Typography.medium },
+    cardPrice: {
+        fontSize: Typography.lg,
+        fontWeight: Typography.extraBold,
+        color: Colors.primary,
+        marginTop: 2,
+    },
+    extraRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        marginTop: Spacing.md,
+        paddingTop: Spacing.md,
+        borderTopWidth: 1,
+        borderTopColor: Colors.divider,
+    },
+    extraLabel: {
+        flex: 1,
+        fontSize: Typography.base,
+        color: Colors.charcoalMid,
+        fontWeight: Typography.medium,
+    },
+    extraPrice: { fontSize: Typography.base, fontWeight: Typography.bold, color: Colors.primary },
+});
+
+const av = StyleSheet.create({
     timeRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: Spacing.lg,
         gap: Spacing.md,
+        marginBottom: Spacing.lg,
     },
     timeBox: {
         alignItems: 'center',
@@ -1002,8 +1582,8 @@ const s = StyleSheet.create({
         fontWeight: Typography.extraBold,
         color: Colors.primaryDark,
     },
-    timeDash: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    timeLine: { width: 16, height: 1.5, backgroundColor: Colors.primaryBorder },
+    timeSep: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    timeLine: { width: 14, height: 1.5, backgroundColor: Colors.primaryBorder },
     daysRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: Spacing.md },
     dayCircle: {
         width: 36,
@@ -1018,7 +1598,7 @@ const s = StyleSheet.create({
     dayCircleActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
     dayAbbr: { fontSize: Typography.sm, fontWeight: Typography.bold, color: Colors.charcoalLight },
     dayAbbrActive: { color: Colors.white },
-    bookingRule: {
+    ruleBox: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
@@ -1026,143 +1606,133 @@ const s = StyleSheet.create({
         padding: Spacing.sm,
         borderRadius: Radii.md,
     },
-    bookingRuleText: {
+    ruleText: {
+        flex: 1,
         fontSize: Typography.sm,
         color: Colors.primaryDark,
         fontWeight: Typography.medium,
     },
-    facilityRow: { flexDirection: 'row', gap: 10 },
-    facilityCard: {
-        flex: 1,
-        alignItems: 'center',
-        padding: Spacing.md,
-        borderRadius: Radii.md,
-        backgroundColor: Colors.background,
-        borderWidth: 1.5,
-        borderColor: Colors.border,
-        gap: 4,
-    },
-    facilityCardActive: { backgroundColor: Colors.primaryDim, borderColor: Colors.primaryBorder },
-    facilityName: { fontSize: Typography.sm, fontWeight: Typography.bold, color: Colors.charcoal },
-    facilityStatus: {
-        fontSize: Typography.sm,
-        fontWeight: Typography.semiBold,
-        color: Colors.primary,
-    },
-    chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-    beverageGrid: { gap: 8 },
-    beverageItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        backgroundColor: Colors.background,
-        borderRadius: Radii.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-    },
-    beverageName: {
-        flex: 1,
-        fontSize: Typography.base,
-        fontWeight: Typography.medium,
-        color: Colors.charcoal,
-    },
-    beverageBrand: {
-        fontSize: Typography.sm,
-        color: Colors.charcoalLight,
-        marginRight: Spacing.sm,
-    },
-    beveragePrice: {
-        fontSize: Typography.base,
-        fontWeight: Typography.bold,
-        color: Colors.primary,
-    },
-    foodItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: Spacing.md,
-        backgroundColor: Colors.background,
-        borderRadius: Radii.md,
-        marginBottom: 8,
-        borderWidth: 1,
-        borderColor: Colors.border,
-    },
-    foodLeft: { flex: 1 },
-    foodName: {
-        fontSize: Typography.base,
-        fontWeight: Typography.bold,
-        color: Colors.charcoal,
-        marginBottom: 3,
-    },
-    foodItems: { fontSize: Typography.sm, color: Colors.charcoalLight },
-    foodPricePill: {
-        alignItems: 'flex-end',
-        backgroundColor: Colors.primaryLight,
-        paddingHorizontal: 10,
-        paddingVertical: 6,
-        borderRadius: Radii.sm,
-    },
-    foodPriceLabel: {
-        fontSize: 9,
-        fontWeight: Typography.bold,
-        color: Colors.primaryDark,
-        letterSpacing: 0.3,
-    },
-    foodPrice: {
-        fontSize: Typography.md,
-        fontWeight: Typography.extraBold,
-        color: Colors.primaryDark,
-    },
-    ctaBar: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+});
+
+const sheet = StyleSheet.create({
+    overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.45)' },
+    container: {
         backgroundColor: Colors.surface,
+        borderTopLeftRadius: Radii.xxl,
+        borderTopRightRadius: Radii.xxl,
         paddingHorizontal: Spacing.xl,
+        paddingBottom: Platform.OS === 'ios' ? 40 : Spacing.xl,
         paddingTop: Spacing.lg,
-        paddingBottom: Platform.OS === 'ios' ? 34 : Spacing.lg,
-        borderTopWidth: 1,
-        borderTopColor: Colors.border,
         ...Shadows.floating,
     },
-    ctaPriceLabel: {
-        fontSize: 10,
-        fontWeight: Typography.semiBold,
-        color: Colors.charcoalLight,
-        letterSpacing: 0.5,
+    handle: {
+        width: 40,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: Colors.border,
+        alignSelf: 'center',
+        marginBottom: Spacing.lg,
     },
-    ctaPriceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 2 },
-    ctaPrice: {
-        fontSize: Typography.xxl,
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        marginBottom: Spacing.lg,
+    },
+    headerTitle: {
+        fontSize: Typography.xl,
         fontWeight: Typography.extraBold,
         color: Colors.charcoal,
     },
-    ctaPriceUnit: {
-        fontSize: Typography.base,
-        fontWeight: Typography.medium,
-        color: Colors.charcoalLight,
-    },
-    ctaButton: {
-        flexDirection: 'row',
+    priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 2, marginTop: 4 },
+    startingFrom: { fontSize: Typography.sm, color: Colors.charcoalLight },
+    price: { fontSize: Typography.xxl, fontWeight: Typography.extraBold, color: Colors.primary },
+    perHour: { fontSize: Typography.sm, color: Colors.charcoalLight },
+    closeBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: Radii.md,
+        backgroundColor: Colors.background,
         alignItems: 'center',
-        backgroundColor: Colors.primary,
-        paddingHorizontal: 28,
-        paddingVertical: 14,
-        borderRadius: Radii.full,
-        shadowColor: Colors.primaryDark,
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.4,
-        shadowRadius: 12,
-        elevation: 8,
+        justifyContent: 'center',
     },
-    ctaButtonText: {
+    fieldLabel: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalMid,
+        letterSpacing: 0.3,
+        marginBottom: Spacing.sm,
+    },
+    durationRow: { flexDirection: 'row', gap: 8, marginBottom: Spacing.lg },
+    durationBtn: {
+        flex: 1,
+        paddingVertical: 10,
+        borderRadius: Radii.md,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        alignItems: 'center',
+        backgroundColor: Colors.background,
+    },
+    durationBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+    durationText: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalMid,
+    },
+    durationTextActive: { color: Colors.white },
+    summaryBox: {
+        backgroundColor: Colors.background,
+        borderRadius: Radii.md,
+        padding: Spacing.md,
+        marginBottom: Spacing.lg,
+    },
+    summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    summaryLabel: {
+        fontSize: Typography.base,
+        color: Colors.charcoalMid,
+        fontWeight: Typography.medium,
+    },
+    summaryValue: {
+        fontSize: Typography.base,
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoal,
+    },
+    estimatedTotal: {
         fontSize: Typography.lg,
         fontWeight: Typography.extraBold,
-        color: Colors.white,
-        letterSpacing: 0.2,
+        color: Colors.primary,
+    },
+    reserveBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.primary,
+        borderRadius: Radii.full,
+        paddingVertical: 15,
+        marginBottom: Spacing.lg,
+        ...Shadows.primary,
+    },
+    reserveText: { fontSize: Typography.lg, fontWeight: Typography.extraBold, color: Colors.white },
+    infoStrip: { gap: 6, marginBottom: Spacing.lg },
+    infoItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    infoText: {
+        fontSize: Typography.sm,
+        color: Colors.charcoalLight,
+        fontWeight: Typography.medium,
+    },
+    shareBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1.5,
+        borderColor: Colors.primaryBorder,
+        borderRadius: Radii.full,
+        paddingVertical: 12,
+        gap: 6,
+    },
+    shareText: {
+        fontSize: Typography.base,
+        fontWeight: Typography.semiBold,
+        color: Colors.primary,
     },
 });
