@@ -1,15 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View,
     Text,
     StyleSheet,
     ScrollView,
     TouchableOpacity,
-    ActivityIndicator,
+    FlatList,
     RefreshControl,
     Alert,
-    Animated,
-    Dimensions,
+    ListRenderItemInfo,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows, StatusConfig } from '../../theme/theme';
@@ -17,122 +16,148 @@ import BookingCard from '../../components/booking/booking-card';
 import { bookingAPI } from '../../service/apis/booking';
 import { useAuthStore } from '../../store/auth-store';
 import NotAuthenticatedScreen from '../../components/not-authenticated';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../navigations/RootNavigation';
-import {
-    NativeBottomTabBarProps,
-    NativeBottomTabNavigatorProps,
-    NativeBottomTabScreenProps,
-} from '@react-navigation/bottom-tabs/unstable';
+import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
 import { ClientTabParamList } from '../../navigations/tabNavigations/ClientTabNavigation';
+import EmptyState from '../../components/UI/empty-state';
+import Loader from '../../components/UI/loader';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
-// ─── Data ─────────────────────────────────────────────────────────────────────
-const STATIC_BOOKINGS = [
-    {
-        id: '1',
-        venueName: 'The Grand Hall',
-        status: 'confirmed',
-        startDate: '2026-03-15T10:00:00',
-        endDate: '2026-03-15T14:00:00',
-        totalAmount: 450,
-        notes: 'Please set up chairs in a U-shape configuration.',
-    },
-    {
-        id: '2',
-        venueName: 'Rooftop Lounge',
-        status: 'pending',
-        startDate: '2026-03-20T18:00:00',
-        endDate: '2026-03-20T22:00:00',
-        totalAmount: 300,
-        notes: null,
-    },
-    {
-        id: '3',
-        venueName: 'Downtown Conference Center',
-        status: 'completed',
-        startDate: '2026-02-10T09:00:00',
-        endDate: '2026-02-10T17:00:00',
-        totalAmount: 800,
-        notes: 'Annual team offsite.',
-    },
-    {
-        id: '4',
-        venueName: 'Lakeside Pavilion',
-        status: 'cancelled',
-        startDate: '2026-02-28T12:00:00',
-        endDate: '2026-02-28T16:00:00',
-        totalAmount: 200,
-        notes: null,
-    },
-    {
-        id: '5',
-        venueName: 'Studio Loft',
-        status: 'pending',
-        startDate: '2026-03-25T14:00:00',
-        endDate: '2026-03-25T18:00:00',
-        totalAmount: 175,
-        notes: 'Photography session — need blackout curtains.',
-    },
-];
+type Booking = {
+    id: string;
+    venueName: string;
+    status: string;
+    startDate: string;
+    endDate: string;
+    totalAmount: number;
+    notes: string | null;
+};
 
-const MOCK_USER = { userType: 'owner' };
-const TABS = ['all', 'pending', 'confirmed', 'completed', 'cancelled'];
+type BookingsProps = NativeBottomTabScreenProps<ClientTabParamList, 'bookings'>;
 
-type bookinProps = NativeBottomTabScreenProps<ClientTabParamList, 'bookings'>;
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const TABS = ['all', 'pending', 'confirmed', 'completed', 'cancelled'] as const;
+
+// Tab → EmptyState icon map
+const EMPTY_ICON: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
+    all: 'calendar-outline',
+    pending: 'time-outline',
+    confirmed: 'checkmark-circle-outline',
+    completed: 'checkmark-done-circle-outline',
+    cancelled: 'close-circle-outline',
+};
+
+// Tab → EmptyState description map
+const EMPTY_DESC: Record<string, string> = {
+    all: 'Your bookings will appear here',
+    pending: 'No pending bookings right now.',
+    confirmed: 'No confirmed bookings found.',
+    completed: 'You have no completed bookings yet.',
+    cancelled: 'No cancelled bookings found.',
+};
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
-export default function BookingsScreen({ navigation }: bookinProps) {
+
+export default function BookingsScreen({ navigation }: BookingsProps) {
     const { user, token, isAuthenticated } = useAuthStore();
-    const [bookings, setBookings] = useState<any[]>([]);
+
+    const [bookings, setBookings] = useState<Booking[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
-    const [activeTab, setActiveTab] = useState('all');
+    const [activeTab, setActiveTab] = useState<string>('all');
 
-    useEffect(() => {
-        fetchBookings();
-    }, []);
+    // ── Data fetching ──────────────────────────────────────────────────────────
 
-    const fetchBookings = async () => {
+    const fetchBookings = useCallback(async () => {
         if (!isAuthenticated) return;
         try {
             setLoading(true);
-            console.log('TOKEN FOUNDED : ', token);
-
             const response = await bookingAPI.getAll();
-
             if (!response?.success) {
-                console.error('FETCHING BOOKING ERROR : ', response?.message);
+                console.error('FETCHING BOOKING ERROR:', response?.message);
                 setBookings([]);
                 return;
             }
-
-            setBookings(response?.booking);
-        } catch (error: any) {
+            setBookings(response?.booking ?? []);
+        } catch (error) {
             setBookings([]);
-            console.error('FETCHING BOOKING ERROR : ', error);
+            console.error('FETCHING BOOKING ERROR:', error);
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
-    };
+    }, [isAuthenticated]);
 
-    const handleStatusUpdate = async (id: string, status: string) => {
+    useEffect(() => {
+        fetchBookings();
+    }, [fetchBookings]);
+
+    const handleRefresh = useCallback(() => {
+        setRefreshing(true);
+        fetchBookings();
+    }, [fetchBookings]);
+
+    // ── Actions ────────────────────────────────────────────────────────────────
+
+    const handleStatusUpdate = useCallback((id: string, status: string) => {
         setBookings(prev => prev.map(b => (b.id === id ? { ...b, status } : b)));
         Alert.alert('Updated', `Booking marked as ${status}.`);
-    };
+    }, []);
 
-    const filtered = bookings?.filter(b => activeTab === 'all' || b.status === activeTab);
-    const counts = TABS.reduce((acc, t) => {
-        acc[t] = t === 'all' ? bookings?.length : bookings?.filter(b => b.status === t).length;
+    // ── Derived data ───────────────────────────────────────────────────────────
+
+    const filtered = bookings.filter(b => activeTab === 'all' || b.status === activeTab);
+
+    const counts = TABS.reduce<Record<string, number>>((acc, t) => {
+        acc[t] = t === 'all' ? bookings.length : bookings.filter(b => b.status === t).length;
         return acc;
-    }, {} as Record<string, number>);
+    }, {});
+
+    // ── FlatList render helpers ────────────────────────────────────────────────
+
+    const keyExtractor = useCallback((item: Booking) => item.id, []);
+
+    const renderItem = useCallback(
+        ({ item, index }: ListRenderItemInfo<Booking>) => (
+            <BookingCard
+                booking={item}
+                userType={user?.userType}
+                onStatusUpdate={handleStatusUpdate}
+                index={index}
+            />
+        ),
+        [user?.userType, handleStatusUpdate],
+    );
+
+    const ListHeaderComponent = useCallback(() => <View style={styles.listTopSpacer} />, []);
+
+    const ListFooterComponent = useCallback(() => <View style={styles.listBottomSpacer} />, []);
+
+    const ListEmptyComponent = useCallback(
+        () =>
+            loading ? null : (
+                <EmptyState
+                    icon={EMPTY_ICON[activeTab] as any}
+                    title="No bookings here"
+                    description={EMPTY_DESC[activeTab]}
+                />
+            ),
+        [loading, activeTab],
+    );
+
+    const ItemSeparatorComponent = useCallback(() => <View style={styles.separator} />, []);
+
+    // ── Auth guard ─────────────────────────────────────────────────────────────
 
     if (!isAuthenticated) {
         return (
             <NotAuthenticatedScreen navigation={navigation.getParent()} featureLabel="Booking" />
         );
     }
+
+    // ── Render ─────────────────────────────────────────────────────────────────
+
     return (
         <View style={styles.container}>
             {/* ── Header ── */}
@@ -144,10 +169,12 @@ export default function BookingsScreen({ navigation }: bookinProps) {
                         <Text style={styles.headerTitle}>My Bookings</Text>
                     </View>
                     <View style={styles.totalBadge}>
-                        <Text style={styles.totalBadgeNum}>{bookings?.length}</Text>
+                        <Text style={styles.totalBadgeNum}>{bookings.length}</Text>
                         <Text style={styles.totalBadgeLabel}>Total</Text>
                     </View>
                 </View>
+
+                {/* Status summary chips */}
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -216,58 +243,44 @@ export default function BookingsScreen({ navigation }: bookinProps) {
                 </ScrollView>
             </View>
 
-            {/* ── Content ── */}
-            <ScrollView
-                style={styles.content}
-                contentContainerStyle={styles.contentPadding}
+            {/* ── Loader overlay (initial load only) ── */}
+            {loading && <Loader size="md" label="Loading bookings…" style={styles.loader} />}
+
+            {/* ── Bookings FlatList ── */}
+            <FlatList<Booking>
+                data={filtered}
+                keyExtractor={keyExtractor}
+                renderItem={renderItem}
+                ListHeaderComponent={ListHeaderComponent}
+                ListFooterComponent={ListFooterComponent}
+                ListEmptyComponent={ListEmptyComponent}
+                ItemSeparatorComponent={ItemSeparatorComponent}
                 showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.flatListContent}
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
-                        onRefresh={() => {
-                            setRefreshing(true);
-                            fetchBookings();
-                        }}
+                        onRefresh={handleRefresh}
                         tintColor={Colors.primary}
                     />
                 }
-            >
-                {loading ? (
-                    <View style={styles.loaderWrap}>
-                        <ActivityIndicator size="large" color={Colors.primary} />
-                        <Text style={styles.loaderText}>Loading bookings...</Text>
-                    </View>
-                ) : filtered?.length === 0 ? (
-                    <View style={styles.emptyWrap}>
-                        <View style={styles.emptyIconWrap}>
-                            <Ionicons
-                                name="calendar-outline"
-                                size={40}
-                                color={Colors.primaryBorder}
-                            />
-                        </View>
-                        <Text style={styles.emptyTitle}>No bookings here</Text>
-                        <Text style={styles.emptySubtitle}>
-                            {activeTab === 'all'
-                                ? 'Your bookings will appear here.'
-                                : `No ${activeTab} bookings found.`}
-                        </Text>
-                    </View>
-                ) : (
-                    filtered?.map((booking, index) => (
-                        <BookingCard
-                            key={booking.id}
-                            booking={booking}
-                            userType={user.userType}
-                            onStatusUpdate={handleStatusUpdate}
-                            index={index}
-                        />
-                    ))
-                )}
-            </ScrollView>
+                // Performance tuning
+                removeClippedSubviews
+                initialNumToRender={8}
+                maxToRenderPerBatch={8}
+                windowSize={10}
+                getItemLayout={(_data, index) => ({
+                    length: BOOKING_CARD_HEIGHT,
+                    offset: BOOKING_CARD_HEIGHT * index,
+                    index,
+                })}
+            />
         </View>
     );
 }
+
+// ─── Layout constant (adjust to match BookingCard height) ─────────────────────
+const BOOKING_CARD_HEIGHT = 148;
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
@@ -375,37 +388,12 @@ const styles = StyleSheet.create({
     tabCountText: { fontSize: 10, fontWeight: Typography.bold, color: Colors.charcoalLight },
     tabCountTextActive: { color: Colors.white },
 
-    // Content
-    content: { flex: 1 },
-    contentPadding: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, paddingBottom: 110 },
+    // FlatList
+    flatListContent: { flexGrow: 1, paddingHorizontal: Spacing.lg },
+    listTopSpacer: { height: Spacing.sm },
+    listBottomSpacer: { height: 110 },
+    separator: { height: Spacing.sm },
 
-    // Loader / Empty
-    loaderWrap: { alignItems: 'center', paddingTop: 64, gap: 12 },
-    loaderText: {
-        fontSize: Typography.md,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.medium,
-    },
-    emptyWrap: { alignItems: 'center', paddingTop: 72, gap: 12 },
-    emptyIconWrap: {
-        width: 88,
-        height: 88,
-        borderRadius: 44,
-        backgroundColor: Colors.primaryLight,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: Spacing.xxs,
-    },
-    emptyTitle: {
-        fontSize: 18,
-        fontWeight: Typography.extraBold,
-        color: Colors.charcoal,
-        letterSpacing: -0.3,
-    },
-    emptySubtitle: {
-        fontSize: Typography.md,
-        color: Colors.charcoalLight,
-        textAlign: 'center',
-        paddingHorizontal: 32,
-    },
+    // Inline loader (shows above the list on first load)
+    loader: { paddingTop: 64 },
 });

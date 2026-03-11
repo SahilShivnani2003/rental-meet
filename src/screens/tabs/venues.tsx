@@ -110,7 +110,7 @@ export default function VenuesScreen({ navigation }: venueProps) {
 
         return matchesSearch && matchesCategory;
     });
-
+    debugger;
     return (
         <View style={styles.container}>
             {/* ── Header ── */}
@@ -121,15 +121,16 @@ export default function VenuesScreen({ navigation }: venueProps) {
                         <Text style={styles.greetingLabel}>DISCOVER</Text>
                         <Text style={styles.greeting}>Venues</Text>
                     </View>
-                    {!isAuthenticated || user?.userType === 'owner'}
-                    <TouchableOpacity
-                        style={styles.addVenueButton}
-                        activeOpacity={0.85}
-                        onPress={handleAddVenue}
-                    >
-                        <Ionicons name="add" size={18} color={Colors.white} />
-                        <Text style={styles.addVenueLabel}>Add Venue</Text>
-                    </TouchableOpacity>
+                    {!isAuthenticated || user?.role === 'owner' ? (
+                        <TouchableOpacity
+                            style={styles.addVenueButton}
+                            activeOpacity={0.85}
+                            onPress={handleAddVenue}
+                        >
+                            <Ionicons name="add" size={18} color={Colors.white} />
+                            <Text style={styles.addVenueLabel}>Add Venue</Text>
+                        </TouchableOpacity>
+                    ) : null}
                 </View>
                 <Text style={styles.headerSubtitle}>Book your premium meeting venues.</Text>
             </View>

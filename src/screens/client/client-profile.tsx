@@ -526,28 +526,6 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                     ))}
                 </View>
 
-                {/* ── CTA banner ────────────────────────────────────────────────── */}
-                <Animated.View style={[styles.ctaBanner, { opacity: headerFade }]}>
-                    <View style={{ flex: 1 }}>
-                        <Ionicons
-                            name="location"
-                            size={16}
-                            color={Colors.primary}
-                            style={{ marginBottom: 4 }}
-                        />
-                        <Text style={styles.ctaBannerTitle}>Find your next space</Text>
-                        <Text style={styles.ctaBannerSub}>Hundreds of premium venues near you</Text>
-                    </View>
-                    <TouchableOpacity
-                        style={styles.ctaBannerBtn}
-                        onPress={() => navigation.navigate('home')}
-                        activeOpacity={0.85}
-                    >
-                        <Ionicons name="search" size={15} color={Colors.white} />
-                        <Text style={styles.ctaBannerBtnText}>Browse</Text>
-                    </TouchableOpacity>
-                </Animated.View>
-
                 {/* ── Quick actions ─────────────────────────────────────────────── */}
                 <Animated.View style={[{ opacity: headerFade }, styles.quickSection]}>
                     <Text style={styles.sectionHeading}>Quick Actions</Text>
