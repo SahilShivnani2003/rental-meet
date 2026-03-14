@@ -42,17 +42,68 @@ export default function BookingCard({
         label: booking.status,
     };
 
+    // API returns bookingDate as ISO string + startTime / endTime as "HH:MM" or "HH:MM AM/PM"
     const formatDate = (d: string) =>
         new Date(d).toLocaleDateString('en-US', {
             weekday: 'short',
             month: 'short',
             day: 'numeric',
         });
-    const formatTime = (d: string) =>
-        new Date(d).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    const hours = Math.round(
-        (new Date(booking.endDate).getTime() - new Date(booking.startDate).getTime()) / 3_600_000,
-    );
+
+    /**
+     * Parse a time token like "14:30" or "10:30 PM" into a normalised "HH:MM AM/PM" label.
+     * We don't have a full ISO timestamp for start/end, so we just display the raw strings
+     * after normalising 24-h to 12-h where needed.
+     */
+    const formatTimeStr = (t: string): string => {
+        if (!t) return '';
+        // Already has AM/PM → return as-is (trim extra spaces)
+        if (/[AaPp][Mm]/.test(t)) return t.trim();
+        // 24-h format "HH:MM"
+        const [hStr, mStr] = t.split(':');
+        const h = parseInt(hStr, 10);
+        const m = mStr ?? '00';
+        const period = h >= 12 ? 'PM' : 'AM';
+        const h12 = h % 12 === 0 ? 12 : h % 12;
+        return `${h12}:${m} ${period}`;
+    };
+
+    /**
+     * Approximate duration in hours from startTime / endTime strings.
+     * Falls back to "—" if times can't be parsed.
+     */
+    const calcHours = (start: string, end: string): string => {
+        try {
+            const toMinutes = (t: string) => {
+                const cleaned = t.replace(/[AaPp][Mm]/, '').trim();
+                const [h, m] = cleaned.split(':').map(Number);
+                const isPM = /[Pp][Mm]/.test(t) && h !== 12;
+                const isAM = /[Aa][Mm]/.test(t) && h === 12;
+                let total = h * 60 + (m || 0);
+                if (isPM) total += 12 * 60;
+                if (isAM) total -= 12 * 60;
+                return total;
+            };
+            let diff = toMinutes(end) - toMinutes(start);
+            // Handle midnight wrap-around
+            if (diff < 0) diff += 24 * 60;
+            const hrs = Math.floor(diff / 60);
+            const mins = diff % 60;
+            return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
+        } catch {
+            return '—';
+        }
+    };
+
+    // ── Derived values from corrected field names ──────────────────────────────
+    const venueName = booking.venue?.businessName ?? 'Unknown Venue';
+    const bookingDate = booking.bookingDate;
+    const startTime = booking.startTime;
+    const endTime = booking.endTime;
+    const totalAmount = booking.amount ?? booking.priceBreakdown?.total ?? 0;
+    const notes = booking.customerDetails?.specialRequirements || booking.notes || '';
+    // Use _id as the canonical identifier
+    const bookingId = booking._id ?? booking.id;
 
     return (
         <Animated.View
@@ -64,9 +115,9 @@ export default function BookingCard({
                 <View style={styles.cardTop}>
                     <View style={{ flex: 1 }}>
                         <Text style={styles.cardVenueName} numberOfLines={1}>
-                            {booking.venueName}
+                            {venueName}
                         </Text>
-                        <Text style={styles.cardDate}>{formatDate(booking.startDate)}</Text>
+                        <Text style={styles.cardDate}>{formatDate(bookingDate)}</Text>
                     </View>
                     <View style={[styles.statusPill, { backgroundColor: cfg.bg }]}>
                         <Ionicons name={cfg.icon as any} size={12} color={cfg.color} />
@@ -83,20 +134,22 @@ export default function BookingCard({
                     <View style={styles.chip}>
                         <Ionicons name="time-outline" size={13} color={Colors.charcoalLight} />
                         <Text style={styles.chipText}>
-                            {formatTime(booking.startDate)} – {formatTime(booking.endDate)}
+                            {formatTimeStr(startTime)} – {formatTimeStr(endTime)}
                         </Text>
                     </View>
                     <View style={styles.chip}>
                         <Ionicons name="hourglass-outline" size={13} color={Colors.charcoalLight} />
-                        <Text style={styles.chipText}>{hours}h</Text>
+                        <Text style={styles.chipText}>{calcHours(startTime, endTime)}</Text>
                     </View>
                     <View style={[styles.chip, styles.amountChip]}>
-                        <Text style={styles.amountText}>${booking.totalAmount}</Text>
+                        <Text style={styles.amountText}>
+                            ₹{Number(totalAmount).toLocaleString('en-IN')}
+                        </Text>
                     </View>
                 </View>
 
-                {/* Notes */}
-                {booking.notes && (
+                {/* Notes / special requirements */}
+                {!!notes && (
                     <View style={styles.notesBox}>
                         <View style={styles.notesIconRow}>
                             <Ionicons
@@ -106,7 +159,7 @@ export default function BookingCard({
                             />
                             <Text style={styles.notesLabel}>Note</Text>
                         </View>
-                        <Text style={styles.notesText}>{booking.notes}</Text>
+                        <Text style={styles.notesText}>{notes}</Text>
                     </View>
                 )}
 
@@ -115,7 +168,7 @@ export default function BookingCard({
                     <View style={styles.actionsRow}>
                         <TouchableOpacity
                             style={[styles.actionBtn, styles.actionBtnConfirm]}
-                            onPress={() => onStatusUpdate(booking.id, 'confirmed')}
+                            onPress={() => onStatusUpdate(bookingId, 'confirmed')}
                             activeOpacity={0.8}
                         >
                             <Ionicons name="checkmark" size={15} color={Colors.white} />
@@ -123,7 +176,7 @@ export default function BookingCard({
                         </TouchableOpacity>
                         <TouchableOpacity
                             style={[styles.actionBtn, styles.actionBtnReject]}
-                            onPress={() => onStatusUpdate(booking.id, 'cancelled')}
+                            onPress={() => onStatusUpdate(bookingId, 'cancelled')}
                             activeOpacity={0.8}
                         >
                             <Ionicons name="close" size={15} color={Colors.danger} />
@@ -139,7 +192,7 @@ export default function BookingCard({
                     <View style={styles.actionsRow}>
                         <TouchableOpacity
                             style={[styles.actionBtn, styles.actionBtnReject, { flex: 1 }]}
-                            onPress={() => onStatusUpdate(booking.id, 'cancelled')}
+                            onPress={() => onStatusUpdate(bookingId, 'cancelled')}
                             activeOpacity={0.8}
                         >
                             <Ionicons name="close" size={15} color={Colors.danger} />

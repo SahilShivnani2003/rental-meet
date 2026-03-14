@@ -20,18 +20,8 @@ import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstab
 import { ClientTabParamList } from '../../navigations/tabNavigations/ClientTabNavigation';
 import EmptyState from '../../components/UI/empty-state';
 import Loader from '../../components/UI/loader';
-
-// ─── Types ─────────────────────────────────────────────────────────────────────
-
-type Booking = {
-    id: string;
-    venueName: string;
-    status: string;
-    startDate: string;
-    endDate: string;
-    totalAmount: number;
-    notes: string | null;
-};
+import { RootStackParamList } from '../../navigations/RootNavigation';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 type BookingsProps = NativeBottomTabScreenProps<ClientTabParamList, 'bookings'>;
 
@@ -39,7 +29,6 @@ type BookingsProps = NativeBottomTabScreenProps<ClientTabParamList, 'bookings'>;
 
 const TABS = ['all', 'pending', 'confirmed', 'completed', 'cancelled'] as const;
 
-// Tab → EmptyState icon map
 const EMPTY_ICON: Record<string, React.ComponentProps<typeof Ionicons>['name']> = {
     all: 'calendar-outline',
     pending: 'time-outline',
@@ -48,7 +37,6 @@ const EMPTY_ICON: Record<string, React.ComponentProps<typeof Ionicons>['name']> 
     cancelled: 'close-circle-outline',
 };
 
-// Tab → EmptyState description map
 const EMPTY_DESC: Record<string, string> = {
     all: 'Your bookings will appear here',
     pending: 'No pending bookings right now.',
@@ -60,9 +48,9 @@ const EMPTY_DESC: Record<string, string> = {
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function BookingsScreen({ navigation }: BookingsProps) {
-    const { user, token, isAuthenticated } = useAuthStore();
+    const { user, isAuthenticated } = useAuthStore();
 
-    const [bookings, setBookings] = useState<Booking[]>([]);
+    const [bookings, setBookings] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [activeTab, setActiveTab] = useState<string>('all');
@@ -79,7 +67,8 @@ export default function BookingsScreen({ navigation }: BookingsProps) {
                 setBookings([]);
                 return;
             }
-            setBookings(response?.booking ?? []);
+            // API returns `bookings` array; each item uses `_id` as identifier
+            setBookings(response?.bookings ?? []);
         } catch (error) {
             setBookings([]);
             console.error('FETCHING BOOKING ERROR:', error);
@@ -100,14 +89,15 @@ export default function BookingsScreen({ navigation }: BookingsProps) {
 
     // ── Actions ────────────────────────────────────────────────────────────────
 
+    // Match on `_id` (API) instead of the old `id` field
     const handleStatusUpdate = useCallback((id: string, status: string) => {
-        setBookings(prev => prev.map(b => (b.id === id ? { ...b, status } : b)));
+        setBookings(prev => prev.map(b => (b._id === id ? { ...b, status } : b)));
         Alert.alert('Updated', `Booking marked as ${status}.`);
     }, []);
 
     // ── Derived data ───────────────────────────────────────────────────────────
 
-    const filtered = bookings.filter(b => activeTab === 'all' || b.status === activeTab);
+    const filtered = activeTab === 'all' ? bookings : bookings.filter(b => b.status === activeTab);
 
     const counts = TABS.reduce<Record<string, number>>((acc, t) => {
         acc[t] = t === 'all' ? bookings.length : bookings.filter(b => b.status === t).length;
@@ -116,16 +106,27 @@ export default function BookingsScreen({ navigation }: BookingsProps) {
 
     // ── FlatList render helpers ────────────────────────────────────────────────
 
-    const keyExtractor = useCallback((item: Booking) => item.id, []);
+    // Use `_id` as the key (API field)
+    const keyExtractor = useCallback((item: any) => item._id, []);
 
     const renderItem = useCallback(
-        ({ item, index }: ListRenderItemInfo<Booking>) => (
-            <BookingCard
-                booking={item}
-                userType={user?.userType}
-                onStatusUpdate={handleStatusUpdate}
-                index={index}
-            />
+        ({ item, index }: ListRenderItemInfo<any>) => (
+            <TouchableOpacity
+                onPress={() =>
+                    navigation
+                        .getParent<NativeStackNavigationProp<RootStackParamList>>()
+                        .navigate('bookingDetail', {
+                            booking: item,
+                        })
+                }
+            >
+                <BookingCard
+                    booking={item}
+                    userType={user?.userType}
+                    onStatusUpdate={handleStatusUpdate}
+                    index={index}
+                />
+            </TouchableOpacity>
         ),
         [user?.userType, handleStatusUpdate],
     );
@@ -247,7 +248,7 @@ export default function BookingsScreen({ navigation }: BookingsProps) {
             {loading && <Loader size="md" label="Loading bookings…" style={styles.loader} />}
 
             {/* ── Bookings FlatList ── */}
-            <FlatList<Booking>
+            <FlatList<any>
                 data={filtered}
                 keyExtractor={keyExtractor}
                 renderItem={renderItem}
@@ -264,7 +265,6 @@ export default function BookingsScreen({ navigation }: BookingsProps) {
                         tintColor={Colors.primary}
                     />
                 }
-                // Performance tuning
                 removeClippedSubviews
                 initialNumToRender={8}
                 maxToRenderPerBatch={8}
@@ -279,7 +279,7 @@ export default function BookingsScreen({ navigation }: BookingsProps) {
     );
 }
 
-// ─── Layout constant (adjust to match BookingCard height) ─────────────────────
+// ─── Layout constant ──────────────────────────────────────────────────────────
 const BOOKING_CARD_HEIGHT = 148;
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -394,6 +394,5 @@ const styles = StyleSheet.create({
     listBottomSpacer: { height: 110 },
     separator: { height: Spacing.sm },
 
-    // Inline loader (shows above the list on first load)
     loader: { paddingTop: 64 },
 });

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
     View,
     Text,
@@ -20,18 +20,9 @@ import {
 import { ClientTabParamList } from '../../navigations/tabNavigations/ClientTabNavigation';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigations/RootNavigation';
+import { bookingAPI } from '../../service/apis/booking';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// ── Mock data ─────────────────────────────────────────────────────────────────
-const MOCK_USER = {
-    name: 'Alex Johnson',
-    firstName: 'Alex',
-    email: 'alex.johnson@email.com',
-    userType: 'owner',
-    role: 'PREMIUM MEMBER',
-    initials: 'AJ',
-};
 
 const USER_TYPE_CONFIG: Record<string, { label: string; icon: string; color: string; bg: string }> =
     {
@@ -320,6 +311,9 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
     const alert = useAlert();
     const { logOut } = useAuthStore();
 
+    //for booking stats and recent bookings
+    const [bookings, setBookings] = useState([]);
+
     const headerFade = useRef(new Animated.Value(0)).current;
     const heroSlide = useRef(new Animated.Value(-16)).current;
 
@@ -339,6 +333,17 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
         ]).start();
     }, []);
 
+    const fetchBookingData = async () => {
+        try {
+            const response = await bookingAPI.getAll();
+
+            if (response.success) {
+                setBookings(response?.bookings);
+            }
+        } catch (error: any) {
+            console.error('FETCH BOOKING ERROR FROM PROFILE : ', error);
+        }
+    };
     const handleLogout = () => {
         alert.show({
             type: 'confirm',

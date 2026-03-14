@@ -33,4 +33,5 @@ export const venueAPI = {
     }),
 
     venueTypes: () => apiClient.get('venue-types'),
+    platformSetting: () => apiClient.get('venues/platform-settings/public'),
 }

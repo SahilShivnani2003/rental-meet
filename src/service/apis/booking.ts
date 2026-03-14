@@ -17,5 +17,7 @@ export const bookingAPI = {
 
     bookingCancel: (id: string, data: any) => apiClient.put(`bookings/${id}/cancel`, data, {
         headers: getAuthHeader()
-    })
+    }),
+
+    terms: () => apiClient.get('terms/'),
 }

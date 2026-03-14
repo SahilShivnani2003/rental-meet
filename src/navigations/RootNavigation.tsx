@@ -8,10 +8,12 @@ import { ClientTabNavigation, ClientTabParamList } from './tabNavigations/Client
 import { OwnerTabNavigation, OwnerTabParamList } from './tabNavigations/OwnerTabNavigation';
 import RegisterScreen from '../screens/auth/register';
 import { AlertProvider } from '../context/AlertContext';
-import VenueDetailScreen from '../screens/venue-detail';
+import VenueDetailScreen, { SelectedAmenityItem, Venue } from '../screens/venue-detail';
 import { TabNavigation, tabParamList } from './tabNavigations/TabNavigation';
 import RegisterVenueScreen from '../screens/auth/register-venue';
 import BrowseCategoryScreen from '../screens/CategoryList';
+import BookingScreen from '../screens/BookingScreen';
+import BookingDetailScreen from '../screens/BookingDetailScreen';
 
 export type RootStackParamList = {
     splash: undefined;
@@ -28,6 +30,15 @@ export type RootStackParamList = {
         venue: any;
     };
     category: undefined;
+    booking: {
+        venue: Venue;
+        selectedAmenities?: SelectedAmenityItem[];
+        amenitiesTotal?: number;
+        preselectedDurationHours?: number;
+    };
+    bookingDetail: {
+        booking: any;
+    };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -62,6 +73,8 @@ export default function RootNavigator() {
                     />
                     <Stack.Screen name="venueDetail" component={VenueDetailScreen} />
                     <Stack.Screen name="category" component={BrowseCategoryScreen} />
+                    <Stack.Screen name="booking" component={BookingScreen} />
+                    <Stack.Screen name="bookingDetail" component={BookingDetailScreen} />
                 </Stack.Navigator>
             </NavigationContainer>
         </AlertProvider>

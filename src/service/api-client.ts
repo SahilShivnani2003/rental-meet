@@ -12,7 +12,7 @@ type RequestOptions = {
 export const getAuthHeader = () => {
     const token = useAuthStore.getState().token;
 
-    return { authorization: `Bearer ${token}` };
+    return { Authorization: `Bearer ${token}` };
 };
 
 async function request<T = unknown>(

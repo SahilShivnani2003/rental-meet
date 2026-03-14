@@ -14,9 +14,10 @@ import {
     Modal,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigations/RootNavigation';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../theme/theme';
+import { useNavigation } from '@react-navigation/native';
 
 const { width, height } = Dimensions.get('window');
 const HERO_HEIGHT = height * 0.38;
@@ -24,16 +25,16 @@ const THUMB_SIZE = 60;
 
 type Props = NativeStackScreenProps<RootStackParamList, 'venueDetail'>;
 
-// ─── Domain types ─────────────────────────────────────────────────────────────
+// ─── Domain types ──────────────────────────────────────────────────────────────
 
-type BasicAmenity = { name: string; type: string; rate: number };
-type AdditionalAmenity = { name: string; charges: number };
-type Beverage = { name: string; ratePerUnit: number };
-type RefreshmentFood = { name: string; ratePerPlate: number };
-type LunchThali = { type: string; itemNames: string; ratePerPlate: number };
-type FacilityItem = { available: boolean; type: string; charges: number };
+export type BasicAmenity = { name: string; type: string; rate: number };
+export type AdditionalAmenity = { name: string; charges: number };
+export type Beverage = { name: string; ratePerUnit: number };
+export type RefreshmentFood = { name: string; ratePerPlate: number };
+export type LunchThali = { type: string; itemNames: string; ratePerPlate: number };
+export type FacilityItem = { available: boolean; type: string; charges: number };
 
-type Amenities = {
+export type Amenities = {
     basic: BasicAmenity[];
     additional: AdditionalAmenity[];
     beverages: Beverage[];
@@ -43,20 +44,21 @@ type Amenities = {
     diningArea: FacilityItem;
 };
 
-type VenueImage = { url: string; isFeatured: boolean };
-type Pricing = {
+export type VenueImage = { url: string; isFeatured: boolean };
+export type Pricing = {
     perHour: { weekday: number; weekend: number };
     halfDay: { weekday: number; weekend: number };
     fullDay: { weekday: number; weekend: number };
     extraHourRate: { weekday: number; weekend: number };
+    enabledOptions?: { perHour?: boolean; halfDay?: boolean; fullDay?: boolean };
 };
-type Availability = {
+export type Availability = {
     openingTime: string;
     closingTime: string;
     availableDays: string[];
     advanceBookingRule: string;
 };
-type Location = {
+export type Location = {
     address: string;
     landmark: string;
     city: string;
@@ -67,7 +69,9 @@ type Location = {
     nearestBusAuto: number;
     nearestMetroTrain: string;
 };
-type Venue = {
+export type Venue = {
+    _id?: string;
+    id?: string;
     businessName: string;
     status: string;
     images: VenueImage[];
@@ -82,9 +86,33 @@ type Venue = {
     availability: Availability;
     amenities: Amenities;
     location: Location;
+    customPlatformFee?: { enabled: boolean; percentage: number };
+    customGST?: { enabled: boolean; rate: number };
 };
 
-// Helper row types (typed inline arrays)
+// ─── Selected amenity snapshot passed to BookingScreen ────────────────────────
+
+export type SelectedAmenityItem = {
+    name: string;
+    category:
+        | 'basic_included'
+        | 'basic_paid'
+        | 'additional'
+        | 'beverage'
+        | 'refreshment'
+        | 'thali'
+        | 'facility';
+    qty: number;
+    unitPrice: number;
+    total: number;
+    // Extra fields forwarded to the API payload builder
+    rateType?: string; // "Fixed" | "Per Use" | "Per Person" etc.
+    thaliCategory?: string; // e.g. "Regular Thali"
+    numberOfItems?: number; // thali item count
+    itemNames?: string; // thali item names string
+};
+
+// Helper row types
 type StatItem = { icon: string; value: string };
 type PricingCard = { icon: string; label: string; price: number; sub: string };
 type TransitItem = { icon: string; label: string; value: string };
@@ -289,7 +317,7 @@ function ThaliGroup({ groupName, thalis, selectedThalis, onToggle }: ThaliGroupP
     return (
         <View style={am.thaliGroup}>
             <Text style={am.thaliGroupName}>{groupName}</Text>
-            {thalis.map((t: LunchThali, i: number) => {
+            {thalis.map((t, i) => {
                 const key = `${groupName}_${t.type}`;
                 const checked = selectedThalis.has(key);
                 return (
@@ -327,11 +355,36 @@ const DURATIONS: Array<{ label: string; hours: number }> = [
     { label: 'Full Day', hours: 8 },
 ];
 
-type BookingSheetProps = { visible: boolean; venue: Venue; onClose: () => void };
-function BookingSheet({ visible, venue, onClose }: BookingSheetProps) {
+type BookingSheetProps = {
+    visible: boolean;
+    venue: Venue;
+    selectedAmenities: SelectedAmenityItem[];
+    amenitiesTotal: number;
+    onClose: () => void;
+};
+
+function BookingSheet({
+    visible,
+    venue,
+    selectedAmenities,
+    amenitiesTotal,
+    onClose,
+}: BookingSheetProps) {
+    const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
     const [duration, setDuration] = useState(0);
     const weekdayPrice = venue.pricing.perHour.weekday;
-    const estimated = weekdayPrice * DURATIONS[duration].hours;
+    const venueRental = weekdayPrice * DURATIONS[duration].hours;
+    const estimated = venueRental + amenitiesTotal;
+
+    const handleReserve = () => {
+        onClose();
+        navigation.navigate('booking', {
+            venue,
+            selectedAmenities,
+            amenitiesTotal,
+            preselectedDurationHours: DURATIONS[duration].hours,
+        });
+    };
 
     return (
         <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -357,6 +410,7 @@ function BookingSheet({ visible, venue, onClose }: BookingSheetProps) {
                         </TouchableOpacity>
                     </View>
                     <Divider />
+
                     <Text style={sheet.fieldLabel}>Duration</Text>
                     <View style={sheet.durationRow}>
                         {DURATIONS.map((d, i) => (
@@ -380,13 +434,22 @@ function BookingSheet({ visible, venue, onClose }: BookingSheetProps) {
                             </TouchableOpacity>
                         ))}
                     </View>
+
                     <View style={sheet.summaryBox}>
                         <View style={sheet.summaryRow}>
                             <Text style={sheet.summaryLabel}>Base Price</Text>
-                            <Text style={sheet.summaryValue}>
-                                ₹{(weekdayPrice * DURATIONS[duration].hours).toLocaleString()}
-                            </Text>
+                            <Text style={sheet.summaryValue}>₹{venueRental.toLocaleString()}</Text>
                         </View>
+                        {amenitiesTotal > 0 && (
+                            <View style={[sheet.summaryRow, { marginTop: 6 }]}>
+                                <Text style={sheet.summaryLabel}>
+                                    Amenities ({selectedAmenities.length} selected)
+                                </Text>
+                                <Text style={sheet.summaryValue}>
+                                    ₹{amenitiesTotal.toLocaleString()}
+                                </Text>
+                            </View>
+                        )}
                         <View style={[sheet.summaryRow, { marginTop: 6 }]}>
                             <Text style={[sheet.summaryLabel, { fontWeight: Typography.bold }]}>
                                 Estimated Total
@@ -394,7 +457,12 @@ function BookingSheet({ visible, venue, onClose }: BookingSheetProps) {
                             <Text style={sheet.estimatedTotal}>₹{estimated.toLocaleString()}</Text>
                         </View>
                     </View>
-                    <TouchableOpacity style={sheet.reserveBtn} activeOpacity={0.85}>
+
+                    <TouchableOpacity
+                        style={sheet.reserveBtn}
+                        activeOpacity={0.85}
+                        onPress={handleReserve}
+                    >
                         <Ionicons
                             name="calendar"
                             size={18}
@@ -403,6 +471,7 @@ function BookingSheet({ visible, venue, onClose }: BookingSheetProps) {
                         />
                         <Text style={sheet.reserveText}>Reserve Now</Text>
                     </TouchableOpacity>
+
                     <View style={sheet.infoStrip}>
                         {(
                             [
@@ -425,6 +494,7 @@ function BookingSheet({ visible, venue, onClose }: BookingSheetProps) {
                             </View>
                         ))}
                     </View>
+
                     <TouchableOpacity style={sheet.shareBtn} activeOpacity={0.8}>
                         <Ionicons name="share-social-outline" size={16} color={Colors.primary} />
                         <Text style={sheet.shareText}>Share Venue</Text>
@@ -435,6 +505,33 @@ function BookingSheet({ visible, venue, onClose }: BookingSheetProps) {
     );
 }
 
+// ─── Amenity summary badge shown in CTA bar ───────────────────────────────────
+
+function AmenitiesSummaryBadge({ count, total }: { count: number; total: number }) {
+    if (count === 0) return null;
+    return (
+        <View style={badge.wrap}>
+            <Ionicons name="add-circle" size={12} color={Colors.primary} />
+            <Text style={badge.text}>
+                {count} amenit{count === 1 ? 'y' : 'ies'} • ₹{total.toLocaleString()}
+            </Text>
+        </View>
+    );
+}
+const badge = StyleSheet.create({
+    wrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: Colors.primaryDim,
+        borderRadius: Radii.sm,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        marginTop: 2,
+    },
+    text: { fontSize: 10, fontWeight: Typography.semiBold, color: Colors.primaryDark },
+});
+
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function VenueDetailScreen({ route, navigation }: Props) {
@@ -444,6 +541,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
     const [bookingVisible, setBookingVisible] = useState(false);
     const { pricing, availability, amenities, location } = venue;
 
+    // ── Amenity selection state ───────────────────────────────────────────────
     const [paidChecked, setPaidChecked] = useState<Set<string>>(new Set());
     const [paidQty, setPaidQty] = useState<Record<string, number>>({});
     const [bevChecked, setBevChecked] = useState<Set<string>>(new Set());
@@ -457,6 +555,111 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
         return next;
     }, []);
 
+    // ── Compute selected amenities snapshot ───────────────────────────────────
+    const { selectedAmenities, amenitiesTotal } = React.useMemo<{
+        selectedAmenities: SelectedAmenityItem[];
+        amenitiesTotal: number;
+    }>(() => {
+        const items: SelectedAmenityItem[] = [];
+
+        // Basic included (free) — always sent so the API knows what's in the booking
+        amenities.basic
+            .filter(a => a.type !== 'Paid')
+            .forEach(a => {
+                items.push({
+                    name: a.name,
+                    category: 'basic_included',
+                    qty: 1,
+                    unitPrice: 0,
+                    total: 0,
+                    rateType: 'Fixed',
+                });
+            });
+
+        // Basic paid
+        amenities.basic
+            .filter(a => a.type === 'Paid' && paidChecked.has(a.name))
+            .forEach(a => {
+                const qty = paidQty[a.name] ?? 1;
+                items.push({
+                    name: a.name,
+                    category: 'basic_paid',
+                    qty,
+                    unitPrice: a.rate,
+                    total: a.rate * qty,
+                    rateType: 'Per Use',
+                });
+            });
+
+        // Additional services
+        amenities.additional
+            .filter(a => paidChecked.has(`add_${a.name}`))
+            .forEach(a => {
+                const qty = paidQty[`add_${a.name}`] ?? 1;
+                items.push({
+                    name: a.name,
+                    category: 'additional',
+                    qty,
+                    unitPrice: a.charges,
+                    total: a.charges * qty,
+                    rateType: 'Fixed',
+                });
+            });
+
+        // Beverages
+        amenities.beverages
+            .filter(b => bevChecked.has(b.name))
+            .forEach(b => {
+                const qty = bevQty[b.name] ?? 1;
+                items.push({
+                    name: b.name,
+                    category: 'beverage',
+                    qty,
+                    unitPrice: b.ratePerUnit,
+                    total: b.ratePerUnit * qty,
+                    rateType: 'Per Person',
+                });
+            });
+
+        // Refreshments
+        amenities.refreshmentFood
+            .filter(f => refChecked.has(f.name))
+            .forEach(f => {
+                items.push({
+                    name: f.name,
+                    category: 'refreshment',
+                    qty: 1,
+                    unitPrice: f.ratePerPlate,
+                    total: f.ratePerPlate,
+                    rateType: 'Per Plate',
+                });
+            });
+
+        // Thalis — carry thaliCategory, numberOfItems, itemNames for the payload
+        amenities.lunchThalis.forEach(t => {
+            const group = thaliGroupKey(t.type);
+            const key = `${group}_${t.type}`;
+            if (thaliChecked.has(key)) {
+                items.push({
+                    name: t.type,
+                    category: 'thali',
+                    qty: 1,
+                    unitPrice: t.ratePerPlate,
+                    total: t.ratePerPlate,
+                    thaliCategory: 'Regular Thali',
+                    numberOfItems: (t as any).numberOfItems ?? 0,
+                    itemNames: t.itemNames ?? '',
+                });
+            }
+        });
+
+        // Only paid items count toward amenitiesTotal (included items are free)
+        const paidItems = items.filter(i => i.category !== 'basic_included');
+        const total = paidItems.reduce((sum, i) => sum + i.total, 0);
+        return { selectedAmenities: items, amenitiesTotal: total };
+    }, [paidChecked, paidQty, bevChecked, bevQty, refChecked, thaliChecked, amenities]);
+
+    // ─── Animated values ──────────────────────────────────────────────────────
     const heroTranslate = scrollY.interpolate({
         inputRange: [0, HERO_HEIGHT],
         outputRange: [0, -HERO_HEIGHT * 0.28],
@@ -473,21 +676,13 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
         extrapolate: 'clamp',
     });
 
-    // Thali grouping — fully typed reduce
-    const thaliGroups = amenities.lunchThalis.reduce<Record<string, LunchThali[]>>(
-        (acc: Record<string, LunchThali[]>, t: LunchThali) => {
-            const type = t?.type ?? ''; // ← guard against undefined
-            const group = type.includes('Rajasthani')
-                ? 'Rajasthani Thali'
-                : type.includes('South')
-                ? 'South Indian Thali'
-                : 'North Indian Thali';
-            if (!acc[group]) acc[group] = [];
-            acc[group].push(t);
-            return acc;
-        },
-        {},
-    );
+    // Thali grouping
+    const thaliGroups = amenities.lunchThalis.reduce<Record<string, LunchThali[]>>((acc, t) => {
+        const group = thaliGroupKey(t?.type ?? '');
+        if (!acc[group]) acc[group] = [];
+        acc[group].push(t);
+        return acc;
+    }, {});
 
     return (
         <View style={s.container}>
@@ -524,8 +719,8 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                     Math.round(e.nativeEvent.contentOffset.x / width),
                                 )
                             }
-                            keyExtractor={(_item: VenueImage, i: number) => String(i)}
-                            renderItem={({ item }: { item: VenueImage }) => (
+                            keyExtractor={(_, i) => String(i)}
+                            renderItem={({ item }) => (
                                 <Image source={{ uri: item.url }} style={s.heroImage} />
                             )}
                         />
@@ -560,7 +755,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={s.thumbScroll}
                     >
-                        {venue.images.map((img: VenueImage, i: number) => (
+                        {venue.images.map((img, i) => (
                             <TouchableOpacity
                                 key={i}
                                 style={[s.thumb, i === activeImageIndex && s.thumbActive]}
@@ -639,7 +834,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                         showsHorizontalScrollIndicator={false}
                         contentContainerStyle={s.typeChips}
                     >
-                        {venue.venueType.map((t: string) => (
+                        {venue.venueType.map(t => (
                             <View key={t} style={s.typeChip}>
                                 <Text style={s.typeChipText}>{t}</Text>
                             </View>
@@ -657,7 +852,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                 <View style={s.section}>
                     <SectionTitle icon="options-outline" label="Select Amenities & Services" />
 
-                    {amenities.basic.filter((a: BasicAmenity) => a.type !== 'Paid').length > 0 && (
+                    {amenities.basic.filter(a => a.type !== 'Paid').length > 0 && (
                         <View style={am.subSection}>
                             <View style={am.subHeader}>
                                 <View style={am.subDot} />
@@ -666,8 +861,8 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                             <Text style={am.subLabel}>Included</Text>
                             <View style={am.includedGrid}>
                                 {amenities.basic
-                                    .filter((a: BasicAmenity) => a.type !== 'Paid')
-                                    .map((item: BasicAmenity, i: number) => (
+                                    .filter(a => a.type !== 'Paid')
+                                    .map((item, i) => (
                                         <View key={i} style={am.includedCell}>
                                             <IncludedItem name={item.name} />
                                         </View>
@@ -676,12 +871,12 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                         </View>
                     )}
 
-                    {amenities.basic.filter((a: BasicAmenity) => a.type === 'Paid').length > 0 && (
+                    {amenities.basic.filter(a => a.type === 'Paid').length > 0 && (
                         <View style={am.subSection}>
                             <Text style={am.subLabel}>Paid</Text>
                             {amenities.basic
-                                .filter((a: BasicAmenity) => a.type === 'Paid')
-                                .map((item: BasicAmenity, i: number) => (
+                                .filter(a => a.type === 'Paid')
+                                .map((item, i) => (
                                     <PaidItem
                                         key={i}
                                         name={item.name}
@@ -716,7 +911,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                 <View style={[am.subDot, { backgroundColor: Colors.info }]} />
                                 <Text style={am.subTitle}>Additional Services</Text>
                             </View>
-                            {amenities.additional.map((item: AdditionalAmenity, i: number) => (
+                            {amenities.additional.map((item, i) => (
                                 <PaidItem
                                     key={i}
                                     name={item.name}
@@ -754,7 +949,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                 <Ionicons name="cafe-outline" size={14} color={Colors.primary} />
                                 <Text style={am.subTitle}>Beverages</Text>
                             </View>
-                            {amenities.beverages.map((b: Beverage, i: number) => (
+                            {amenities.beverages.map((b, i) => (
                                 <BeverageItem
                                     key={i}
                                     name={b.name}
@@ -790,7 +985,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                 />
                                 <Text style={am.subTitle}>Refreshments & Snacks</Text>
                             </View>
-                            {amenities.refreshmentFood.map((food: RefreshmentFood, i: number) => (
+                            {amenities.refreshmentFood.map((food, i) => (
                                 <RefreshmentItem
                                     key={i}
                                     name={food.name}
@@ -814,19 +1009,15 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                 />
                                 <Text style={am.subTitle}>Lunch Thalis</Text>
                             </View>
-                            {Object.entries(thaliGroups).map(
-                                ([group, thalis]: [string, LunchThali[]]) => (
-                                    <ThaliGroup
-                                        key={group}
-                                        groupName={group}
-                                        thalis={thalis}
-                                        selectedThalis={thaliChecked}
-                                        onToggle={(key: string) =>
-                                            setThaliChecked(prev => toggleSet(prev, key))
-                                        }
-                                    />
-                                ),
-                            )}
+                            {Object.entries(thaliGroups).map(([group, thalis]) => (
+                                <ThaliGroup
+                                    key={group}
+                                    groupName={group}
+                                    thalis={thalis}
+                                    selectedThalis={thaliChecked}
+                                    onToggle={key => setThaliChecked(prev => toggleSet(prev, key))}
+                                />
+                            ))}
                         </View>
                     )}
 
@@ -844,7 +1035,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                     data: amenities.diningArea,
                                 },
                             ] as FacilityDef[]
-                        ).map((f: FacilityDef) => (
+                        ).map(f => (
                             <View
                                 key={f.label}
                                 style={[am.facilityCard, f.data.available && am.facilityCardActive]}
@@ -885,8 +1076,8 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                             { label: 'Parking', value: location.parkingAvailability },
                         ] as LocationRow[]
                     )
-                        .filter((r: LocationRow) => !!r.value)
-                        .map((row: LocationRow, i: number) => (
+                        .filter(r => !!r.value)
+                        .map((row, i) => (
                             <View key={i} style={loc.row}>
                                 <Text style={loc.label}>{row.label}:</Text>
                                 <Text style={loc.value}>{row.value}</Text>
@@ -914,7 +1105,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                     value: location.nearestMetroTrain,
                                 },
                             ] as TransitItem[]
-                        ).map((tr: TransitItem) => (
+                        ).map(tr => (
                             <View key={tr.label} style={loc.transitItem}>
                                 <View style={loc.transitIcon}>
                                     <Ionicons
@@ -957,7 +1148,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                     sub: '8 Hours',
                                 },
                             ] as PricingCard[]
-                        ).map((p: PricingCard, i: number) => (
+                        ).map((p, i) => (
                             <View key={i} style={pr.card}>
                                 <View style={pr.iconWrap}>
                                     <Ionicons
@@ -1002,7 +1193,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                         </View>
                     </View>
                     <View style={av.daysRow}>
-                        {ALL_DAYS.map((day: string) => {
+                        {ALL_DAYS.map(day => {
                             const active = availability.availableDays.includes(day);
                             return (
                                 <View
@@ -1039,6 +1230,10 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                         <Text style={s.ctaPrice}>₹{pricing.perHour.weekday.toLocaleString()}</Text>
                         <Text style={s.ctaPerHour}>/hr</Text>
                     </View>
+                    <AmenitiesSummaryBadge
+                        count={selectedAmenities.length}
+                        total={amenitiesTotal}
+                    />
                 </View>
                 <TouchableOpacity
                     style={s.ctaButton}
@@ -1058,10 +1253,20 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
             <BookingSheet
                 visible={bookingVisible}
                 venue={venue}
+                selectedAmenities={selectedAmenities}
+                amenitiesTotal={amenitiesTotal}
                 onClose={() => setBookingVisible(false)}
             />
         </View>
     );
+}
+
+// ─── Helper ───────────────────────────────────────────────────────────────────
+
+function thaliGroupKey(type: string): string {
+    if (type?.includes('Rajasthani')) return 'Rajasthani Thali';
+    if (type?.includes('South')) return 'South Indian Thali';
+    return 'North Indian Thali';
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
