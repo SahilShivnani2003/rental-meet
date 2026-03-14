@@ -9,17 +9,17 @@ import {
     Dimensions,
     TextInput,
     Modal,
+    Image,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
-import { KEY_STATS, CATEGORIES, AMENITIES, PACKAGES, TESTIMONIALS } from '../../Data/landingData';
+import { PACKAGES } from '../../Data/landingData';
 import useEntrance from '../../hooks/useEntrance';
 import FeaturedCard from '../../components/landing/featuredCard';
 import { useAuthStore } from '../../store/auth-store';
 import { ClientTabParamList } from '../../navigations/tabNavigations/ClientTabNavigation';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
 import { venueAPI } from '../../service/apis/venues';
-import { Venue } from '../venue-detail';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigations/RootNavigation';
 
@@ -44,6 +44,16 @@ function formatDate(date: Date) {
 
 type DropdownType = 'city' | 'capacity' | 'date' | null;
 
+// FIX 1: Typed to match the API response shape
+type VenueType = {
+    _id: string;
+    name: string;
+    description: string;
+    icon: string; // emoji string e.g. "🏢"
+    isActive: boolean;
+    order: number;
+};
+
 type landingProps = NativeBottomTabScreenProps<ClientTabParamList, 'home'>;
 
 export default function LandingScreen({ navigation }: landingProps) {
@@ -52,8 +62,10 @@ export default function LandingScreen({ navigation }: landingProps) {
 
     // ── API data ───────────────────────────────────────────────────────────────
     const [cities, setCities] = useState<string[]>([]);
-    const [locations, setLocations] = useState<{ city: string; areas: string[] }[]>([]);
+    // FIX 2: Removed unused `locations` state — was fetched but never consumed in the UI
     const [venues, setVenues] = useState<any[]>([]);
+    // FIX 3: Typed categories to match the API response
+    const [categories, setCategories] = useState<VenueType[]>([]);
 
     // ── Filter state ───────────────────────────────────────────────────────────
     const [openDropdown, setOpenDropdown] = useState<DropdownType>(null);
@@ -69,20 +81,13 @@ export default function LandingScreen({ navigation }: landingProps) {
     const [calYear, setCalYear] = useState(today.getFullYear());
     const [calMonth, setCalMonth] = useState(today.getMonth());
 
-    const { fade: heroFade, slide: heroSlide } = useEntrance(0);
     const { fade: bodyFade } = useEntrance(180);
-    const heroScale = useRef(new Animated.Value(1.06)).current;
     const slideAnim = useRef(new Animated.Value(300)).current;
 
     useEffect(() => {
         getAllVenueLoc();
         getAllVenue();
-        Animated.spring(heroScale, {
-            toValue: 1,
-            useNativeDriver: true,
-            speed: 5,
-            bounciness: 2,
-        }).start();
+        fetchCategory();
     }, []);
 
     // Animate modal slide-up
@@ -103,7 +108,7 @@ export default function LandingScreen({ navigation }: landingProps) {
     const goToVenues = () => navigation.navigate('venues');
     const goToProfile = () => navigation.navigate('profile');
 
-    const goToVenueDetail = (venue: Venue) => {
+    const goToVenueDetail = (venue: any) => {
         navigation
             .getParent<NativeStackNavigationProp<RootStackParamList>>()
             ?.navigate('venueDetail', { venue });
@@ -114,7 +119,7 @@ export default function LandingScreen({ navigation }: landingProps) {
             const response = await venueAPI.getVenueLocations();
             if (!response?.success) return;
             setCities(response.cities ?? []);
-            setLocations(response.locations ?? []);
+            // FIX 5: Removed setLocations — state was unused so the call was pointless
         } catch (error: any) {
             console.error('FETCHING LOCATION ERROR : ', error);
         }
@@ -130,7 +135,17 @@ export default function LandingScreen({ navigation }: landingProps) {
         }
     };
 
-    const activeCity = cities.length > 0 ? cities[0].toUpperCase() : 'YOUR CITY';
+    // FIX 6: Renamed fetchCatgory → fetchCategory (typo)
+    const fetchCategory = async () => {
+        try {
+            const response = await venueAPI.venueTypes();
+            if (response?.success) {
+                setCategories(response.venueTypes);
+            }
+        } catch (error: any) {
+            console.error('FETCHING CATEGORY ERROR : ', error);
+        }
+    };
 
     // ── Filter chip labels ─────────────────────────────────────────────────────
     const cityLabel = selectedCity ?? (cities.length > 0 ? cities[0] : 'City');
@@ -348,97 +363,47 @@ export default function LandingScreen({ navigation }: landingProps) {
     return (
         <View style={s.root}>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
-                <View style={s.hero}>
-                    <Animated.View
-                        style={[StyleSheet.absoluteFill, { transform: [{ scale: heroScale }] }]}
-                    >
-                        <View style={s.heroBg} />
-                        <View style={s.diag1} />
-                        <View style={s.diag2} />
-                        <View style={s.heroGlow} />
-                    </Animated.View>
-
-                    {/* Navbar */}
-                    <Animated.View style={[s.navbar, { opacity: heroFade }]}>
-                        <View style={s.brand}>
-                            <View style={s.brandDot}>
-                                <Ionicons name="location" size={12} color={Colors.charcoal} />
+                {/* ── HEADER ── */}
+                <View style={s.header}>
+                    <View style={s.brand}>
+                        <Image
+                            source={require('../../assets/NameLogo.png')}
+                            style={s.brandLogo}
+                            resizeMode="contain"
+                        />
+                    </View>
+                    <View style={s.navIcons}>
+                        <TouchableOpacity style={s.navIconBtn}>
+                            <Ionicons
+                                name="notifications-outline"
+                                size={24}
+                                color={Colors.charcoal}
+                            />
+                            <View style={s.notifDot} />
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={s.profilePill}
+                            onPress={goToProfile}
+                            activeOpacity={0.85}
+                        >
+                            <View style={s.profileAvatar}>
+                                <Text style={s.profileInitials}>
+                                    {user?.name?.slice(0, 2).toUpperCase() || 'G'}
+                                </Text>
                             </View>
-                            <Text style={s.brandName}>
-                                <Text style={{ color: Colors.primary }}>Rental</Text>
-                                <Text style={{ color: Colors.white }}>Meet</Text>
-                            </Text>
-                        </View>
-                        <View style={s.navIcons}>
-                            <TouchableOpacity style={s.navIconBtn}>
-                                <Ionicons
-                                    name="notifications-outline"
-                                    size={18}
-                                    color={Colors.white}
-                                />
-                                <View style={s.notifDot} />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={s.profilePill}
-                                onPress={goToProfile}
-                                activeOpacity={0.85}
-                            >
-                                <View style={s.profileAvatar}>
-                                    <Text style={s.profileInitials}>
-                                        {user?.name?.slice(0, 2).toUpperCase() || 'G'}
-                                    </Text>
-                                </View>
-                                <Text style={s.profileName}>{user?.name || 'Guest'}</Text>
-                                <Ionicons
-                                    name="chevron-down"
-                                    size={11}
-                                    color="rgba(255,255,255,0.6)"
-                                />
-                            </TouchableOpacity>
-                        </View>
-                    </Animated.View>
+                            <Text style={s.profileName}>{user?.name || 'Guest'}</Text>
+                            <Ionicons name="chevron-down" size={11} color={Colors.charcoalLight} />
+                        </TouchableOpacity>
+                    </View>
+                </View>
 
-                    {/* Hero copy */}
-                    <Animated.View
-                        style={[
-                            s.heroBody,
-                            { opacity: heroFade, transform: [{ translateY: heroSlide }] },
-                        ]}
-                    >
-                        <View style={s.locationPill}>
-                            <Ionicons name="location" size={11} color={Colors.primary} />
-                            <Text style={s.locationPillText}>{activeCity}, MADHYA PRADESH</Text>
-                        </View>
-                        <Text style={s.heroTitle}>Book Your{'\n'}Perfect Space</Text>
-                        <Text style={s.heroHighlight}>with RentalMeet</Text>
-                        <Text style={s.heroSub}>
-                            Premium venues for 1000+ guests.{'\n'}Hourly bookings, world-class
-                            hospitality.
-                        </Text>
-                        <View style={s.heroCtaRow}>
-                            <TouchableOpacity
-                                style={s.ctaPrimary}
-                                onPress={goToVenues}
-                                activeOpacity={0.88}
-                            >
-                                <Text style={s.ctaPrimaryText}>Browse Venues</Text>
-                                <Ionicons name="arrow-forward" size={15} color={Colors.charcoal} />
-                            </TouchableOpacity>
-                        </View>
-                    </Animated.View>
-
-                    {/* Stats strip */}
-                    <Animated.View style={[s.statsStrip, { opacity: heroFade }]}>
-                        {KEY_STATS.map((st, i) => (
-                            <View
-                                key={i}
-                                style={[s.statItem, i < KEY_STATS.length - 1 && s.statBorder]}
-                            >
-                                <Text style={s.statValue}>{st.value}</Text>
-                                <Text style={s.statLabel}>{st.label}</Text>
-                            </View>
-                        ))}
-                    </Animated.View>
+                {/* ── BROWSE VENUES BUTTON ── */}
+                <View style={s.browseRow}>
+                    <TouchableOpacity style={s.browseBtn} onPress={goToVenues} activeOpacity={0.88}>
+                        <Ionicons name="business-outline" size={16} color={Colors.charcoal} />
+                        <Text style={s.browseBtnText}>Browse Venues</Text>
+                        <Ionicons name="arrow-forward" size={15} color={Colors.charcoal} />
+                    </TouchableOpacity>
                 </View>
 
                 {/* SEARCH CARD */}
@@ -594,27 +559,29 @@ export default function LandingScreen({ navigation }: landingProps) {
                             <View style={s.accentBar} />
                             <Text style={s.sectionTitle}>Browse by Category</Text>
                         </View>
-                        <TouchableOpacity onPress={goToVenues}>
+                        <TouchableOpacity
+                            onPress={() => {
+                                navigation
+                                    .getParent<NativeStackNavigationProp<RootStackParamList>>()
+                                    .navigate('category');
+                            }}
+                        >
                             <Text style={s.seeAll}>See all →</Text>
                         </TouchableOpacity>
                     </View>
                     <View style={s.catGrid}>
-                        {CATEGORIES.map((cat, i) => (
+                        {categories.slice(0, 6).map(cat => (
                             <TouchableOpacity
-                                key={i}
+                                key={cat._id}
                                 style={s.catCard}
                                 onPress={goToVenues}
                                 activeOpacity={0.8}
                             >
                                 <View style={s.catIconWrap}>
-                                    <Ionicons
-                                        name={cat.icon as any}
-                                        size={22}
-                                        color={Colors.primary}
-                                    />
+                                    <Text style={s.catIconEmoji}>{cat.icon}</Text>
                                 </View>
-                                <Text style={s.catLabel}>{cat.label}</Text>
-                                <Text style={s.catCount}>{cat.count}</Text>
+                                <Text style={s.catLabel}>{cat.name}</Text>
+                                <Text style={s.catCount}>{cat.description}</Text>
                             </TouchableOpacity>
                         ))}
                     </View>
@@ -649,31 +616,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                         <Text style={s.viewAllBtnText}>View All Venues</Text>
                         <Ionicons name="arrow-forward" size={14} color={Colors.white} />
                     </TouchableOpacity>
-                </View>
-
-                {/* AMENITIES */}
-                <View style={s.section}>
-                    <View style={s.centeredHead}>
-                        <Text style={s.eyebrow}>FACILITIES</Text>
-                        <Text style={s.centeredTitle}>Unparalleled Amenities</Text>
-                        <Text style={s.centeredSub}>
-                            Every space comes equipped to ensure your meeting runs flawlessly.
-                        </Text>
-                    </View>
-                    <View style={s.amenGrid}>
-                        {AMENITIES.map((a, i) => (
-                            <View key={i} style={s.amenCard}>
-                                <View style={s.amenIconWrap}>
-                                    <Ionicons
-                                        name={a.icon as any}
-                                        size={20}
-                                        color={Colors.primary}
-                                    />
-                                </View>
-                                <Text style={s.amenLabel}>{a.label}</Text>
-                            </View>
-                        ))}
-                    </View>
                 </View>
 
                 {/* PRICING PACKAGES */}
@@ -738,46 +680,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                             </TouchableOpacity>
                         ))}
                     </View>
-                </View>
-
-                {/* TESTIMONIALS */}
-                <View style={s.section}>
-                    <View style={s.centeredHead}>
-                        <Text style={s.eyebrow}>TESTIMONIALS</Text>
-                        <Text style={s.centeredTitle}>What Clients Say</Text>
-                    </View>
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={s.hScroll}
-                    >
-                        {TESTIMONIALS.map((t, i) => (
-                            <View key={i} style={s.testiCard}>
-                                <View style={s.testiTop}>
-                                    <View style={s.testiAvatar}>
-                                        <Text style={s.testiAvatarText}>{t.initials}</Text>
-                                    </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={s.testiName}>{t.name}</Text>
-                                        <Text style={s.testiRole}>{t.role}</Text>
-                                    </View>
-                                    <View style={s.testiStars}>
-                                        {[1, 2, 3, 4, 5].map(j => (
-                                            <Ionicons
-                                                key={j}
-                                                name="star"
-                                                size={11}
-                                                color={Colors.primary}
-                                            />
-                                        ))}
-                                    </View>
-                                </View>
-                                <View style={s.testiDivider} />
-                                <Text style={s.quoteMark}>"</Text>
-                                <Text style={s.testiText}>{t.text}</Text>
-                            </View>
-                        ))}
-                    </ScrollView>
                 </View>
 
                 {/* BOTTOM CTA BANNER */}
@@ -977,50 +879,22 @@ const ds = StyleSheet.create({
     },
 });
 
-// ─── Main styles (unchanged from original) ───────────────────────────────────
+// ─── Main styles ─────────────────────────────────────────────────────────────
 const CAT_W = (W - Spacing.lg * 2 - Spacing.sm * 2) / 3;
 const AMEN_W = (W - Spacing.lg * 2 - Spacing.sm) / 2;
 
 const s = StyleSheet.create({
     root: { flex: 1, backgroundColor: Colors.background },
     scroll: { paddingBottom: 120 },
-    hero: { height: H * 0.6, justifyContent: 'flex-end', overflow: 'hidden' },
-    heroBg: { ...StyleSheet.absoluteFillObject, backgroundColor: '#1A1208' },
-    diag1: {
-        position: 'absolute',
-        top: '28%',
-        left: -60,
-        width: W * 1.5,
-        height: 1.5,
-        backgroundColor: 'rgba(245,166,35,0.13)',
-        transform: [{ rotate: '-9deg' }],
-    },
-    diag2: {
-        position: 'absolute',
-        top: '48%',
-        left: -60,
-        width: W * 1.5,
-        height: 1,
-        backgroundColor: 'rgba(245,166,35,0.07)',
-        transform: [{ rotate: '-9deg' }],
-    },
-    heroGlow: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 150,
-        backgroundColor: 'rgba(245,166,35,0.05)',
-    },
-    navbar: {
-        position: 'absolute',
-        top: 39,
-        left: 0,
-        right: 0,
+    // ── Header ──
+    header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: Spacing.xl,
+        paddingTop: 24,
+        paddingBottom: Spacing.md,
+        backgroundColor: Colors.background,
     },
     brand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     brandDot: {
@@ -1031,15 +905,18 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
+    brandLogo: { height: 50, width: 150 },
     brandName: { fontSize: 20, fontWeight: Typography.extraBold, letterSpacing: -0.4 },
     navIcons: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
     navIconBtn: {
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: 'rgba(255,255,255,0.10)',
+        backgroundColor: Colors.surface,
         alignItems: 'center',
         justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: Colors.border,
     },
     notifDot: {
         position: 'absolute',
@@ -1050,15 +927,15 @@ const s = StyleSheet.create({
         borderRadius: 4,
         backgroundColor: Colors.danger,
         borderWidth: 1.5,
-        borderColor: '#1A1208',
+        borderColor: Colors.background,
     },
     profilePill: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        backgroundColor: 'rgba(255,255,255,0.10)',
+        backgroundColor: Colors.surface,
         borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.16)',
+        borderColor: Colors.border,
         paddingLeft: 4,
         paddingRight: 10,
         paddingVertical: 4,
@@ -1073,85 +950,28 @@ const s = StyleSheet.create({
         justifyContent: 'center',
     },
     profileInitials: { fontSize: 10, fontWeight: Typography.extraBold, color: Colors.charcoal },
-    profileName: { fontSize: 12, fontWeight: Typography.bold, color: Colors.white },
-    heroBody: { paddingHorizontal: Spacing.xl, paddingBottom: 80 },
-    locationPill: {
+    profileName: { fontSize: 12, fontWeight: Typography.bold, color: Colors.charcoal },
+    // ── Browse button row ──
+    browseRow: {
+        paddingHorizontal: Spacing.lg,
+        paddingVertical: Spacing.md,
+        backgroundColor: Colors.background,
+    },
+    browseBtn: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 5,
-        alignSelf: 'flex-start',
-        backgroundColor: 'rgba(245,166,35,0.14)',
-        borderWidth: 1,
-        borderColor: 'rgba(245,166,35,0.28)',
-        paddingHorizontal: 10,
-        paddingVertical: 5,
-        borderRadius: Radii.full,
-        marginBottom: 14,
-    },
-    locationPillText: {
-        fontSize: 9,
-        fontWeight: Typography.bold,
-        color: Colors.primary,
-        letterSpacing: 2,
-    },
-    heroTitle: {
-        fontSize: 32,
-        fontWeight: Typography.extraBold,
-        color: Colors.white,
-        lineHeight: 38,
-        letterSpacing: -0.8,
-    },
-    heroHighlight: {
-        fontSize: 32,
-        fontWeight: Typography.extraBold,
-        color: Colors.primary,
-        lineHeight: 42,
-        letterSpacing: -0.8,
-        marginBottom: 12,
-    },
-    heroSub: { fontSize: 13, color: 'rgba(255,255,255,0.50)', lineHeight: 20, marginBottom: 24 },
-    heroCtaRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-    ctaPrimary: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 7,
+        justifyContent: 'center',
+        gap: 8,
         backgroundColor: Colors.primary,
-        paddingHorizontal: 20,
-        paddingVertical: 13,
+        paddingVertical: 14,
         borderRadius: Radii.full,
         ...Shadows.primary,
     },
-    ctaPrimaryText: {
-        fontSize: 13.5,
+    browseBtnText: {
+        fontSize: 15,
         fontWeight: Typography.extraBold,
         color: Colors.charcoal,
         letterSpacing: 0.2,
-    },
-    statsStrip: {
-        position: 'absolute',
-        bottom: 0,
-        left: Spacing.lg,
-        right: Spacing.lg,
-        flexDirection: 'row',
-        backgroundColor: Colors.surface,
-        borderTopLeftRadius: Radii.xl,
-        borderTopRightRadius: Radii.xl,
-        paddingVertical: 14,
-        ...Shadows.card,
-    },
-    statItem: { flex: 1, alignItems: 'center' },
-    statBorder: { borderRightWidth: 1, borderRightColor: Colors.border },
-    statValue: {
-        fontSize: 18,
-        fontWeight: Typography.extraBold,
-        color: Colors.charcoal,
-        letterSpacing: -0.5,
-    },
-    statLabel: {
-        fontSize: 10,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.medium,
-        marginTop: 2,
     },
     searchCard: {
         backgroundColor: Colors.surface,
@@ -1291,6 +1111,10 @@ const s = StyleSheet.create({
         borderWidth: 1.5,
         borderColor: Colors.primaryBorder,
     },
+    // FIX 10: Added emoji icon style for category cards
+    catIconEmoji: {
+        fontSize: 24,
+    },
     catLabel: {
         fontSize: 11.5,
         fontWeight: Typography.bold,
@@ -1385,39 +1209,6 @@ const s = StyleSheet.create({
     },
     pkgPriceUnit: { fontSize: 11, color: Colors.charcoalLight, fontWeight: Typography.medium },
     textWhite: { color: Colors.white },
-    testiCard: {
-        width: W * 0.76,
-        backgroundColor: Colors.surface,
-        borderRadius: Radii.xl,
-        padding: Spacing.lg,
-        marginRight: 12,
-        ...Shadows.card,
-        borderWidth: 1,
-        borderColor: Colors.border,
-    },
-    testiTop: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-    testiAvatar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: Colors.charcoal,
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
-    },
-    testiAvatarText: { fontSize: 13, fontWeight: Typography.extraBold, color: Colors.primary },
-    testiName: { fontSize: 13, fontWeight: Typography.bold, color: Colors.charcoal },
-    testiRole: { fontSize: 10.5, color: Colors.charcoalLight, marginTop: 2 },
-    testiStars: { flexDirection: 'row', gap: 2 },
-    testiDivider: { height: 1, backgroundColor: Colors.border, marginBottom: 10 },
-    quoteMark: {
-        fontSize: 36,
-        lineHeight: 32,
-        color: Colors.primaryBorder,
-        fontWeight: Typography.extraBold,
-        marginBottom: 4,
-    },
-    testiText: { fontSize: 12.5, color: Colors.charcoalMid, lineHeight: 19 },
     ctaBannerWrap: { paddingHorizontal: Spacing.lg },
     ctaBanner: {
         backgroundColor: Colors.charcoal,
@@ -1496,22 +1287,5 @@ const s = StyleSheet.create({
         backgroundColor: Colors.charcoal,
         alignItems: 'center',
         justifyContent: 'center',
-    },
-    ctaProfileLink: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    ctaProfileAvatar: {
-        width: 26,
-        height: 26,
-        borderRadius: 13,
-        backgroundColor: 'rgba(245,166,35,0.20)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1,
-        borderColor: 'rgba(245,166,35,0.30)',
-    },
-    ctaProfileInitials: { fontSize: 9, fontWeight: Typography.extraBold, color: Colors.primary },
-    ctaProfileText: {
-        fontSize: 12.5,
-        fontWeight: Typography.semiBold,
-        color: 'rgba(255,255,255,0.65)',
     },
 });

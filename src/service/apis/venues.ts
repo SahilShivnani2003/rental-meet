@@ -30,5 +30,7 @@ export const venueAPI = {
 
     venueImages: (data: any, id: string) => apiClient.post(`venues/${id}/images`, data, {
         headers: getAuthHeader()
-    })
+    }),
+
+    venueTypes: () => apiClient.get('venue-types'),
 }

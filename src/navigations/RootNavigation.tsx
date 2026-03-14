@@ -1,24 +1,25 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, NavigatorScreenParams } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from '../screens/auth/login';
 import SplashScreen from '../screens/dummyScreen';
 import RegisterTypeScreen from '../screens/auth/resigter-type';
-import { ClientTabNavigation } from './tabNavigations/ClientTabNavigation';
-import { OwnerTabNavigation } from './tabNavigations/OwnerTabNavigation';
+import { ClientTabNavigation, ClientTabParamList } from './tabNavigations/ClientTabNavigation';
+import { OwnerTabNavigation, OwnerTabParamList } from './tabNavigations/OwnerTabNavigation';
 import RegisterScreen from '../screens/auth/register';
 import { AlertProvider } from '../context/AlertContext';
 import VenueDetailScreen from '../screens/venue-detail';
-import { TabNavigation } from './tabNavigations/TabNavigation';
+import { TabNavigation, tabParamList } from './tabNavigations/TabNavigation';
 import RegisterVenueScreen from '../screens/auth/register-venue';
+import BrowseCategoryScreen from '../screens/CategoryList';
 
 export type RootStackParamList = {
     splash: undefined;
     login: undefined;
-    main: undefined;
+    main: NavigatorScreenParams<tabParamList>;
     registerType: undefined;
-    client: undefined;
-    owner: undefined;
+    client: NavigatorScreenParams<ClientTabParamList>;
+    owner: NavigatorScreenParams<OwnerTabParamList>;
     registerVenue: undefined;
     register: {
         role: string;
@@ -26,6 +27,7 @@ export type RootStackParamList = {
     venueDetail: {
         venue: any;
     };
+    category: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -35,7 +37,7 @@ export default function RootNavigator() {
         <AlertProvider>
             <NavigationContainer>
                 <Stack.Navigator
-                    initialRouteName="splash"
+                    initialRouteName="login"
                     screenOptions={{ headerShown: false, animation: 'fade' }}
                 >
                     <Stack.Screen name="splash" component={SplashScreen} />
@@ -59,6 +61,7 @@ export default function RootNavigator() {
                         options={{ animation: 'fade' }}
                     />
                     <Stack.Screen name="venueDetail" component={VenueDetailScreen} />
+                    <Stack.Screen name="category" component={BrowseCategoryScreen} />
                 </Stack.Navigator>
             </NavigationContainer>
         </AlertProvider>

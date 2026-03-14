@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     View,
     Text,
@@ -8,7 +8,6 @@ import {
     TextInput,
     ActivityIndicator,
     RefreshControl,
-    Dimensions,
     Animated,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -22,20 +21,26 @@ import { tabParamList } from '../../navigations/tabNavigations/TabNavigation';
 import { RootStackParamList } from '../../navigations/RootNavigation';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useAlert } from '../../context/AlertContext';
+import FilterModal, { FilterState, DEFAULT_FILTERS } from '../models/FilterModal';
 
-const categories = [
-    { id: 'all', name: 'All', icon: 'apps-outline', venueType: null },
-    {
-        id: 'Conference Hall',
-        name: 'Conference',
-        icon: 'business-outline',
-        venueType: 'Conference Hall',
-    },
-    { id: 'Banquet Hall', name: 'Banquet', icon: 'restaurant-outline', venueType: 'Banquet Hall' },
-    { id: 'Marriage Garden', name: 'Wedding', icon: 'rose-outline', venueType: 'Marriage Garden' },
-    { id: 'Function Hall', name: 'Party', icon: 'balloon-outline', venueType: 'Function Hall' },
-    { id: 'Meeting Hall', name: 'Meeting', icon: 'people-outline', venueType: 'Meeting Hall' },
-];
+// ── Types ─────────────────────────────────────────────────────────────────────
+type VenueType = {
+    _id: string;
+    name: string;
+    description: string;
+    icon: string;
+    isActive: boolean;
+    order: number;
+};
+
+const ALL_CATEGORY: VenueType = {
+    _id: 'all',
+    name: 'All',
+    icon: '🏠',
+    description: '',
+    isActive: true,
+    order: 0,
+};
 
 type appParamList = OwnerTabParamList | ClientTabParamList | tabParamList;
 type venueProps = NativeStackScreenProps<appParamList, 'venues'>;
@@ -43,74 +48,184 @@ type venueProps = NativeStackScreenProps<appParamList, 'venues'>;
 // ── Screen ────────────────────────────────────────────────────────────────────
 export default function VenuesScreen({ navigation }: venueProps) {
     const alert = useAlert();
-    const { user, isAuthenticated } = useAuthStore();
+    const { user } = useAuthStore();
+
     const [venues, setVenues] = useState<any[]>([]);
+    const [categories, setCategories] = useState<VenueType[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+
+    // ── Search (local — triggers server call on submit/debounce) ──────────────
     const [searchQuery, setSearch] = useState('');
+
+    // ── Category chip (drives venueType param) ────────────────────────────────
     const [selectedCategory, setCategory] = useState('all');
+
+    // ── Modal filter state — maps 1:1 to API query params ────────────────────
+    const [filterVisible, setFilterVisible] = useState(false);
+    const [activeFilters, setActiveFilters] = useState<FilterState>(DEFAULT_FILTERS);
+
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
+    // Debounce ref for search input
+    const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // ── Active filter badge count ─────────────────────────────────────────────
+    const activeFilterCount = Object.entries(activeFilters).filter(([, v]) => v !== '').length;
+
+    // ── Fetch on mount ────────────────────────────────────────────────────────
+    useEffect(() => {
+        fetchCategories();
+        fetchVenues();
+    }, []);
+
+    // ── Re-fetch when category chip changes ───────────────────────────────────
     useEffect(() => {
         fetchVenues();
-        Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
     }, [selectedCategory]);
 
-    const fetchVenues = async () => {
+    // ── Build query params from all active filters + search + category ────────
+    const buildParams = useCallback(() => {
+        const params: Record<string, string> = {};
+
+        if (searchQuery.trim()) params.search = searchQuery.trim();
+        if (selectedCategory !== 'all') params.venueType = selectedCategory;
+
+        // Modal filters — only add if non-empty
+        if (activeFilters.city) params.city = activeFilters.city;
+        if (activeFilters.venueType) params.venueType = activeFilters.venueType;
+        if (activeFilters.capacity) params.capacity = activeFilters.capacity;
+        if (activeFilters.minPrice) params.minPrice = activeFilters.minPrice;
+        if (activeFilters.maxPrice) params.maxPrice = activeFilters.maxPrice;
+
+        return params;
+    }, [searchQuery, selectedCategory, activeFilters]);
+
+    // ── API call ──────────────────────────────────────────────────────────────
+    const fetchVenues = async (overrideSearch?: string) => {
         try {
             setLoading(true);
+            fadeAnim.setValue(0);
 
-            const response = await venueAPI.getVenues();
+            const params: Record<string, string> = {};
+            const sq = overrideSearch ?? searchQuery;
+
+            if (sq.trim()) params.search = sq.trim();
+            if (selectedCategory !== 'all') params.venueType = selectedCategory;
+            if (activeFilters.city) params.city = activeFilters.city;
+            // Modal venueType overrides chip if both set
+            if (activeFilters.venueType) params.venueType = activeFilters.venueType;
+            if (activeFilters.capacity) params.capacity = activeFilters.capacity;
+            if (activeFilters.minPrice) params.minPrice = activeFilters.minPrice;
+            if (activeFilters.maxPrice) params.maxPrice = activeFilters.maxPrice;
+
+            const response = await venueAPI.getVenues(params);
 
             if (!response?.venues) {
-                console.error('FETCHING VENUES ERROR : ', response?.message);
+                console.error('FETCHING VENUES ERROR:', response?.message);
+                setVenues([]);
                 return;
             }
 
-            setVenues(response?.venues);
+            setVenues(response.venues);
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 400,
+                useNativeDriver: true,
+            }).start();
         } finally {
             setLoading(false);
             setRefreshing(false);
         }
     };
 
-    const handleAddVenue = () => {
-        if (!isAuthenticated) {
-            alert.show({
-                title: 'Login Reguired',
-                message: 'Sign in is required to add venue.',
-                buttons: [
-                    { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },
-                    {
-                        label: 'Login',
-                        onPress: () => {
-                            navigation
-                                .getParent<NativeStackNavigationProp<RootStackParamList>>()
-                                .navigate('login');
-                            alert.dismiss();
-                        },
-                    },
-                ],
-            });
-
-            return;
+    const fetchCategories = async () => {
+        try {
+            const response = await venueAPI.venueTypes();
+            if (response?.success) {
+                setCategories([ALL_CATEGORY, ...response.venueTypes]);
+            } else {
+                setCategories([ALL_CATEGORY]);
+            }
+        } catch (error: any) {
+            console.error('FETCH CATEGORIES ERROR:', error);
+            setCategories([ALL_CATEGORY]);
         }
+    };
 
+    // ── Search: debounce 500ms then call server ───────────────────────────────
+    const handleSearchChange = (text: string) => {
+        setSearch(text);
+        if (searchTimer.current) clearTimeout(searchTimer.current);
+        searchTimer.current = setTimeout(() => {
+            fetchVenues(text);
+        }, 500);
+    };
+
+    const handleSearchSubmit = () => {
+        if (searchTimer.current) clearTimeout(searchTimer.current);
+        fetchVenues(searchQuery);
+    };
+
+    // ── Apply filters from modal ──────────────────────────────────────────────
+    const handleApplyFilters = (filters: FilterState) => {
+        setActiveFilters(filters);
+        // Fetch with new filters immediately (useEffect won't fire since
+        // activeFilters reference changes but we need a manual call here)
+        const params: Record<string, string> = {};
+        if (searchQuery.trim()) params.search = searchQuery.trim();
+        if (selectedCategory !== 'all') params.venueType = selectedCategory;
+        if (filters.city) params.city = filters.city;
+        if (filters.venueType) params.venueType = filters.venueType;
+        if (filters.capacity) params.capacity = filters.capacity;
+        if (filters.minPrice) params.minPrice = filters.minPrice;
+        if (filters.maxPrice) params.maxPrice = filters.maxPrice;
+
+        (async () => {
+            try {
+                setLoading(true);
+                fadeAnim.setValue(0);
+                const response = await venueAPI.getVenues(params);
+                setVenues(response?.venues ?? []);
+                Animated.timing(fadeAnim, {
+                    toValue: 1,
+                    duration: 400,
+                    useNativeDriver: true,
+                }).start();
+            } finally {
+                setLoading(false);
+            }
+        })();
+    };
+
+    const handleClearFilters = () => {
+        setActiveFilters(DEFAULT_FILTERS);
+        setSearch('');
+        setCategory('all');
+        // Fetch with no params
+        (async () => {
+            try {
+                setLoading(true);
+                fadeAnim.setValue(0);
+                const response = await venueAPI.getVenues({});
+                setVenues(response?.venues ?? []);
+                Animated.timing(fadeAnim, {
+                    toValue: 1,
+                    duration: 400,
+                    useNativeDriver: true,
+                }).start();
+            } finally {
+                setLoading(false);
+            }
+        })();
+    };
+
+    const handleAddVenue = () => {
         navigation
             .getParent<NativeStackNavigationProp<RootStackParamList>>()
             .navigate('registerVenue');
     };
-    // ── Filter by search query AND selected category ──────────────────────────
-    const filteredVenues = venues.filter(v => {
-        const matchesSearch = v.businessName.toLowerCase().includes(searchQuery.toLowerCase());
 
-        const matchesCategory =
-            selectedCategory === 'all' ||
-            (Array.isArray(v.venueType) && v.venueType.includes(selectedCategory));
-
-        return matchesSearch && matchesCategory;
-    });
-    debugger;
     return (
         <View style={styles.container}>
             {/* ── Header ── */}
@@ -121,7 +236,7 @@ export default function VenuesScreen({ navigation }: venueProps) {
                         <Text style={styles.greetingLabel}>DISCOVER</Text>
                         <Text style={styles.greeting}>Venues</Text>
                     </View>
-                    {!isAuthenticated || user?.role === 'owner' ? (
+                    {user?.role === 'owner' && (
                         <TouchableOpacity
                             style={styles.addVenueButton}
                             activeOpacity={0.85}
@@ -130,12 +245,12 @@ export default function VenuesScreen({ navigation }: venueProps) {
                             <Ionicons name="add" size={18} color={Colors.white} />
                             <Text style={styles.addVenueLabel}>Add Venue</Text>
                         </TouchableOpacity>
-                    ) : null}
+                    )}
                 </View>
                 <Text style={styles.headerSubtitle}>Book your premium meeting venues.</Text>
             </View>
 
-            {/* ── Search ── */}
+            {/* ── Search + Filter button ── */}
             <View style={styles.searchWrapper}>
                 <View style={styles.searchContainer}>
                     <Ionicons
@@ -149,11 +264,41 @@ export default function VenuesScreen({ navigation }: venueProps) {
                         placeholder="Search venues, cities..."
                         placeholderTextColor={Colors.charcoalLight}
                         value={searchQuery}
-                        onChangeText={setSearch}
+                        onChangeText={handleSearchChange}
+                        onSubmitEditing={handleSearchSubmit}
+                        returnKeyType="search"
                     />
+                    {searchQuery.length > 0 && (
+                        <TouchableOpacity
+                            onPress={() => {
+                                setSearch('');
+                                fetchVenues('');
+                            }}
+                        >
+                            <Ionicons name="close-circle" size={16} color={Colors.charcoalLight} />
+                        </TouchableOpacity>
+                    )}
                 </View>
-                <TouchableOpacity style={styles.filterButton}>
-                    <Ionicons name="options" size={18} color={Colors.white} />
+
+                {/* Filter button */}
+                <TouchableOpacity
+                    style={[
+                        styles.filterButton,
+                        activeFilterCount > 0 && styles.filterButtonActive,
+                    ]}
+                    onPress={() => setFilterVisible(true)}
+                    activeOpacity={0.85}
+                >
+                    <Ionicons
+                        name="options"
+                        size={18}
+                        color={activeFilterCount > 0 ? Colors.charcoal : Colors.white}
+                    />
+                    {activeFilterCount > 0 && (
+                        <View style={styles.filterBadge}>
+                            <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+                        </View>
+                    )}
                 </TouchableOpacity>
             </View>
 
@@ -171,7 +316,7 @@ export default function VenuesScreen({ navigation }: venueProps) {
                     />
                 }
             >
-                {/* ── Categories ── */}
+                {/* ── Category chips from API ── */}
                 <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -179,15 +324,18 @@ export default function VenuesScreen({ navigation }: venueProps) {
                     style={{ marginBottom: Spacing.sm }}
                 >
                     {categories.map(cat => {
-                        const isActive = selectedCategory === cat.id;
+                        const isActive =
+                            cat._id === 'all'
+                                ? selectedCategory === 'all'
+                                : selectedCategory === cat.name;
                         return (
                             <TouchableOpacity
-                                key={cat.id}
+                                key={cat._id}
                                 style={[
                                     styles.categoryButton,
                                     isActive && styles.categoryButtonActive,
                                 ]}
-                                onPress={() => setCategory(cat.id)}
+                                onPress={() => setCategory(cat._id === 'all' ? 'all' : cat.name)}
                             >
                                 <View
                                     style={[
@@ -195,11 +343,7 @@ export default function VenuesScreen({ navigation }: venueProps) {
                                         isActive && styles.categoryIconWrapActive,
                                     ]}
                                 >
-                                    <Ionicons
-                                        name={cat.icon as any}
-                                        size={18}
-                                        color={isActive ? Colors.white : Colors.primary}
-                                    />
+                                    <Text style={styles.categoryEmoji}>{cat.icon}</Text>
                                 </View>
                                 <Text
                                     style={[
@@ -214,14 +358,38 @@ export default function VenuesScreen({ navigation }: venueProps) {
                     })}
                 </ScrollView>
 
-                {/* ── All Venues ── */}
+                {/* ── Active filter summary strip ── */}
+                {(activeFilterCount > 0 || searchQuery) && (
+                    <View style={styles.activeFilterStrip}>
+                        <Ionicons name="funnel" size={13} color={Colors.primaryDark} />
+                        <Text style={styles.activeFilterText} numberOfLines={1}>
+                            {[
+                                searchQuery && `"${searchQuery}"`,
+                                activeFilters.city && activeFilters.city,
+                                activeFilters.venueType && activeFilters.venueType,
+                                activeFilters.capacity && `Cap: ${activeFilters.capacity}`,
+                                (activeFilters.minPrice || activeFilters.maxPrice) &&
+                                    `₹${activeFilters.minPrice || '0'} – ₹${
+                                        activeFilters.maxPrice || '∞'
+                                    }`,
+                            ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                        </Text>
+                        <TouchableOpacity onPress={handleClearFilters}>
+                            <Text style={styles.clearLink}>Clear</Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+
+                {/* ── Venue list ── */}
                 <View style={[styles.section, { paddingBottom: 100 }]}>
                     <View style={styles.sectionHeader}>
                         <View style={styles.sectionTitleRow}>
                             <View style={styles.sectionAccent} />
                             <Text style={styles.sectionTitle}>All Venues</Text>
                         </View>
-                        <Text style={styles.venueCount}>{filteredVenues.length} spaces</Text>
+                        <Text style={styles.venueCount}>{venues.length} spaces</Text>
                     </View>
 
                     {loading ? (
@@ -229,7 +397,7 @@ export default function VenuesScreen({ navigation }: venueProps) {
                             <ActivityIndicator size="large" color={Colors.primary} />
                             <Text style={styles.loaderText}>Finding spaces...</Text>
                         </View>
-                    ) : filteredVenues.length === 0 ? (
+                    ) : venues.length === 0 ? (
                         <View style={styles.emptyState}>
                             <Ionicons
                                 name="search-outline"
@@ -237,10 +405,15 @@ export default function VenuesScreen({ navigation }: venueProps) {
                                 color={Colors.primaryBorder}
                             />
                             <Text style={styles.emptyText}>No venues found</Text>
+                            {(activeFilterCount > 0 || searchQuery) && (
+                                <TouchableOpacity onPress={handleClearFilters}>
+                                    <Text style={styles.clearFiltersLink}>Clear all filters</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     ) : (
                         <Animated.View style={[styles.venuesGrid, { opacity: fadeAnim }]}>
-                            {filteredVenues.map(v => (
+                            {venues.map(v => (
                                 <VenueCard key={v._id} venue={v} />
                             ))}
                         </Animated.View>
@@ -248,17 +421,28 @@ export default function VenuesScreen({ navigation }: venueProps) {
                 </View>
             </ScrollView>
 
-            {/* ── FAB ── */}
-            <TouchableOpacity style={styles.fab} activeOpacity={0.85}>
-                <View style={styles.fabInner}>
-                    <Ionicons name="add" size={26} color={Colors.white} />
-                </View>
-                <Text style={styles.fabLabel}>Add Venue</Text>
-            </TouchableOpacity>
+            {/* ── FAB (owner only) ── */}
+            {user?.role === 'owner' && (
+                <TouchableOpacity style={styles.fab} onPress={handleAddVenue} activeOpacity={0.85}>
+                    <View style={styles.fabInner}>
+                        <Ionicons name="add" size={26} color={Colors.white} />
+                    </View>
+                    <Text style={styles.fabLabel}>Add Venue</Text>
+                </TouchableOpacity>
+            )}
+
+            {/* ── Filter modal ── */}
+            <FilterModal
+                visible={filterVisible}
+                onClose={() => setFilterVisible(false)}
+                onApply={handleApplyFilters}
+                initialFilters={activeFilters}
+            />
         </View>
     );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
 
@@ -314,25 +498,6 @@ const styles = StyleSheet.create({
         color: Colors.white,
         letterSpacing: 0.3,
     },
-    notificationButton: {
-        width: 46,
-        height: 46,
-        borderRadius: Radii.md,
-        backgroundColor: Colors.background,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    notifDot: {
-        position: 'absolute',
-        top: 10,
-        right: 10,
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: Colors.primary,
-        borderWidth: 1.5,
-        borderColor: Colors.background,
-    },
 
     // Search
     searchWrapper: {
@@ -362,9 +527,33 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         ...Shadows.primary,
     },
+    filterButtonActive: { backgroundColor: Colors.charcoal },
+    filterBadge: {
+        position: 'absolute',
+        top: -5,
+        right: -5,
+        minWidth: 18,
+        height: 18,
+        borderRadius: 9,
+        backgroundColor: Colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 4,
+        borderWidth: 1.5,
+        borderColor: Colors.background,
+    },
+    filterBadgeText: {
+        fontSize: 9,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+    },
 
     // Categories
-    categoriesContainer: { paddingHorizontal: Spacing.xl, gap: 10, paddingVertical: Spacing.xxs },
+    categoriesContainer: {
+        paddingHorizontal: Spacing.xl,
+        gap: 10,
+        paddingVertical: Spacing.xxs,
+    },
     categoryButton: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -387,6 +576,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     categoryIconWrapActive: { backgroundColor: Colors.primary },
+    categoryEmoji: { fontSize: 16 },
     categoryText: {
         fontSize: Typography.base,
         color: Colors.charcoalMid,
@@ -395,7 +585,33 @@ const styles = StyleSheet.create({
     },
     categoryTextActive: { color: Colors.white },
 
-    // Sections
+    // Active filter summary strip
+    activeFilterStrip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginHorizontal: Spacing.xl,
+        marginBottom: Spacing.sm,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        backgroundColor: Colors.primaryLight,
+        borderRadius: Radii.md,
+        borderWidth: 1,
+        borderColor: Colors.primaryBorder,
+    },
+    activeFilterText: {
+        flex: 1,
+        fontSize: Typography.sm,
+        color: Colors.primaryDark,
+        fontWeight: Typography.medium,
+    },
+    clearLink: {
+        fontSize: Typography.sm,
+        color: Colors.primaryDark,
+        fontWeight: Typography.bold,
+    },
+
+    // Content
     content: { flex: 1 },
     section: { marginBottom: Spacing.sm },
     sectionHeader: {
@@ -414,15 +630,11 @@ const styles = StyleSheet.create({
         color: Colors.charcoal,
         letterSpacing: -0.3,
     },
-    seeAllButton: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    seeAll: { fontSize: Typography.base, color: Colors.primary, fontWeight: Typography.bold },
     venueCount: {
         fontSize: Typography.base,
         color: Colors.charcoalLight,
         fontWeight: Typography.medium,
     },
-
-    // Venue grid
     venuesGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -439,6 +651,12 @@ const styles = StyleSheet.create({
     },
     emptyState: { alignItems: 'center', paddingVertical: 48, gap: 12 },
     emptyText: { fontSize: 16, color: Colors.charcoalLight, fontWeight: Typography.semiBold },
+    clearFiltersLink: {
+        fontSize: Typography.base,
+        color: Colors.primary,
+        fontWeight: Typography.bold,
+        textDecorationLine: 'underline',
+    },
 
     // FAB
     fab: {
