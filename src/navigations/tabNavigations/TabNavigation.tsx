@@ -14,6 +14,7 @@ export type tabParamList = {
     otherService: undefined;
     profile: undefined;
 };
+
 export const TABS = [
     { name: 'home', label: 'Home', icon: 'home', iconOff: 'home-outline' },
     { name: 'venues', label: 'Browse', icon: 'search', iconOff: 'search-outline' },

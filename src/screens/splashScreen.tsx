@@ -9,51 +9,65 @@ import {
     StatusBar,
     Easing,
 } from 'react-native';
+
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigations/RootNavigation';
 import { useAuthStore } from '../store/auth-store';
 
 const { width: W, height: H } = Dimensions.get('window');
 
-// ─── Brand Tokens ────────────────────────────────────────────────────────────
-const ORANGE = '#F29200';
-const ORANGE_DARK = '#D97F00';
-const ORANGE_DEEP = '#B86C00';
+// ─── Brand Tokens ─────────────────────────────────────────────────────────────
 const WHITE = '#FFFFFF';
-const CHARCOAL = '#1A1A1A';
-const CHARCOAL_MID = '#2E2E2E';
+const ORANGE = '#F29200';
+const ORANGE_MED = 'rgba(242,146,0,0.22)';
+const ORANGE_LIGHT = 'rgba(242,146,0,0.10)';
+const CHARCOAL = '#2E2E2E';
+const GREY = '#888888';
+const GREY_MED = 'rgba(120,120,120,0.18)';
+const GREY_BORDER = 'rgba(120,120,120,0.25)';
 
 type SplashProps = NativeStackScreenProps<RootStackParamList, 'splash'>;
 
 export default function SplashScreen({ navigation }: SplashProps) {
-    const loadUser = useAuthStore(state => state.loadUser);
+    const loadUser = useAuthStore(s => s.loadUser);
 
-    // ── Animation refs ────────────────────────────────────────────────────────
-    const bgScale       = useRef(new Animated.Value(1.15)).current;
-    const ring1Opacity  = useRef(new Animated.Value(0)).current;
-    const ring1Scale    = useRef(new Animated.Value(0.4)).current;
-    const ring2Opacity  = useRef(new Animated.Value(0)).current;
-    const ring2Scale    = useRef(new Animated.Value(0.4)).current;
-    const ring3Opacity  = useRef(new Animated.Value(0)).current;
-    const ring3Scale    = useRef(new Animated.Value(0.4)).current;
-    const logoOpacity   = useRef(new Animated.Value(0)).current;
-    const logoScale     = useRef(new Animated.Value(0.6)).current;
-    const logoY         = useRef(new Animated.Value(20)).current;
-    const shimmer       = useRef(new Animated.Value(0)).current;
-    const titleOpacity  = useRef(new Animated.Value(0)).current;
-    const titleY        = useRef(new Animated.Value(24)).current;
+    // ── Animated values ───────────────────────────────────────────────────────
+    const shape1Opacity = useRef(new Animated.Value(0)).current;
+    const shape1Scale = useRef(new Animated.Value(0.6)).current;
+    const shape2Opacity = useRef(new Animated.Value(0)).current;
+    const shape2Scale = useRef(new Animated.Value(0.6)).current;
+    const shape3Opacity = useRef(new Animated.Value(0)).current;
+    const shape4Opacity = useRef(new Animated.Value(0)).current;
+    const shape4Scale = useRef(new Animated.Value(0.5)).current;
+    const gridOpacity = useRef(new Animated.Value(0)).current;
+
+    const logoOpacity = useRef(new Animated.Value(0)).current;
+    const logoScale = useRef(new Animated.Value(0.55)).current;
+    const logoY = useRef(new Animated.Value(0)).current;
+    const ringScale1 = useRef(new Animated.Value(0.4)).current;
+    const ringOpacity1 = useRef(new Animated.Value(0)).current;
+    const ringScale2 = useRef(new Animated.Value(0.4)).current;
+    const ringOpacity2 = useRef(new Animated.Value(0)).current;
+
+    const rentalOpacity = useRef(new Animated.Value(0)).current;
+    const rentalX = useRef(new Animated.Value(-24)).current;
+    const meetOpacity = useRef(new Animated.Value(0)).current;
+    const meetX = useRef(new Animated.Value(24)).current;
+
+    const taglineOpacity = useRef(new Animated.Value(0)).current;
+    const taglineY = useRef(new Animated.Value(10)).current;
+    const dividerScale = useRef(new Animated.Value(0)).current;
+    const badgeOpacity = useRef(new Animated.Value(0)).current;
+    const badgeScale = useRef(new Animated.Value(0.7)).current;
     const sloganOpacity = useRef(new Animated.Value(0)).current;
-    const sloganY       = useRef(new Animated.Value(16)).current;
-    const badgeOpacity  = useRef(new Animated.Value(0)).current;
-    const badgeScale    = useRef(new Animated.Value(0.8)).current;
-    const dot1          = useRef(new Animated.Value(0)).current;
-    const dot2          = useRef(new Animated.Value(0)).current;
-    const dot3          = useRef(new Animated.Value(0)).current;
-    const dot1Pulse     = useRef(new Animated.Value(1)).current;
-    const dot2Pulse     = useRef(new Animated.Value(1)).current;
-    const dot3Pulse     = useRef(new Animated.Value(1)).current;
+    const sloganY = useRef(new Animated.Value(12)).current;
+
+    const dotsOpacity = useRef(new Animated.Value(0)).current;
+    const dotPulse = useRef(new Animated.Value(1)).current;
+    const footerOpacity = useRef(new Animated.Value(0)).current;
+    const progressWidth = useRef(new Animated.Value(0)).current;
+
     const screenOpacity = useRef(new Animated.Value(1)).current;
-    const glowOpacity   = useRef(new Animated.Value(0)).current;
 
     const handleNavigation = async () => {
         await loadUser();
@@ -66,460 +80,597 @@ export default function SplashScreen({ navigation }: SplashProps) {
     };
 
     useEffect(() => {
-        StatusBar.setHidden(true);
+        StatusBar.setBarStyle('dark-content');
+        StatusBar.setHidden(false);
 
-        // Continuous shimmer loop
-        const shimmerLoop = Animated.loop(
+        // ── Continuous loops ──────────────────────────────────────────────────
+        Animated.loop(
             Animated.sequence([
-                Animated.timing(shimmer, { toValue: 1, duration: 1800, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
-                Animated.timing(shimmer, { toValue: 0, duration: 1800, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
-            ])
-        );
+                Animated.timing(logoY, {
+                    toValue: -7,
+                    duration: 2400,
+                    easing: Easing.inOut(Easing.sin),
+                    useNativeDriver: true,
+                }),
+                Animated.timing(logoY, {
+                    toValue: 0,
+                    duration: 2400,
+                    easing: Easing.inOut(Easing.sin),
+                    useNativeDriver: true,
+                }),
+            ]),
+        ).start();
 
-        // Dot pulse loop
-        const pulseDots = Animated.loop(
-            Animated.stagger(200, [
-                Animated.sequence([
-                    Animated.timing(dot1Pulse, { toValue: 1.5, duration: 400, useNativeDriver: true }),
-                    Animated.timing(dot1Pulse, { toValue: 1, duration: 400, useNativeDriver: true }),
-                ]),
-                Animated.sequence([
-                    Animated.timing(dot2Pulse, { toValue: 1.5, duration: 400, useNativeDriver: true }),
-                    Animated.timing(dot2Pulse, { toValue: 1, duration: 400, useNativeDriver: true }),
-                ]),
-                Animated.sequence([
-                    Animated.timing(dot3Pulse, { toValue: 1.5, duration: 400, useNativeDriver: true }),
-                    Animated.timing(dot3Pulse, { toValue: 1, duration: 400, useNativeDriver: true }),
-                ]),
-            ])
-        );
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(dotPulse, { toValue: 1.6, duration: 550, useNativeDriver: true }),
+                Animated.timing(dotPulse, { toValue: 1.0, duration: 550, useNativeDriver: true }),
+            ]),
+        ).start();
 
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(progressWidth, {
+                    toValue: W * 0.55,
+                    duration: 1800,
+                    easing: Easing.inOut(Easing.ease),
+                    useNativeDriver: false,
+                }),
+                Animated.timing(progressWidth, { toValue: 0, duration: 0, useNativeDriver: false }),
+            ]),
+        ).start();
+
+        // ── Main entrance sequence ─────────────────────────────────────────────
         Animated.sequence([
-            // 1 — BG zoom-in settle
-            Animated.timing(bgScale, {
-                toValue: 1,
-                duration: 700,
-                easing: Easing.out(Easing.cubic),
-                useNativeDriver: true,
-            }),
+            // 1 — Background shapes bloom in
+            Animated.parallel([
+                Animated.timing(gridOpacity, { toValue: 1, duration: 450, useNativeDriver: true }),
+                Animated.timing(shape1Opacity, {
+                    toValue: 1,
+                    duration: 500,
+                    useNativeDriver: true,
+                }),
+                Animated.spring(shape1Scale, {
+                    toValue: 1,
+                    speed: 6,
+                    bounciness: 8,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(shape2Opacity, {
+                    toValue: 1,
+                    duration: 550,
+                    useNativeDriver: true,
+                }),
+                Animated.spring(shape2Scale, {
+                    toValue: 1,
+                    speed: 5,
+                    bounciness: 6,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(shape3Opacity, {
+                    toValue: 1,
+                    duration: 600,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(shape4Opacity, {
+                    toValue: 1,
+                    duration: 500,
+                    useNativeDriver: true,
+                }),
+                Animated.spring(shape4Scale, {
+                    toValue: 1,
+                    speed: 6,
+                    bounciness: 8,
+                    useNativeDriver: true,
+                }),
+            ]),
 
-            // 2 — Ripple rings burst out
-            Animated.stagger(120, [
+            // 2 — Rings ripple out
+            Animated.stagger(100, [
                 Animated.parallel([
-                    Animated.timing(ring1Opacity, { toValue: 0.25, duration: 400, useNativeDriver: true }),
-                    Animated.timing(ring1Scale, { toValue: 1, duration: 500, easing: Easing.out(Easing.back(1.4)), useNativeDriver: true }),
+                    Animated.timing(ringOpacity1, {
+                        toValue: 1,
+                        duration: 350,
+                        useNativeDriver: true,
+                    }),
+                    Animated.spring(ringScale1, {
+                        toValue: 1,
+                        speed: 7,
+                        bounciness: 10,
+                        useNativeDriver: true,
+                    }),
                 ]),
                 Animated.parallel([
-                    Animated.timing(ring2Opacity, { toValue: 0.18, duration: 400, useNativeDriver: true }),
-                    Animated.timing(ring2Scale, { toValue: 1, duration: 500, easing: Easing.out(Easing.back(1.2)), useNativeDriver: true }),
+                    Animated.timing(ringOpacity2, {
+                        toValue: 1,
+                        duration: 350,
+                        useNativeDriver: true,
+                    }),
+                    Animated.spring(ringScale2, {
+                        toValue: 1,
+                        speed: 6,
+                        bounciness: 8,
+                        useNativeDriver: true,
+                    }),
                 ]),
-                Animated.parallel([
-                    Animated.timing(ring3Opacity, { toValue: 0.1, duration: 400, useNativeDriver: true }),
-                    Animated.timing(ring3Scale, { toValue: 1, duration: 500, easing: Easing.out(Easing.back(1.0)), useNativeDriver: true }),
-                ]),
             ]),
 
-            // 3 — Logo drops in with glow
+            // 3 — Logo bursts in
             Animated.parallel([
-                Animated.spring(logoScale, { toValue: 1, useNativeDriver: true, speed: 12, bounciness: 16 }),
-                Animated.timing(logoOpacity, { toValue: 1, duration: 350, useNativeDriver: true }),
-                Animated.spring(logoY, { toValue: 0, useNativeDriver: true, speed: 14, bounciness: 10 }),
-                Animated.timing(glowOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
+                Animated.spring(logoScale, {
+                    toValue: 1,
+                    speed: 11,
+                    bounciness: 20,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(logoOpacity, { toValue: 1, duration: 380, useNativeDriver: true }),
             ]),
 
-            // 4 — Title slides up
+            // 4 — Brand name splits in from sides
             Animated.parallel([
-                Animated.timing(titleOpacity, { toValue: 1, duration: 320, useNativeDriver: true }),
-                Animated.spring(titleY, { toValue: 0, useNativeDriver: true, speed: 16, bounciness: 8 }),
+                Animated.timing(rentalOpacity, {
+                    toValue: 1,
+                    duration: 300,
+                    useNativeDriver: true,
+                }),
+                Animated.spring(rentalX, {
+                    toValue: 0,
+                    speed: 18,
+                    bounciness: 10,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(meetOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+                Animated.spring(meetX, {
+                    toValue: 0,
+                    speed: 18,
+                    bounciness: 10,
+                    useNativeDriver: true,
+                }),
             ]),
 
-            // 5 — Slogan
+            // 5 — Original tagline
             Animated.parallel([
-                Animated.timing(sloganOpacity, { toValue: 1, duration: 280, useNativeDriver: true }),
-                Animated.spring(sloganY, { toValue: 0, useNativeDriver: true, speed: 16, bounciness: 6 }),
+                Animated.timing(taglineOpacity, {
+                    toValue: 1,
+                    duration: 280,
+                    useNativeDriver: true,
+                }),
+                Animated.spring(taglineY, {
+                    toValue: 0,
+                    speed: 16,
+                    bounciness: 6,
+                    useNativeDriver: true,
+                }),
             ]),
 
-            // 6 — Badge pop
+            // 6 — Divider + slogan
             Animated.parallel([
-                Animated.spring(badgeScale, { toValue: 1, useNativeDriver: true, speed: 18, bounciness: 18 }),
+                Animated.spring(dividerScale, {
+                    toValue: 1,
+                    speed: 20,
+                    bounciness: 8,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(sloganOpacity, {
+                    toValue: 1,
+                    duration: 300,
+                    useNativeDriver: true,
+                }),
+                Animated.spring(sloganY, {
+                    toValue: 0,
+                    speed: 16,
+                    bounciness: 6,
+                    useNativeDriver: true,
+                }),
+            ]),
+
+            // 7 — Badge pops
+            Animated.parallel([
+                Animated.spring(badgeScale, {
+                    toValue: 1,
+                    speed: 20,
+                    bounciness: 22,
+                    useNativeDriver: true,
+                }),
                 Animated.timing(badgeOpacity, { toValue: 1, duration: 250, useNativeDriver: true }),
             ]),
 
-            // 7 — Loading dots appear
-            Animated.stagger(100, [
-                Animated.spring(dot1, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 12 }),
-                Animated.spring(dot2, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 12 }),
-                Animated.spring(dot3, { toValue: 1, useNativeDriver: true, speed: 22, bounciness: 12 }),
+            // 8 — Dots + footer
+            Animated.parallel([
+                Animated.timing(dotsOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+                Animated.timing(footerOpacity, {
+                    toValue: 1,
+                    duration: 350,
+                    useNativeDriver: true,
+                }),
             ]),
 
-            // 8 — Hold
-            Animated.delay(900),
+            // 9 — Hold
+            Animated.delay(1000),
 
-            // 9 — Fade out
-            Animated.timing(screenOpacity, { toValue: 0, duration: 450, useNativeDriver: true }),
+            // 10 — Fade out
+            Animated.timing(screenOpacity, { toValue: 0, duration: 480, useNativeDriver: true }),
         ]).start(handleNavigation);
-
-        shimmerLoop.start();
-        // Start dot pulse after dots appear
-        setTimeout(() => pulseDots.start(), 2200);
-
-        return () => {
-            shimmerLoop.stop();
-            pulseDots.stop();
-        };
     }, []);
 
-    // Shimmer interpolation for logo glow
-    const shimmerTranslate = shimmer.interpolate({
-        inputRange: [0, 1],
-        outputRange: [-W * 0.6, W * 0.6],
-    });
-
     return (
-        <Animated.View style={[styles.container, { opacity: screenOpacity }]}>
-            <StatusBar hidden />
+        <Animated.View style={[s.container, { opacity: screenOpacity }]}>
+            <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
 
-            {/* ── Full orange background with subtle zoom ── */}
-            <Animated.View style={[styles.background, { transform: [{ scale: bgScale }] }]}>
-                {/* Diagonal dark overlay stripe */}
-                <View style={styles.diagonalStripe} />
-                {/* Bottom-left corner glow */}
-                <View style={styles.cornerGlowBL} />
-                {/* Top-right corner glow */}
-                <View style={styles.cornerGlowTR} />
+            {/* ── Subtle dot grid ── */}
+            <Animated.View style={[s.dotGrid, { opacity: gridOpacity }]}>
+                {Array.from({ length: 10 }).map((_, r) =>
+                    Array.from({ length: 7 }).map((__, c) => (
+                        <View
+                            key={`${r}-${c}`}
+                            style={[s.gridDot, { top: r * (H / 10), left: c * (W / 7) }]}
+                        />
+                    )),
+                )}
             </Animated.View>
 
-            {/* ── Ripple rings behind logo ── */}
-            <Animated.View style={[styles.ring, styles.ring3, {
-                opacity: ring3Opacity,
-                transform: [{ scale: ring3Scale }],
-            }]} />
-            <Animated.View style={[styles.ring, styles.ring2, {
-                opacity: ring2Opacity,
-                transform: [{ scale: ring2Scale }],
-            }]} />
-            <Animated.View style={[styles.ring, styles.ring1, {
-                opacity: ring1Opacity,
-                transform: [{ scale: ring1Scale }],
-            }]} />
+            {/* ── Abstract shapes ── */}
 
-            {/* ── Center content ── */}
-            <View style={styles.center}>
+            {/* Top-left large orange arc */}
+            <Animated.View
+                style={[
+                    s.arcOrangeTL,
+                    { opacity: shape1Opacity, transform: [{ scale: shape1Scale }] },
+                ]}
+            />
 
-                {/* Logo container with glow */}
-                <Animated.View style={[styles.logoContainer, {
-                    opacity: logoOpacity,
-                    transform: [{ scale: logoScale }, { translateY: logoY }],
-                }]}>
-                    {/* Glow halo */}
-                    <Animated.View style={[styles.logoGlow, { opacity: glowOpacity }]} />
-                    {/* Logo card */}
-                    <View style={styles.logoCard}>
-                        <Image
-                            source={require('../assets/icon.webp')}
-                            style={styles.logo}
-                            resizeMode="contain"
-                        />
-                        {/* Shimmer sweep */}
-                        <Animated.View
-                            style={[styles.shimmer, { transform: [{ translateX: shimmerTranslate }, { rotate: '20deg' }] }]}
-                        />
-                    </View>
-                </Animated.View>
+            {/* Top-left inner grey ring */}
+            <Animated.View
+                style={[
+                    s.arcGreyTL,
+                    { opacity: shape2Opacity, transform: [{ scale: shape2Scale }] },
+                ]}
+            />
 
-                {/* Brand Name */}
-                <Animated.View style={[styles.titleRow, {
-                    opacity: titleOpacity,
-                    transform: [{ translateY: titleY }],
-                }]}>
-                    <Text style={styles.brandRental}>Rental</Text>
-                    <Text style={styles.brandMeet}>Meet</Text>
-                </Animated.View>
+            {/* Bottom-right large grey blob */}
+            <Animated.View style={[s.blobGreyBR, { opacity: shape3Opacity }]} />
 
-                {/* Divider line with dot */}
-                <Animated.View style={[styles.dividerRow, { opacity: sloganOpacity }]}>
-                    <View style={styles.dividerLine} />
-                    <View style={styles.dividerDot} />
-                    <View style={styles.dividerLine} />
-                </Animated.View>
+            {/* Bottom-right orange accent blob */}
+            <Animated.View
+                style={[
+                    s.blobOrangeBR,
+                    { opacity: shape4Opacity, transform: [{ scale: shape4Scale }] },
+                ]}
+            />
 
-                {/* Slogan */}
-                <Animated.Text style={[styles.slogan, {
-                    opacity: sloganOpacity,
-                    transform: [{ translateY: sloganY }],
-                }]}>
-                    India's 1st Meeting Venue{'\n'}Booking Platform
-                </Animated.Text>
-
-                {/* "First in India" badge */}
-                <Animated.View style={[styles.badge, {
-                    opacity: badgeOpacity,
-                    transform: [{ scale: badgeScale }],
-                }]}>
-                    <Text style={styles.badgeText}>#1 IN INDIA</Text>
-                </Animated.View>
-            </View>
-
-            {/* ── Animated loading dots ── */}
-            <View style={styles.dotsRow}>
-                {[
-                    { anim: dot1, pulse: dot1Pulse },
-                    { anim: dot2, pulse: dot2Pulse },
-                    { anim: dot3, pulse: dot3Pulse },
-                ].map(({ anim, pulse }, i) => (
-                    <Animated.View
+            {/* Top-right dot cluster */}
+            <Animated.View style={[s.dotClusterTR, { opacity: shape3Opacity }]}>
+                {[0, 1, 2, 3, 4, 5].map(i => (
+                    <View
                         key={i}
                         style={[
-                            styles.dot,
-                            i === 1 && styles.dotLarge,
-                            {
-                                opacity: anim,
-                                transform: [{ scale: Animated.multiply(anim, pulse) }],
-                            },
+                            s.clusterDot,
+                            i % 2 === 0 ? s.clusterOrange : s.clusterGrey,
+                            { top: (i % 3) * 16, left: Math.floor(i / 3) * 16 },
                         ]}
                     />
                 ))}
+            </Animated.View>
+
+            {/* Bottom-left diagonal lines */}
+            <Animated.View style={[s.diagonalBL, { opacity: shape2Opacity }]}>
+                {[0, 1, 2, 3].map(i => (
+                    <View key={i} style={s.diagLine} />
+                ))}
+            </Animated.View>
+
+            {/* ── CENTER ── */}
+            <View style={s.center}>
+                {/* Logo with ripple rings */}
+                <View style={s.logoArea}>
+                    <Animated.View
+                        style={[
+                            s.ring,
+                            s.ring2,
+                            {
+                                opacity: ringOpacity2,
+                                transform: [{ scale: ringScale2 }],
+                            },
+                        ]}
+                    />
+                    <Animated.View
+                        style={[
+                            s.ring,
+                            s.ring1,
+                            {
+                                opacity: ringOpacity1,
+                                transform: [{ scale: ringScale1 }],
+                            },
+                        ]}
+                    />
+                    <Animated.View
+                        style={[
+                            s.logoWrap,
+                            {
+                                opacity: logoOpacity,
+                                transform: [{ scale: logoScale }, { translateY: logoY }],
+                            },
+                        ]}
+                    >
+                        <Image
+                            source={require('../assets/logo1.png')}
+                            style={s.logoImg}
+                            resizeMode="contain"
+                        />
+                    </Animated.View>
+                </View>
+
+                {/* Full logo wordmark image — RentalMeet + tagline */}
+                <Animated.View
+                    style={[
+                        s.wordmarkWrap,
+                        {
+                            opacity: rentalOpacity,
+                            transform: [{ translateY: taglineY }],
+                        },
+                    ]}
+                >
+                    <Image
+                        source={require('../assets/fullName.png')}
+                        style={s.wordmarkImg}
+                        resizeMode="contain"
+                    />
+                </Animated.View>
+
+                {/* Divider */}
+                <Animated.View style={[s.dividerRow, { transform: [{ scaleX: dividerScale }] }]}>
+                    <View style={s.divLine} />
+                    <View style={s.divDot} />
+                    <View style={s.divLine} />
+                </Animated.View>
+
+                {/* India slogan */}
+                <Animated.Text
+                    style={[
+                        s.slogan,
+                        {
+                            opacity: sloganOpacity,
+                            transform: [{ translateY: sloganY }],
+                        },
+                    ]}
+                >
+                    India's 1st Meeting Venue Booking Platform
+                </Animated.Text>
+
+                {/* Badge */}
+                <Animated.View
+                    style={[
+                        s.badge,
+                        {
+                            opacity: badgeOpacity,
+                            transform: [{ scale: badgeScale }],
+                        },
+                    ]}
+                >
+                    <View style={s.badgeDot} />
+                    <Text style={s.badgeText}>#1 IN INDIA</Text>
+                </Animated.View>
             </View>
 
-            {/* ── Bottom tagline ── */}
-            <Animated.Text style={[styles.footerTag, { opacity: sloganOpacity }]}>
-                Book. Meet. Succeed.
-            </Animated.Text>
+            {/* ── Loading dots ── */}
+            <Animated.View style={[s.dotsRow, { opacity: dotsOpacity }]}>
+                <View style={s.dot} />
+                <Animated.View style={[s.dot, s.dotCenter, { transform: [{ scale: dotPulse }] }]} />
+                <View style={s.dot} />
+            </Animated.View>
 
-            {/* ── Version ── */}
-            <Text style={styles.version}>v1.0.0</Text>
+            {/* ── Footer ── */}
+            <Animated.View style={[s.footerWrap, { opacity: footerOpacity }]}>
+                <View style={s.progressTrack}>
+                    <Animated.View style={[s.progressFill, { width: progressWidth }]} />
+                </View>
+                <Text style={s.footerTag}>BOOK · MEET · SUCCEED</Text>
+                <Text style={s.version}>v1.0.0</Text>
+            </Animated.View>
         </Animated.View>
     );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
     container: {
         flex: 1,
+        backgroundColor: WHITE,
         alignItems: 'center',
         justifyContent: 'center',
         overflow: 'hidden',
     },
 
-    // ── Background ──
-    background: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: ORANGE,
-    },
-    diagonalStripe: {
+    // ── Grid ──
+    dotGrid: { ...StyleSheet.absoluteFillObject },
+    gridDot: {
         position: 'absolute',
-        bottom: -H * 0.15,
-        left: -W * 0.2,
-        width: W * 1.5,
-        height: H * 0.38,
-        backgroundColor: ORANGE_DARK,
-        opacity: 0.45,
-        transform: [{ rotate: '-8deg' }],
-    },
-    cornerGlowBL: {
-        position: 'absolute',
-        bottom: -W * 0.3,
-        left: -W * 0.3,
-        width: W * 0.65,
-        height: W * 0.65,
-        borderRadius: W * 0.325,
-        backgroundColor: ORANGE_DEEP,
-        opacity: 0.4,
-    },
-    cornerGlowTR: {
-        position: 'absolute',
-        top: -W * 0.25,
-        right: -W * 0.25,
-        width: W * 0.55,
-        height: W * 0.55,
-        borderRadius: W * 0.275,
-        backgroundColor: '#FFA500',
-        opacity: 0.3,
+        width: 3,
+        height: 3,
+        borderRadius: 2,
+        backgroundColor: 'rgba(180,180,180,0.18)',
     },
 
-    // ── Ripple rings ──
-    ring: {
+    // ── Abstract shapes ──
+    arcOrangeTL: {
         position: 'absolute',
-        borderRadius: 9999,
-        borderWidth: 2,
-        borderColor: WHITE,
+        top: -W * 0.32,
+        left: -W * 0.32,
+        width: W * 0.72,
+        height: W * 0.72,
+        borderRadius: W * 0.36,
+        backgroundColor: ORANGE_MED,
     },
-    ring1: {
-        width: W * 0.58,
-        height: W * 0.58,
+    arcGreyTL: {
+        position: 'absolute',
+        top: -W * 0.2,
+        left: -W * 0.2,
+        width: W * 0.52,
+        height: W * 0.52,
+        borderRadius: W * 0.26,
+        borderWidth: 1.5,
+        borderColor: GREY_BORDER,
+        backgroundColor: 'transparent',
     },
-    ring2: {
-        width: W * 0.78,
-        height: W * 0.78,
+    blobGreyBR: {
+        position: 'absolute',
+        bottom: -W * 0.28,
+        right: -W * 0.28,
+        width: W * 0.7,
+        height: W * 0.7,
+        borderRadius: W * 0.35,
+        backgroundColor: GREY_MED,
     },
-    ring3: {
-        width: W * 0.98,
-        height: W * 0.98,
+    blobOrangeBR: {
+        position: 'absolute',
+        bottom: -W * 0.12,
+        right: -W * 0.12,
+        width: W * 0.38,
+        height: W * 0.38,
+        borderRadius: W * 0.19,
+        backgroundColor: ORANGE_LIGHT,
+    },
+    dotClusterTR: {
+        position: 'absolute',
+        top: H * 0.1,
+        right: 28,
+        width: 48,
+        height: 48,
+    },
+    clusterDot: { position: 'absolute', width: 6, height: 6, borderRadius: 3 },
+    clusterOrange: { backgroundColor: 'rgba(242,146,0,0.45)' },
+    clusterGrey: { backgroundColor: 'rgba(120,120,120,0.25)' },
+    diagonalBL: {
+        position: 'absolute',
+        bottom: H * 0.14,
+        left: 20,
+        gap: 8,
+        transform: [{ rotate: '-30deg' }],
+    },
+    diagLine: {
+        width: 32,
+        height: 1.5,
+        backgroundColor: 'rgba(120,120,120,0.2)',
+        borderRadius: 1,
+        marginBottom: 8,
     },
 
     // ── Center ──
-    center: {
-        alignItems: 'center',
-        gap: 12,
-    },
+    center: { alignItems: 'center', gap: 8 },
 
-    // Logo
-    logoContainer: {
+    logoArea: {
+        width: 160,
+        height: 160,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 8,
+        marginBottom: 16,
     },
-    logoGlow: {
+    ring: {
         position: 'absolute',
-        width: 184,
-        height: 184,
-        borderRadius: 92,
-        backgroundColor: 'rgba(255,255,255,0.22)',
-        shadowColor: WHITE,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 1,
-        shadowRadius: 48,
-        elevation: 0,
+        borderRadius: 9999,
+        borderWidth: 1,
     },
-    logoCard: {
-        width: 148,
-        height: 148,
-        borderRadius: 74,          // ← perfect circle
-        overflow: 'hidden',
-        borderWidth: 4,
-        borderColor: 'rgba(255,255,255,0.9)',
+    ring1: { width: 140, height: 140, borderColor: 'rgba(242,146,0,0.22)' },
+    ring2: { width: 172, height: 172, borderColor: 'rgba(242,146,0,0.10)' },
+
+    logoWrap: { width: 110, height: 110, alignItems: 'center', justifyContent: 'center' },
+    logoImg: { width: 110, height: 110 },
+
+    // ── Wordmark image (full logo: icon + RentalMeet + tagline) ──
+    wordmarkWrap: {
         alignItems: 'center',
         justifyContent: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 14 },
-        shadowOpacity: 0.3,
-        shadowRadius: 28,
-        elevation: 20,
+        marginBottom: 4,
     },
-    logo: {
-        width: '100%',
-        height: '100%',
-    },
-    shimmer: {
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: 60,
-        height: '100%',
-        backgroundColor: 'rgba(255,255,255,0.28)',
+    wordmarkImg: {
+        width: W * 0.72,
+        height: 80,
     },
 
-    // Title
-    titleRow: {
-        flexDirection: 'row',
-        alignItems: 'baseline',
-        marginTop: 4,
-    },
-    brandRental: {
-        fontSize: 42,
-        fontWeight: '300',
-        color: WHITE,
-        letterSpacing: -1,
-        textShadowColor: 'rgba(0,0,0,0.2)',
-        textShadowOffset: { width: 0, height: 2 },
-        textShadowRadius: 8,
-    },
-    brandMeet: {
-        fontSize: 42,
-        fontWeight: '900',
-        color: CHARCOAL,
-        letterSpacing: -1,
-        textShadowColor: 'rgba(0,0,0,0.15)',
-        textShadowOffset: { width: 0, height: 2 },
-        textShadowRadius: 6,
-    },
+    // ── Divider ──
+    dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 6 },
+    divLine: { width: 40, height: 1.5, backgroundColor: 'rgba(120,120,120,0.3)', borderRadius: 1 },
+    divDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: ORANGE },
 
-    // Divider
-    dividerRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        marginVertical: 4,
-    },
-    dividerLine: {
-        width: 48,
-        height: 1.5,
-        backgroundColor: 'rgba(255,255,255,0.55)',
-        borderRadius: 2,
-    },
-    dividerDot: {
-        width: 5,
-        height: 5,
-        borderRadius: 3,
-        backgroundColor: WHITE,
-    },
-
-    // Slogan
+    // ── Slogan ──
     slogan: {
-        fontSize: 15,
-        fontWeight: '700',
-        color: WHITE,
+        fontSize: 12,
+        fontFamily: 'Exo2-Medium',
+        color: GREY,
         textAlign: 'center',
         letterSpacing: 0.4,
-        lineHeight: 22,
-        textShadowColor: 'rgba(0,0,0,0.18)',
-        textShadowOffset: { width: 0, height: 1 },
-        textShadowRadius: 4,
+        paddingHorizontal: 28,
+        lineHeight: 18,
     },
 
-    // Badge
+    // ── Badge ──
     badge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 7,
         marginTop: 6,
         paddingHorizontal: 16,
-        paddingVertical: 6,
-        borderRadius: 20,
+        paddingVertical: 7,
+        borderRadius: 100,
         backgroundColor: CHARCOAL,
-        borderWidth: 1.5,
-        borderColor: 'rgba(255,255,255,0.2)',
     },
-    badgeText: {
-        fontSize: 11,
-        fontWeight: '800',
-        color: ORANGE,
-        letterSpacing: 2.5,
-    },
+    badgeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: ORANGE },
+    badgeText: { fontSize: 10.5, fontFamily: 'Exo2-Bold', color: ORANGE, letterSpacing: 2.8 },
 
-    // Loading dots
+    // ── Dots ──
     dotsRow: {
         position: 'absolute',
         bottom: H * 0.13,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
+        gap: 8,
     },
-    dot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: 'rgba(255,255,255,0.6)',
-    },
-    dotLarge: {
-        width: 12,
-        height: 12,
-        borderRadius: 6,
-        backgroundColor: WHITE,
+    dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: 'rgba(120,120,120,0.3)' },
+    dotCenter: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: ORANGE,
+        shadowColor: ORANGE,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.5,
+        shadowRadius: 6,
+        elevation: 4,
     },
 
-    // Footer
-    footerTag: {
+    // ── Footer ──
+    footerWrap: {
         position: 'absolute',
-        bottom: H * 0.075,
-        fontSize: 12,
-        fontWeight: '600',
-        color: 'rgba(255,255,255,0.75)',
-        letterSpacing: 3,
+        bottom: 0,
+        left: 0,
+        right: 0,
+        alignItems: 'center',
+        paddingBottom: 28,
+        gap: 6,
+    },
+    progressTrack: {
+        width: W * 0.55,
+        height: 2,
+        backgroundColor: 'rgba(180,180,180,0.3)',
+        borderRadius: 2,
+        overflow: 'hidden',
+        marginBottom: 4,
+    },
+    progressFill: {
+        height: '100%',
+        backgroundColor: ORANGE,
+        borderRadius: 2,
+    },
+    footerTag: {
+        fontSize: 9.5,
+        fontFamily: 'Exo2-SemiBold',
+        color: 'rgba(120,120,120,0.5)',
+        letterSpacing: 3.5,
         textTransform: 'uppercase',
     },
     version: {
-        position: 'absolute',
-        bottom: 24,
-        fontSize: 11,
-        color: 'rgba(255,255,255,0.4)',
-        fontWeight: '500',
+        fontSize: 10,
+        fontFamily: 'Exo2-Regular',
+        color: 'rgba(180,180,180,0.6)',
         letterSpacing: 0.8,
     },
 });

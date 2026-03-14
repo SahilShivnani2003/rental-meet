@@ -2,7 +2,7 @@ import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from '../screens/auth/login';
-import SplashScreen from '../screens/splash-c';
+import SplashScreen from '../screens/dummyScreen';
 import RegisterTypeScreen from '../screens/auth/resigter-type';
 import { ClientTabNavigation } from './tabNavigations/ClientTabNavigation';
 import { OwnerTabNavigation } from './tabNavigations/OwnerTabNavigation';
