@@ -2,7 +2,7 @@ import React from 'react';
 import { NavigationContainer, NavigatorScreenParams } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from '../screens/auth/login';
-import SplashScreen from '../screens/dummyScreen';
+import SplashScreen from '../screens/splashScreen';
 import RegisterTypeScreen from '../screens/auth/resigter-type';
 import { ClientTabNavigation, ClientTabParamList } from './tabNavigations/ClientTabNavigation';
 import { OwnerTabNavigation, OwnerTabParamList } from './tabNavigations/OwnerTabNavigation';
@@ -18,10 +18,10 @@ import BookingDetailScreen from '../screens/BookingDetailScreen';
 export type RootStackParamList = {
     splash: undefined;
     login: undefined;
-    main: NavigatorScreenParams<tabParamList>;
+    main: NavigatorScreenParams<tabParamList> | undefined;
     registerType: undefined;
-    client: NavigatorScreenParams<ClientTabParamList>;
-    owner: NavigatorScreenParams<OwnerTabParamList>;
+    client: NavigatorScreenParams<ClientTabParamList> | undefined;
+    owner: NavigatorScreenParams<OwnerTabParamList> | undefined;
     registerVenue: undefined;
     register: {
         role: string;

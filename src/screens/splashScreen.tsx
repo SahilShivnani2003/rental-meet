@@ -411,7 +411,7 @@ export default function SplashScreen({ navigation }: SplashProps) {
                     ]}
                 >
                     <Image
-                        source={require('../assets/fullName.png')}
+                        source={require('../assets/NameLogo.png')}
                         style={s.wordmarkImg}
                         resizeMode="contain"
                     />

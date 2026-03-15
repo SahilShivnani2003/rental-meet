@@ -183,16 +183,11 @@ export default function LoginScreen({ navigation }: LoginProps) {
                 >
                     <View style={styles.logoCard}>
                         <Image
-                            source={require('../../assets/logo.jpeg')}
+                            source={require('../../assets/MainLogo.png')}
                             style={styles.logo}
                             resizeMode="contain"
                         />
-                    </View>
-                    <View style={styles.brandRow}>
-                        <Text style={styles.brandRental}>Rental</Text>
-                        <Text style={styles.brandMeet}>Meet</Text>
-                    </View>
-                    <Text style={styles.brandTagline}>BOOK YOUR PREMIUM MEETING VENUES</Text>
+                    </View>                    
                 </Animated.View>
 
                 {/* ── Login card ── */}
@@ -357,7 +352,7 @@ const styles = StyleSheet.create({
     // Logo
     logoArea: { alignItems: 'center', paddingTop: SCREEN_HEIGHT * 0.09, marginBottom: Spacing.xxl },
     logoCard: {
-        width: 110,
+        width: 200,
         height: 110,
         alignItems: 'center',
         justifyContent: 'center',
