@@ -514,7 +514,7 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                         <View style={styles.avatarWrapper}>
                             <View style={styles.avatarRing}>
                                 <View style={styles.avatar}>
-                                    <Text style={styles.avatarInitials}>{user.initials}</Text>
+                                    <Text style={styles.avatarInitials}>{user.name.slice(0,2).toUpperCase()}</Text>
                                 </View>
                             </View>
                             <TouchableOpacity style={styles.cameraBtn}>

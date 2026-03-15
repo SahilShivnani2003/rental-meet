@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import {
     View,
     Text,
@@ -10,78 +10,76 @@ import {
     Alert,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { useNavigation } from '@react-navigation/native';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
+import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
+import { OwnerTabParamList } from '../../navigations/tabNavigations/OwnerTabNavigation';
+import { useAuthStore } from '../../store/auth-store';
+import { ownerAPI } from '../../service/apis/owner';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const MOCK_OWNER = {
-    name: 'Alex Johnson',
-    role: 'OWNER PARTNER',
-    initials: 'AJ',
+// ─── API response types ───────────────────────────────────────────────────────
+type DashboardStats = {
+    totalVenues: number;
+    approvedVenues: number;
+    pendingVenues: number;
+    rejectedVenues: number;
+    totalEarnings: number;
+    totalBookings: number;
+    pendingBookings: number;
+    confirmedBookings: number;
 };
 
-const STATS = [
-    {
-        id: 'venues',
-        label: 'Total Venues',
-        value: 0,
-        icon: 'business-outline',
-        color: Colors.primary,
-        bg: Colors.primaryLight,
-        prefix: '',
-    },
-    {
-        id: 'approved',
-        label: 'Approved',
-        value: 0,
-        icon: 'checkmark-circle-outline',
-        color: Colors.success,
-        bg: Colors.successLight,
-        prefix: '',
-    },
-    {
-        id: 'bookings',
-        label: 'Total Bookings',
-        value: 0,
-        icon: 'calendar-outline',
-        color: Colors.info,
-        bg: Colors.infoLight,
-        prefix: '',
-    },
-    {
-        id: 'earnings',
-        label: 'Total Earnings',
-        value: 0,
-        icon: 'cash-outline',
-        color: '#7C3AED',
-        bg: '#EDE9FE',
-        prefix: '₹',
-    },
-];
+type RecentVenue = {
+    _id: string;
+    businessName: string;
+    status: string;
+    venueType?: string[];
+    location?: { city?: string; area?: string };
+    rating?: number;
+    totalBookings?: number;
+};
 
-// ─── Animated number counter ──────────────────────────────────────────────────
-function AnimatedStat({ value }: { value: number }) {
-    const anim = useRef(new Animated.Value(0)).current;
-    useEffect(() => {
-        Animated.timing(anim, {
-            toValue: value,
-            duration: 800,
-            useNativeDriver: false,
-        }).start();
-    }, [value]);
-    return (
-        <Animated.Text style={styles.statValueNum}>
-            {anim.interpolate({
-                inputRange: [0, Math.max(value, 1)],
-                outputRange: ['0', String(value)],
-            })}
-        </Animated.Text>
-    );
-}
+type RecentBooking = {
+    _id: string;
+    bookingNumber?: string;
+    bookingDate: string;
+    status: string;
+    amount: number;
+    bookingType?: string;
+    customerDetails?: { name?: string; eventType?: string };
+    venue?: { businessName?: string };
+};
+
+// ─── Stat card config ─────────────────────────────────────────────────────────
+type StatConfig = {
+    id: string;
+    label: string;
+    value: number;
+    prefix: string;
+    icon: string;
+    color: string;
+    bg: string;
+};
+
+// ─── Status colour map ────────────────────────────────────────────────────────
+const STATUS_MAP: Record<string, { color: string; bg: string; label: string }> = {
+    approved: { color: Colors.success, bg: Colors.successLight, label: 'Approved' },
+    pending: { color: Colors.warning, bg: Colors.warningLight, label: 'Pending' },
+    confirmed: { color: Colors.success, bg: Colors.successLight, label: 'Confirmed' },
+    completed: { color: Colors.info, bg: Colors.infoLight, label: 'Completed' },
+    cancelled: { color: Colors.danger, bg: Colors.dangerLight, label: 'Cancelled' },
+    rejected: { color: Colors.danger, bg: Colors.dangerLight, label: 'Rejected' },
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+const fmtCurrency = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+
+const fmtDate = (str: string) =>
+    new Date(str).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
 // ─── Stat card ────────────────────────────────────────────────────────────────
-function StatCard({ stat, index }: { stat: (typeof STATS)[0]; index: number }) {
+function StatCard({ stat, index }: { stat: StatConfig; index: number }) {
     const slideAnim = useRef(new Animated.Value(30)).current;
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -105,29 +103,15 @@ function StatCard({ stat, index }: { stat: (typeof STATS)[0]; index: number }) {
     }, []);
 
     const onPressIn = () =>
-        Animated.spring(scaleAnim, {
-            toValue: 0.95,
-            useNativeDriver: true,
-            speed: 30,
-        }).start();
+        Animated.spring(scaleAnim, { toValue: 0.95, useNativeDriver: true, speed: 30 }).start();
     const onPressOut = () =>
-        Animated.spring(scaleAnim, {
-            toValue: 1,
-            useNativeDriver: true,
-            speed: 22,
-        }).start();
+        Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 22 }).start();
 
     return (
         <Animated.View
             style={[
                 styles.statCard,
-                {
-                    opacity: fadeAnim,
-                    transform: [
-                        { translateY: slideAnim },
-                        { scale: scaleAnim },
-                    ],
-                },
+                { opacity: fadeAnim, transform: [{ translateY: slideAnim }, { scale: scaleAnim }] },
             ]}
         >
             <TouchableOpacity
@@ -136,42 +120,23 @@ function StatCard({ stat, index }: { stat: (typeof STATS)[0]; index: number }) {
                 activeOpacity={1}
                 style={styles.statCardInner}
             >
-                {/* Decorative arc */}
                 <View style={[styles.statArc, { backgroundColor: stat.bg }]} />
-                <View
-                    style={[styles.statIconWrap, { backgroundColor: stat.bg }]}
-                >
-                    <Ionicons
-                        name={stat.icon as any}
-                        size={20}
-                        color={stat.color}
-                    />
+                <View style={[styles.statIconWrap, { backgroundColor: stat.bg }]}>
+                    <Ionicons name={stat.icon as any} size={20} color={stat.color} />
                 </View>
                 <Text style={[styles.statValueNum, { color: stat.color }]}>
                     {stat.prefix}
-                    {stat.value}
+                    {stat.value.toLocaleString('en-IN')}
                 </Text>
                 <Text style={styles.statLabel}>{stat.label}</Text>
-                {/* Bottom accent line */}
-                <View
-                    style={[
-                        styles.statAccentLine,
-                        { backgroundColor: stat.color },
-                    ]}
-                />
+                <View style={[styles.statAccentLine, { backgroundColor: stat.color }]} />
             </TouchableOpacity>
         </Animated.View>
     );
 }
 
 // ─── Section header ───────────────────────────────────────────────────────────
-function SectionHeader({
-    title,
-    onViewAll,
-}: {
-    title: string;
-    onViewAll: () => void;
-}) {
+function SectionHeader({ title, onViewAll }: { title: string; onViewAll: () => void }) {
     return (
         <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
@@ -180,11 +145,7 @@ function SectionHeader({
             </View>
             <TouchableOpacity style={styles.viewAllBtn} onPress={onViewAll}>
                 <Text style={styles.viewAllText}>View All</Text>
-                <Ionicons
-                    name="arrow-forward"
-                    size={13}
-                    color={Colors.primary}
-                />
+                <Ionicons name="arrow-forward" size={13} color={Colors.primary} />
             </TouchableOpacity>
         </View>
     );
@@ -213,22 +174,14 @@ function EmptyState({
                 speed: 20,
                 bounciness: 10,
             }),
-            Animated.spring(scaleAnim, {
-                toValue: 1,
-                useNativeDriver: true,
-                speed: 20,
-            }),
+            Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 20 }),
         ]).start();
     };
 
     return (
         <View style={styles.emptyWrap}>
             <View style={styles.emptyIconCircle}>
-                <Ionicons
-                    name={icon as any}
-                    size={40}
-                    color={Colors.primaryBorder}
-                />
+                <Ionicons name={icon as any} size={40} color={Colors.primaryBorder} />
             </View>
             <Text style={styles.emptyTitle}>{title}</Text>
             <Text style={styles.emptySubtitle}>{subtitle}</Text>
@@ -251,7 +204,7 @@ function EmptyState({
     );
 }
 
-// ─── Quick insight row ────────────────────────────────────────────────────────
+// ─── Insight row ─────────────────────────────────────────────────────────────
 function InsightRow({
     icon,
     label,
@@ -265,9 +218,7 @@ function InsightRow({
 }) {
     return (
         <View style={styles.insightRow}>
-            <View
-                style={[styles.insightIcon, { backgroundColor: color + '22' }]}
-            >
+            <View style={[styles.insightIcon, { backgroundColor: color + '22' }]}>
                 <Ionicons name={icon as any} size={15} color={color} />
             </View>
             <Text style={styles.insightLabel}>{label}</Text>
@@ -276,19 +227,110 @@ function InsightRow({
     );
 }
 
+// ─── Recent venue row ─────────────────────────────────────────────────────────
+function VenueRow({ venue }: { venue: RecentVenue }) {
+    const st = STATUS_MAP[venue.status] ?? STATUS_MAP.pending;
+    return (
+        <View style={styles.listRow}>
+            <View style={[styles.listAccent, { backgroundColor: st.color }]} />
+            <View style={styles.listBody}>
+                <View style={styles.listTopRow}>
+                    <Text style={styles.listTitle} numberOfLines={1}>
+                        {venue.businessName}
+                    </Text>
+                    <View style={[styles.statusChip, { backgroundColor: st.bg }]}>
+                        <Text style={[styles.statusChipText, { color: st.color }]}>{st.label}</Text>
+                    </View>
+                </View>
+                <View style={styles.listMeta}>
+                    {venue.location?.city ? (
+                        <View style={styles.metaItem}>
+                            <Ionicons
+                                name="location-outline"
+                                size={11}
+                                color={Colors.charcoalLight}
+                            />
+                            <Text style={styles.metaText}>{venue.location.city}</Text>
+                        </View>
+                    ) : null}
+                    {venue.venueType?.length ? (
+                        <View style={styles.metaItem}>
+                            <Ionicons
+                                name="business-outline"
+                                size={11}
+                                color={Colors.charcoalLight}
+                            />
+                            <Text style={styles.metaText}>{venue.venueType[0]}</Text>
+                        </View>
+                    ) : null}
+                    {venue.totalBookings !== undefined ? (
+                        <View style={styles.metaItem}>
+                            <Ionicons
+                                name="bookmark-outline"
+                                size={11}
+                                color={Colors.charcoalLight}
+                            />
+                            <Text style={styles.metaText}>{venue.totalBookings} bookings</Text>
+                        </View>
+                    ) : null}
+                </View>
+            </View>
+            <Ionicons name="chevron-forward" size={15} color={Colors.border} />
+        </View>
+    );
+}
+
+// ─── Recent booking row ───────────────────────────────────────────────────────
+function BookingRow({ booking }: { booking: RecentBooking }) {
+    const st = STATUS_MAP[booking.status] ?? STATUS_MAP.pending;
+    return (
+        <View style={styles.listRow}>
+            <View style={[styles.listAccent, { backgroundColor: st.color }]} />
+            <View style={styles.listBody}>
+                <View style={styles.listTopRow}>
+                    <Text style={styles.listTitle} numberOfLines={1}>
+                        {booking.venue?.businessName ?? booking.customerDetails?.name ?? '—'}
+                    </Text>
+                    <View style={[styles.statusChip, { backgroundColor: st.bg }]}>
+                        <Text style={[styles.statusChipText, { color: st.color }]}>{st.label}</Text>
+                    </View>
+                </View>
+                <View style={styles.listMeta}>
+                    <View style={styles.metaItem}>
+                        <Ionicons name="calendar-outline" size={11} color={Colors.charcoalLight} />
+                        <Text style={styles.metaText}>{fmtDate(booking.bookingDate)}</Text>
+                    </View>
+                    {booking.customerDetails?.eventType ? (
+                        <View style={styles.metaItem}>
+                            <Ionicons name="flag-outline" size={11} color={Colors.charcoalLight} />
+                            <Text style={styles.metaText}>{booking.customerDetails.eventType}</Text>
+                        </View>
+                    ) : null}
+                </View>
+                <Text style={styles.bookingAmount}>{fmtCurrency(booking.amount)}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={15} color={Colors.border} />
+        </View>
+    );
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
-export default function OwnerDashboardScreen() {
-    const navigation = useNavigation<any>();
+type dashboardProps = NativeBottomTabScreenProps<OwnerTabParamList, 'dashboard'>;
+
+export default function OwnerDashboardScreen({ navigation }: dashboardProps) {
+    const { user } = useAuthStore();
     const headerSlide = useRef(new Animated.Value(-20)).current;
     const headerFade = useRef(new Animated.Value(0)).current;
 
+    // FIX: properly typed state
+    const [stats, setStats] = useState<DashboardStats | null>(null);
+    const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
+    const [recentVenues, setRecentVenues] = useState<RecentVenue[]>([]);
+
+    // FIX: call fetchStats on mount
     useEffect(() => {
         Animated.parallel([
-            Animated.timing(headerFade, {
-                toValue: 1,
-                duration: 420,
-                useNativeDriver: true,
-            }),
+            Animated.timing(headerFade, { toValue: 1, duration: 420, useNativeDriver: true }),
             Animated.spring(headerSlide, {
                 toValue: 0,
                 useNativeDriver: true,
@@ -296,29 +338,81 @@ export default function OwnerDashboardScreen() {
                 bounciness: 5,
             }),
         ]).start();
+
+        fetchStats();
     }, []);
+
+    const fetchStats = async () => {
+        try {
+            const response = await ownerAPI.getDashboard();
+            if (response?.success) {
+                setStats(response.stats);
+                setRecentBookings(response.recentBookings ?? []);
+                setRecentVenues(response.recentVenues ?? []);
+            }
+        } catch (error) {
+            console.error('FETCH OWNER DASHBOARD STATS ERROR : ', error);
+        }
+    };
+
+    // FIX: build STATS array from API response instead of undefined constant
+    const statCards: StatConfig[] = useMemo(
+        () => [
+            {
+                id: 'venues',
+                label: 'Total Venues',
+                value: stats?.totalVenues ?? 0,
+                prefix: '',
+                icon: 'business-outline',
+                color: Colors.primary,
+                bg: Colors.primaryLight,
+            },
+            {
+                id: 'bookings',
+                label: 'Total Bookings',
+                value: stats?.totalBookings ?? 0,
+                prefix: '',
+                icon: 'calendar-outline',
+                color: Colors.info,
+                bg: Colors.infoLight,
+            },
+            {
+                id: 'earnings',
+                label: 'Earnings',
+                value: stats?.totalEarnings ?? 0,
+                prefix: '₹',
+                icon: 'cash-outline',
+                color: Colors.success,
+                bg: Colors.successLight,
+            },
+            {
+                id: 'pending',
+                label: 'Pending',
+                value: stats?.pendingBookings ?? 0,
+                prefix: '',
+                icon: 'time-outline',
+                color: Colors.warning,
+                bg: Colors.warningLight,
+            },
+        ],
+        [stats],
+    );
 
     return (
         <View style={styles.container}>
-            {/* ── Branded header ── */}
+            {/* ── Header ── */}
             <Animated.View
                 style={[
                     styles.header,
-                    {
-                        opacity: headerFade,
-                        transform: [{ translateY: headerSlide }],
-                    },
+                    { opacity: headerFade, transform: [{ translateY: headerSlide }] },
                 ]}
             >
-                {/* Amber accent bar */}
                 <View style={styles.headerAccentBar} />
-
                 <View style={styles.headerContent}>
                     <View style={{ flex: 1 }}>
                         <Text style={styles.headerEyebrow}>WELCOME BACK!</Text>
                         <Text style={styles.headerTitle}>Dashboard</Text>
                     </View>
-
                     <View style={styles.headerRight}>
                         <TouchableOpacity
                             style={styles.headerIconBtn}
@@ -329,21 +423,16 @@ export default function OwnerDashboardScreen() {
                                 size={20}
                                 color={Colors.charcoal}
                             />
-                            {/* Amber unread dot */}
                             <View style={styles.notifDot} />
                         </TouchableOpacity>
                         <View style={styles.avatar}>
-                            <Text style={styles.avatarText}>
-                                {MOCK_OWNER.initials}
-                            </Text>
+                            <Text style={styles.avatarText}>{user?.name.slice(0,2).toUpperCase()}</Text>
                         </View>
                     </View>
                 </View>
-
-                {/* Owner role chip */}
                 <View style={styles.ownerChip}>
                     <View style={styles.ownerChipDot} />
-                    <Text style={styles.ownerChipText}>{MOCK_OWNER.role}</Text>
+                    <Text style={styles.ownerChipText}>{user?.role}</Text>
                 </View>
             </Animated.View>
 
@@ -352,71 +441,97 @@ export default function OwnerDashboardScreen() {
                 contentContainerStyle={styles.contentPadding}
                 showsVerticalScrollIndicator={false}
             >
-                {/* ── Stats 2×2 grid ── */}
+                {/* ── Stats grid from API ── */}
                 <View style={styles.statsGrid}>
-                    {STATS.map((stat, i) => (
+                    {statCards.map((stat, i) => (
                         <StatCard key={stat.id} stat={stat} index={i} />
                     ))}
                 </View>
 
-                {/* ── Performance insights card ── */}
+                {/* ── Performance insights ── */}
                 <View style={styles.insightsCard}>
                     <View style={styles.insightsHeader}>
-                        <Ionicons
-                            name="trending-up-outline"
-                            size={18}
-                            color={Colors.primary}
-                        />
-                        <Text style={styles.insightsTitle}>This Month</Text>
+                        <Ionicons name="trending-up-outline" size={18} color={Colors.primary} />
+                        <Text style={styles.insightsTitle}>Venue Status</Text>
                     </View>
                     <InsightRow
-                        icon="eye-outline"
-                        label="Profile Views"
-                        value="—"
+                        icon="checkmark-circle-outline"
+                        label="Approved Venues"
+                        value={String(stats?.approvedVenues ?? 0)}
+                        color={Colors.success}
+                    />
+                    <View style={styles.insightDivider} />
+                    <InsightRow
+                        icon="time-outline"
+                        label="Pending Approval"
+                        value={String(stats?.pendingVenues ?? 0)}
+                        color={Colors.warning}
+                    />
+                    <View style={styles.insightDivider} />
+                    <InsightRow
+                        icon="checkmark-done-outline"
+                        label="Confirmed Bookings"
+                        value={String(stats?.confirmedBookings ?? 0)}
                         color={Colors.info}
                     />
                     <View style={styles.insightDivider} />
                     <InsightRow
-                        icon="star-outline"
-                        label="Avg. Rating"
-                        value="—"
-                        color={Colors.primary}
-                    />
-                    <View style={styles.insightDivider} />
-                    <InsightRow
-                        icon="people-outline"
-                        label="Repeat Clients"
-                        value="—"
-                        color={Colors.success}
+                        icon="close-circle-outline"
+                        label="Rejected Venues"
+                        value={String(stats?.rejectedVenues ?? 0)}
+                        color={Colors.danger}
                     />
                 </View>
 
-                {/* ── My Venues ── */}
+                {/* ── My Venues — from API ── */}
                 <View style={styles.section}>
-                    <SectionHeader
-                        title="My Venues"
-                        onViewAll={() => Alert.alert('My Venues')}
-                    />
-                    <EmptyState
-                        icon="business-outline"
-                        title="No venues yet"
-                        subtitle="Start by adding your first venue and reach thousands of clients."
-                        ctaLabel="Add Your First Venue"
-                        onCta={() => Alert.alert('Add Venue')}
-                    />
+                    <SectionHeader title="My Venues" onViewAll={() => Alert.alert('My Venues')} />
+                    {recentVenues.length === 0 ? (
+                        <EmptyState
+                            icon="business-outline"
+                            title="No venues yet"
+                            subtitle="Start by adding your first venue and reach thousands of clients."
+                            ctaLabel="Add Your First Venue"
+                            onCta={() => Alert.alert('Add Venue')}
+                        />
+                    ) : (
+                        <View style={styles.listContainer}>
+                            {recentVenues.map((v, i) => (
+                                <View key={v._id}>
+                                    <VenueRow venue={v} />
+                                    {i < recentVenues.length - 1 && (
+                                        <View style={styles.rowDivider} />
+                                    )}
+                                </View>
+                            ))}
+                        </View>
+                    )}
                 </View>
 
-                {/* ── Recent Bookings ── */}
+                {/* ── Recent Bookings — from API ── */}
                 <View style={[styles.section, { marginBottom: 110 }]}>
                     <SectionHeader
                         title="Recent Bookings"
                         onViewAll={() => Alert.alert('Bookings')}
                     />
-                    <EmptyState
-                        icon="calendar-outline"
-                        title="No bookings yet"
-                        subtitle="Bookings will appear here once customers book your venues."
-                    />
+                    {recentBookings.length === 0 ? (
+                        <EmptyState
+                            icon="calendar-outline"
+                            title="No bookings yet"
+                            subtitle="Bookings will appear here once customers book your venues."
+                        />
+                    ) : (
+                        <View style={styles.listContainer}>
+                            {recentBookings.map((b, i) => (
+                                <View key={b._id}>
+                                    <BookingRow booking={b} />
+                                    {i < recentBookings.length - 1 && (
+                                        <View style={styles.rowDivider} />
+                                    )}
+                                </View>
+                            ))}
+                        </View>
+                    )}
                 </View>
             </ScrollView>
         </View>
@@ -429,7 +544,7 @@ const STAT_W = (SCREEN_WIDTH - 32 - Spacing.lg * 3) / 2;
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
 
-    // ── Header ──
+    // Header
     header: {
         backgroundColor: Colors.surface,
         borderBottomLeftRadius: Radii.xxl,
@@ -462,11 +577,7 @@ const styles = StyleSheet.create({
         color: Colors.charcoal,
         letterSpacing: Typography.tight,
     },
-    headerRight: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-    },
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
     headerIconBtn: {
         width: 44,
         height: 44,
@@ -514,12 +625,7 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.primaryBorder,
     },
-    ownerChipDot: {
-        width: 7,
-        height: 7,
-        borderRadius: 3.5,
-        backgroundColor: Colors.primary,
-    },
+    ownerChipDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: Colors.primary },
     ownerChipText: {
         fontSize: 10,
         fontWeight: Typography.extraBold,
@@ -527,11 +633,11 @@ const styles = StyleSheet.create({
         letterSpacing: 1.5,
     },
 
-    // ── Content ──
+    // Content
     content: { flex: 1 },
     contentPadding: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.xl },
 
-    // ── Stats ──
+    // Stats
     statsGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -564,7 +670,7 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.sm,
     },
     statValueNum: {
-        fontSize: 30,
+        fontSize: 28,
         fontWeight: Typography.extraBold,
         letterSpacing: -1.5,
         marginBottom: 2,
@@ -585,7 +691,7 @@ const styles = StyleSheet.create({
         borderBottomRightRadius: Radii.xl,
     },
 
-    // ── Insights ──
+    // Insights
     insightsCard: {
         backgroundColor: Colors.surface,
         borderRadius: Radii.xl,
@@ -627,7 +733,7 @@ const styles = StyleSheet.create({
     insightValue: { fontSize: 14, fontWeight: Typography.extraBold },
     insightDivider: { height: 1, backgroundColor: Colors.divider },
 
-    // ── Section card ──
+    // Section
     section: {
         backgroundColor: Colors.surface,
         borderRadius: Radii.xl,
@@ -641,17 +747,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: Spacing.lg,
     },
-    sectionTitleRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-    },
-    sectionAccentBar: {
-        width: 4,
-        height: 20,
-        backgroundColor: Colors.primary,
-        borderRadius: 2,
-    },
+    sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    sectionAccentBar: { width: 4, height: 20, backgroundColor: Colors.primary, borderRadius: 2 },
     sectionTitle: {
         fontSize: 17,
         fontWeight: Typography.extraBold,
@@ -659,18 +756,46 @@ const styles = StyleSheet.create({
         letterSpacing: -0.3,
     },
     viewAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    viewAllText: {
-        fontSize: 13,
-        fontWeight: Typography.bold,
-        color: Colors.primary,
-    },
+    viewAllText: { fontSize: 13, fontWeight: Typography.bold, color: Colors.primary },
 
-    // ── Empty state ──
-    emptyWrap: {
+    // List rows (venues & bookings)
+    listContainer: { gap: 0 },
+    listRow: {
+        flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: Spacing.xxl,
+        paddingVertical: Spacing.md,
         gap: Spacing.sm,
     },
+    listAccent: { width: 3, height: 52, borderRadius: 2 },
+    listBody: { flex: 1 },
+    listTopRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 5,
+    },
+    listTitle: {
+        flex: 1,
+        fontSize: 14,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal,
+        marginRight: Spacing.sm,
+    },
+    listMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    metaItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+    metaText: { fontSize: 11, color: Colors.charcoalLight, fontWeight: Typography.medium },
+    statusChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radii.full },
+    statusChipText: { fontSize: 10, fontWeight: Typography.bold, letterSpacing: 0.3 },
+    bookingAmount: {
+        fontSize: 14,
+        fontWeight: Typography.extraBold,
+        color: Colors.primary,
+        marginTop: 3,
+    },
+    rowDivider: { height: 1, backgroundColor: Colors.background, marginLeft: 15 },
+
+    // Empty state
+    emptyWrap: { alignItems: 'center', paddingVertical: Spacing.xxl, gap: Spacing.sm },
     emptyIconCircle: {
         width: 80,
         height: 80,
