@@ -206,7 +206,7 @@ export default function ProfileScreen({ navigation }: profileProps) {
             iconBg: Colors.primaryLight,
             title: 'My Venues',
             subtitle: 'Manage your listed spaces',
-            onPress: () => console.log('Navigate to /my-venues'),
+            onPress: () => navigation.navigate('venues'),
         },
         user?.role === 'vendor' && {
             id: 'my-services',
@@ -215,7 +215,7 @@ export default function ProfileScreen({ navigation }: profileProps) {
             iconBg: Colors.successLight,
             title: 'My Services',
             subtitle: 'Manage your offered services',
-            onPress: () => console.log('Navigate to /my-services'),
+            onPress: () => navigation.navigate('venues'),
         },
         {
             id: 'edit-profile',
@@ -224,7 +224,7 @@ export default function ProfileScreen({ navigation }: profileProps) {
             iconBg: Colors.primaryLight,
             title: 'Edit Profile',
             subtitle: 'Update your personal info',
-            onPress: () => Alert.alert('Coming Soon', 'Edit profile is coming soon.'),
+            onPress: () => alert.info('Comming Soon', 'Edit profile comming soon'),
         },
         {
             id: 'payment',
@@ -233,7 +233,7 @@ export default function ProfileScreen({ navigation }: profileProps) {
             iconBg: Colors.infoLight,
             title: 'Payment Methods',
             subtitle: 'Cards & billing info',
-            onPress: () => Alert.alert('Coming Soon', 'Payment methods coming soon.'),
+            onPress: () => alert.info('Comming Soon', 'Payment method comming soon.'),
         },
     ].filter(Boolean) as any[];
 
@@ -245,7 +245,7 @@ export default function ProfileScreen({ navigation }: profileProps) {
             iconBg: Colors.warningLight,
             title: 'Notifications',
             subtitle: 'Alerts & reminders',
-            onPress: () => Alert.alert('Coming Soon', 'Notifications coming soon.'),
+            onPress: () => alert.info('Comming Soon', 'Notification feature comming soon.'),
         },
         {
             id: 'help',
@@ -254,7 +254,7 @@ export default function ProfileScreen({ navigation }: profileProps) {
             iconBg: Colors.border,
             title: 'Help & Support',
             subtitle: 'support@rentalmeet.com',
-            onPress: () => Alert.alert('Help', 'Contact us at support@rentalmeet.com'),
+            onPress: () => alert.info('Help', 'Contact us at support@rentalmeet.com'),
         },
         {
             id: 'about',
@@ -264,7 +264,7 @@ export default function ProfileScreen({ navigation }: profileProps) {
             title: 'About RentalMeet',
             subtitle: 'Version 1.0.0',
             onPress: () =>
-                Alert.alert('RentalMeet', 'Version 1.0.0\n\nBook your perfect space with ease.'),
+                alert.info('RentalMeet', 'Version 1.0.0\n\nBook your perfect space with ease.'),
         },
     ];
 
@@ -278,9 +278,6 @@ export default function ProfileScreen({ navigation }: profileProps) {
                         <Text style={styles.headerEyebrow}>ACCOUNT</Text>
                         <Text style={styles.headerTitle}>Profile</Text>
                     </View>
-                    <TouchableOpacity style={styles.settingsBtn}>
-                        <Ionicons name="settings-outline" size={20} color={Colors.charcoal} />
-                    </TouchableOpacity>
                 </View>
             </View>
 

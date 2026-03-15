@@ -17,6 +17,7 @@ import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstab
 import { OwnerTabParamList } from '../../navigations/tabNavigations/OwnerTabNavigation';
 import { useAuthStore } from '../../store/auth-store';
 import { ownerAPI } from '../../service/apis/owner';
+import { useAlert } from '../../context/AlertContext';
 
 const { width: W } = Dimensions.get('window');
 const STAT_W = (W - Spacing.lg * 2 - Spacing.md) / 2;
@@ -260,7 +261,7 @@ type Props = NativeBottomTabScreenProps<OwnerTabParamList, 'dashboard'>;
 
 export default function OwnerDashboardScreen({ navigation }: Props) {
     const { user } = useAuthStore();
-
+    const alert = useAlert();
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
     const [recentVenues, setRecentVenues] = useState<RecentVenue[]>([]);
@@ -357,7 +358,9 @@ export default function OwnerDashboardScreen({ navigation }: Props) {
                     <View style={s.headerRight}>
                         <TouchableOpacity
                             style={s.notifBtn}
-                            onPress={() => Alert.alert('Notifications')}
+                            onPress={() =>
+                                alert.info('Comming Soon', 'Notification feature comming soon')
+                            }
                         >
                             <Ionicons
                                 name="notifications-outline"
@@ -366,7 +369,10 @@ export default function OwnerDashboardScreen({ navigation }: Props) {
                             />
                             <View style={s.notifDot} />
                         </TouchableOpacity>
-                        <View style={s.avatarCircle}>
+                        <View
+                            style={s.avatarCircle}
+                            onTouchStart={() => navigation.navigate('profile')}
+                        >
                             <Text style={s.avatarText}>
                                 {user?.name?.slice(0, 2).toUpperCase() ?? 'OW'}
                             </Text>
@@ -464,7 +470,7 @@ export default function OwnerDashboardScreen({ navigation }: Props) {
                     <CardHeader
                         title="My Venues"
                         count={recentVenues.length || undefined}
-                        onViewAll={() => Alert.alert('My Venues')}
+                        onViewAll={() => navigation.navigate('venues')}
                     />
                     {recentVenues.length === 0 ? (
                         <EmptyState
@@ -472,7 +478,7 @@ export default function OwnerDashboardScreen({ navigation }: Props) {
                             title="No venues listed yet"
                             sub="Add your first venue to start receiving bookings from clients."
                             ctaLabel="Add Venue"
-                            onCta={() => Alert.alert('Add Venue')}
+                            onCta={() => navigation.navigate('addVenue')}
                         />
                     ) : (
                         recentVenues.map((v, i) => (
@@ -486,7 +492,7 @@ export default function OwnerDashboardScreen({ navigation }: Props) {
                     <CardHeader
                         title="Recent Bookings"
                         count={recentBookings.length || undefined}
-                        onViewAll={() => Alert.alert('Bookings')}
+                        onViewAll={() => navigation.navigate('bookings')}
                     />
                     {recentBookings.length === 0 ? (
                         <EmptyState

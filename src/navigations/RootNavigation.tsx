@@ -10,7 +10,6 @@ import RegisterScreen from '../screens/auth/register';
 import { AlertProvider } from '../context/AlertContext';
 import VenueDetailScreen, { SelectedAmenityItem, Venue } from '../screens/venue-detail';
 import { TabNavigation, tabParamList } from './tabNavigations/TabNavigation';
-import RegisterVenueScreen from '../screens/owner/AddVenue';
 import BrowseCategoryScreen from '../screens/CategoryList';
 import BookingScreen from '../screens/BookingScreen';
 import BookingDetailScreen from '../screens/BookingDetailScreen';
@@ -48,7 +47,7 @@ export default function RootNavigator() {
         <AlertProvider>
             <NavigationContainer>
                 <Stack.Navigator
-                    initialRouteName="login"
+                    initialRouteName="splash"
                     screenOptions={{ headerShown: false, animation: 'fade' }}
                 >
                     <Stack.Screen name="splash" component={SplashScreen} />
