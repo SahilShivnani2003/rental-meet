@@ -10,7 +10,7 @@ import RegisterScreen from '../screens/auth/register';
 import { AlertProvider } from '../context/AlertContext';
 import VenueDetailScreen, { SelectedAmenityItem, Venue } from '../screens/venue-detail';
 import { TabNavigation, tabParamList } from './tabNavigations/TabNavigation';
-import RegisterVenueScreen from '../screens/auth/register-venue';
+import RegisterVenueScreen from '../screens/owner/AddVenue';
 import BrowseCategoryScreen from '../screens/CategoryList';
 import BookingScreen from '../screens/BookingScreen';
 import BookingDetailScreen from '../screens/BookingDetailScreen';
@@ -22,7 +22,6 @@ export type RootStackParamList = {
     registerType: undefined;
     client: NavigatorScreenParams<ClientTabParamList> | undefined;
     owner: NavigatorScreenParams<OwnerTabParamList> | undefined;
-    registerVenue: undefined;
     register: {
         role: string;
     };
@@ -56,7 +55,6 @@ export default function RootNavigator() {
                     <Stack.Screen name="login" component={LoginScreen} />
                     <Stack.Screen name="registerType" component={RegisterTypeScreen} />
                     <Stack.Screen name="register" component={RegisterScreen} />
-                    <Stack.Screen name="registerVenue" component={RegisterVenueScreen} />
                     <Stack.Screen
                         name="main"
                         component={TabNavigation}

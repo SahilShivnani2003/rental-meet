@@ -1,7 +1,15 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal } from 'react-native';
+import {
+    View,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+    Modal,
+    KeyboardAvoidingView,
+    Platform,
+} from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
+import { Colors, Typography, Spacing, Radii, Shadows, TAB_BAR_HEIGHT } from '../../theme/theme';
 import Step3Amenities from '../../components/registerVenue/amenities-info';
 import Step1BasicInfo from '../../components/registerVenue/basic-info';
 import Step6Documents from '../../components/registerVenue/documents-info';
@@ -10,17 +18,22 @@ import Step4Pricing from '../../components/registerVenue/pricing-info';
 import StepIndicator from '../../components/registerVenue/step-indicator';
 import Step7Terms from '../../components/registerVenue/terms-info';
 import Step5Photos from '../../components/registerVenue/photos-upload';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../navigations/RootNavigation';
+import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
+import { OwnerTabParamList } from '../../navigations/tabNavigations/OwnerTabNavigation';
 
-type registerVenueProps = NativeStackScreenProps<RootStackParamList, 'registerVenue'>;
+// Tab screen — navigated from the owner tab bar
+type registerVenueProps = NativeBottomTabScreenProps<OwnerTabParamList, 'addVenue'>;
 
 export default function RegisterVenueScreen({ navigation }: registerVenueProps) {
     const [step, setStep] = useState(1);
     const [successModal, setSuccessModal] = useState(false);
 
-    const goNext = () => setStep(s => Math.min(s + 1, 7));
+    const TOTAL_STEPS = 7;
+
+    const goNext = () => setStep(s => Math.min(s + 1, TOTAL_STEPS));
     const goPrev = () => setStep(s => Math.max(s - 1, 1));
+
+    const handleClose = () => navigation.goBack();
 
     const renderStep = () => {
         switch (step) {
@@ -43,12 +56,14 @@ export default function RegisterVenueScreen({ navigation }: registerVenueProps) 
         }
     };
 
-    const handleClose = () => {
-        navigation.goBack();
-    };
     return (
-        <View style={s.root}>
-            {/* Top bar */}
+        // FIX: KeyboardAvoidingView wraps everything so inputs are never hidden by keyboard
+        <KeyboardAvoidingView
+            style={s.root}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+            {/* ── Top bar ── */}
             <View style={s.topBar}>
                 <TouchableOpacity style={s.closeBtn} onPress={handleClose} activeOpacity={0.8}>
                     <Ionicons name="close" size={20} color={Colors.charcoalMid} />
@@ -61,17 +76,25 @@ export default function RegisterVenueScreen({ navigation }: registerVenueProps) 
                         Complete all steps to list your venue on RentalMeet
                     </Text>
                 </View>
+                {/* Step counter */}
+                <View style={s.stepCounter}>
+                    <Text style={s.stepCounterText}>{step}</Text>
+                    <Text style={s.stepCounterSep}>/</Text>
+                    <Text style={s.stepCounterTotal}>{TOTAL_STEPS}</Text>
+                </View>
             </View>
 
+            {/* ── Step indicator ── */}
             <StepIndicator currentStep={step} />
 
+            {/* ── Step content ── */}
             <View style={s.content}>{renderStep()}</View>
 
-            {/* Success modal */}
+            {/* ── Success modal ── */}
             <Modal visible={successModal} transparent animationType="fade">
                 <View style={s.overlay}>
                     <View style={s.modalCard}>
-                        <View style={s.successIcon}>
+                        <View style={s.successIconWrap}>
                             <Ionicons name="checkmark" size={36} color={Colors.white} />
                         </View>
                         <Text style={s.modalTitle}>Venue Submitted!</Text>
@@ -87,23 +110,36 @@ export default function RegisterVenueScreen({ navigation }: registerVenueProps) 
                             }}
                             activeOpacity={0.85}
                         >
+                            <Ionicons
+                                name="checkmark-circle-outline"
+                                size={16}
+                                color={Colors.charcoal}
+                            />
                             <Text style={s.modalBtnText}>Done</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
-        </View>
+        </KeyboardAvoidingView>
     );
 }
 
 const s = StyleSheet.create({
-    root: { flex: 1, backgroundColor: Colors.background },
+    // FIX: root is the KeyboardAvoidingView itself — flex: 1 + background
+    root: {
+        flex: 1,
+        backgroundColor: Colors.background,
+    },
+
+    // ── Top bar ──
+    // FIX: added paddingTop for iOS status bar safe area
     topBar: {
         flexDirection: 'row',
         alignItems: 'center',
         backgroundColor: Colors.surface,
         paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.md,
+        paddingTop: Platform.OS === 'ios' ? 54 : Spacing.lg,
+        paddingBottom: Spacing.md,
         borderBottomWidth: 1,
         borderBottomColor: Colors.border,
         gap: Spacing.md,
@@ -116,16 +152,59 @@ const s = StyleSheet.create({
         backgroundColor: Colors.background,
         alignItems: 'center',
         justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: Colors.border,
     },
     titleWrap: { flex: 1 },
     pageTitle: {
-        fontSize: Typography.xl,
+        fontSize: Typography.lg,
         fontWeight: Typography.extraBold,
         color: Colors.charcoal,
         letterSpacing: Typography.tight,
     },
-    pageSub: { fontSize: Typography.sm, color: Colors.charcoalLight, marginTop: 1 },
-    content: { flex: 1, backgroundColor: Colors.background },
+    pageSub: {
+        fontSize: Typography.xs,
+        color: Colors.charcoalLight,
+        marginTop: 2,
+    },
+
+    // Step counter badge (e.g. "3 / 7")
+    stepCounter: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        gap: 1,
+        backgroundColor: Colors.primaryLight,
+        borderWidth: 1,
+        borderColor: Colors.primaryBorder,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: Radii.full,
+    },
+    stepCounterText: {
+        fontSize: 14,
+        fontWeight: Typography.extraBold,
+        color: Colors.primary,
+    },
+    stepCounterSep: {
+        fontSize: 11,
+        color: Colors.primaryBorder,
+        fontWeight: Typography.medium,
+    },
+    stepCounterTotal: {
+        fontSize: 11,
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoalLight,
+    },
+
+    // ── Step content ──
+    content: {
+        flex: 1,
+        backgroundColor: Colors.background,
+        // Push step content up so fixed bottom buttons clear the tab bar
+        paddingBottom: TAB_BAR_HEIGHT,
+    },
+
+    // ── Success modal ──
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.55)',
@@ -141,19 +220,23 @@ const s = StyleSheet.create({
         alignItems: 'center',
         ...Shadows.floating,
     },
-    successIcon: {
-        width: 72,
-        height: 72,
-        borderRadius: 36,
+    successIconWrap: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
         backgroundColor: Colors.success,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: Spacing.xl,
+        // Soft glow ring
+        borderWidth: 6,
+        borderColor: Colors.successLight,
     },
     modalTitle: {
         fontSize: Typography.xl,
         fontWeight: Typography.extraBold,
         color: Colors.charcoal,
+        letterSpacing: -0.3,
         marginBottom: Spacing.sm,
     },
     modalSub: {
@@ -162,8 +245,13 @@ const s = StyleSheet.create({
         textAlign: 'center',
         lineHeight: 20,
         marginBottom: Spacing.xl,
+        paddingHorizontal: Spacing.sm,
     },
     modalBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 7,
         backgroundColor: Colors.primary,
         borderRadius: Radii.full,
         paddingHorizontal: Spacing.xxl,

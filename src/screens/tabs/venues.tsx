@@ -42,7 +42,7 @@ const ALL_CATEGORY: VenueType = {
     order: 0,
 };
 
-type appParamList = OwnerTabParamList | ClientTabParamList | tabParamList;
+type appParamList = OwnerTabParamList & ClientTabParamList & tabParamList;
 type venueProps = NativeStackScreenProps<appParamList, 'venues'>;
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -221,9 +221,7 @@ export default function VenuesScreen({ navigation }: venueProps) {
     };
 
     const handleAddVenue = () => {
-        navigation
-            .getParent<NativeStackNavigationProp<RootStackParamList>>()
-            .navigate('registerVenue');
+        navigation.navigate('addVenue')
     };
 
     return (
@@ -234,7 +232,7 @@ export default function VenuesScreen({ navigation }: venueProps) {
                 <View style={styles.headerContent}>
                     <View>
                         <Text style={styles.greetingLabel}>DISCOVER</Text>
-                        <Text style={styles.greeting}>Venues</Text>
+                        <Text style={styles.greeting}>{user.role === 'owner' ? 'My Venues' : 'Venues'}</Text>
                     </View>
                     {user?.role === 'owner' && (
                         <TouchableOpacity

@@ -8,6 +8,8 @@ import {
     Animated,
     Dimensions,
     Alert,
+    Platform,
+    RefreshControl,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
@@ -16,9 +18,10 @@ import { OwnerTabParamList } from '../../navigations/tabNavigations/OwnerTabNavi
 import { useAuthStore } from '../../store/auth-store';
 import { ownerAPI } from '../../service/apis/owner';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: W } = Dimensions.get('window');
+const STAT_W = (W - Spacing.lg * 2 - Spacing.md) / 2;
 
-// ─── API response types ───────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 type DashboardStats = {
     totalVenues: number;
     approvedVenues: number;
@@ -51,18 +54,7 @@ type RecentBooking = {
     venue?: { businessName?: string };
 };
 
-// ─── Stat card config ─────────────────────────────────────────────────────────
-type StatConfig = {
-    id: string;
-    label: string;
-    value: number;
-    prefix: string;
-    icon: string;
-    color: string;
-    bg: string;
-};
-
-// ─── Status colour map ────────────────────────────────────────────────────────
+// ─── Status map ───────────────────────────────────────────────────────────────
 const STATUS_MAP: Record<string, { color: string; bg: string; label: string }> = {
     approved: { color: Colors.success, bg: Colors.successLight, label: 'Approved' },
     pending: { color: Colors.warning, bg: Colors.warningLight, label: 'Pending' },
@@ -72,82 +64,163 @@ const STATUS_MAP: Record<string, { color: string; bg: string; label: string }> =
     rejected: { color: Colors.danger, bg: Colors.dangerLight, label: 'Rejected' },
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmtCurrency = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
-const fmtDate = (str: string) =>
-    new Date(str).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+const fmtDate = (s: string) =>
+    new Date(s).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
 // ─── Stat card ────────────────────────────────────────────────────────────────
-function StatCard({ stat, index }: { stat: StatConfig; index: number }) {
-    const slideAnim = useRef(new Animated.Value(30)).current;
-    const fadeAnim = useRef(new Animated.Value(0)).current;
-    const scaleAnim = useRef(new Animated.Value(1)).current;
+type StatCardProps = {
+    icon: string;
+    label: string;
+    value: string;
+    color: string;
+    bg: string;
+    index: number;
+};
+
+function StatCard({ icon, label, value, color, bg, index }: StatCardProps) {
+    const fade = useRef(new Animated.Value(0)).current;
+    const slide = useRef(new Animated.Value(16)).current;
 
     useEffect(() => {
         Animated.parallel([
-            Animated.timing(fadeAnim, {
+            Animated.timing(fade, {
                 toValue: 1,
-                delay: 200 + index * 90,
-                duration: 320,
+                delay: 100 + index * 80,
+                duration: 300,
                 useNativeDriver: true,
             }),
-            Animated.spring(slideAnim, {
+            Animated.spring(slide, {
                 toValue: 0,
-                delay: 200 + index * 90,
+                delay: 100 + index * 80,
+                speed: 18,
+                bounciness: 6,
                 useNativeDriver: true,
-                speed: 16,
-                bounciness: 8,
             }),
         ]).start();
     }, []);
 
-    const onPressIn = () =>
-        Animated.spring(scaleAnim, { toValue: 0.95, useNativeDriver: true, speed: 30 }).start();
-    const onPressOut = () =>
-        Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 22 }).start();
-
     return (
-        <Animated.View
-            style={[
-                styles.statCard,
-                { opacity: fadeAnim, transform: [{ translateY: slideAnim }, { scale: scaleAnim }] },
-            ]}
-        >
-            <TouchableOpacity
-                onPressIn={onPressIn}
-                onPressOut={onPressOut}
-                activeOpacity={1}
-                style={styles.statCardInner}
-            >
-                <View style={[styles.statArc, { backgroundColor: stat.bg }]} />
-                <View style={[styles.statIconWrap, { backgroundColor: stat.bg }]}>
-                    <Ionicons name={stat.icon as any} size={20} color={stat.color} />
+        <Animated.View style={[s.statCard, { opacity: fade, transform: [{ translateY: slide }] }]}>
+            {/* Coloured top bar */}
+            <View style={[s.statTopBar, { backgroundColor: color }]} />
+            <View style={s.statBody}>
+                <View style={[s.statIconBox, { backgroundColor: bg }]}>
+                    <Ionicons name={icon as any} size={20} color={color} />
                 </View>
-                <Text style={[styles.statValueNum, { color: stat.color }]}>
-                    {stat.prefix}
-                    {stat.value.toLocaleString('en-IN')}
-                </Text>
-                <Text style={styles.statLabel}>{stat.label}</Text>
-                <View style={[styles.statAccentLine, { backgroundColor: stat.color }]} />
-            </TouchableOpacity>
+                <Text style={[s.statValue, { color: Colors.charcoal }]}>{value}</Text>
+                <Text style={s.statLabel}>{label}</Text>
+            </View>
         </Animated.View>
     );
 }
 
-// ─── Section header ───────────────────────────────────────────────────────────
-function SectionHeader({ title, onViewAll }: { title: string; onViewAll: () => void }) {
+// ─── Progress bar ─────────────────────────────────────────────────────────────
+function ProgressBar({ value, total, color }: { value: number; total: number; color: string }) {
+    const pct = total > 0 ? Math.min((value / total) * 100, 100) : 0;
     return (
-        <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleRow}>
-                <View style={styles.sectionAccentBar} />
-                <Text style={styles.sectionTitle}>{title}</Text>
-            </View>
-            <TouchableOpacity style={styles.viewAllBtn} onPress={onViewAll}>
-                <Text style={styles.viewAllText}>View All</Text>
-                <Ionicons name="arrow-forward" size={13} color={Colors.primary} />
-            </TouchableOpacity>
+        <View style={s.progressTrack}>
+            <View style={[s.progressFill, { width: `${pct}%` as any, backgroundColor: color }]} />
         </View>
+    );
+}
+
+// ─── Section card header ──────────────────────────────────────────────────────
+function CardHeader({
+    title,
+    count,
+    onViewAll,
+}: {
+    title: string;
+    count?: number;
+    onViewAll?: () => void;
+}) {
+    return (
+        <View style={s.cardHeader}>
+            <View style={s.cardHeaderLeft}>
+                <View style={s.cardAccent} />
+                <Text style={s.cardTitle}>{title}</Text>
+                {count !== undefined && (
+                    <View style={s.countBadge}>
+                        <Text style={s.countBadgeText}>{count}</Text>
+                    </View>
+                )}
+            </View>
+            {onViewAll && (
+                <TouchableOpacity onPress={onViewAll} activeOpacity={0.7}>
+                    <Text style={s.seeAllText}>See all →</Text>
+                </TouchableOpacity>
+            )}
+        </View>
+    );
+}
+
+// ─── Venue row ────────────────────────────────────────────────────────────────
+function VenueRow({ venue, last }: { venue: RecentVenue; last: boolean }) {
+    const st = STATUS_MAP[venue.status] ?? STATUS_MAP.pending;
+    return (
+        <>
+            <TouchableOpacity style={s.row} activeOpacity={0.7}>
+                <View style={[s.rowIconWrap, { backgroundColor: Colors.primaryLight }]}>
+                    <Text style={s.rowEmoji}>🏢</Text>
+                </View>
+                <View style={s.rowContent}>
+                    <Text style={s.rowTitle} numberOfLines={1}>
+                        {venue.businessName}
+                    </Text>
+                    <View style={s.rowMeta}>
+                        {venue.location?.city ? (
+                            <Text style={s.rowMetaText}>
+                                <Ionicons
+                                    name="location-outline"
+                                    size={10}
+                                    color={Colors.charcoalLight}
+                                />{' '}
+                                {venue.location.city}
+                            </Text>
+                        ) : null}
+                        {venue.venueType?.[0] ? <Text style={s.rowMetaSep}>·</Text> : null}
+                        {venue.venueType?.[0] ? (
+                            <Text style={s.rowMetaText}>{venue.venueType[0]}</Text>
+                        ) : null}
+                    </View>
+                </View>
+                <View style={[s.statusTag, { backgroundColor: st.bg }]}>
+                    <Text style={[s.statusTagText, { color: st.color }]}>{st.label}</Text>
+                </View>
+            </TouchableOpacity>
+            {!last && <View style={s.separator} />}
+        </>
+    );
+}
+
+// ─── Booking row ──────────────────────────────────────────────────────────────
+function BookingRow({ booking, last }: { booking: RecentBooking; last: boolean }) {
+    const st = STATUS_MAP[booking.status] ?? STATUS_MAP.pending;
+    const name = booking.venue?.businessName ?? booking.customerDetails?.name ?? '—';
+
+    return (
+        <>
+            <TouchableOpacity style={s.row} activeOpacity={0.7}>
+                <View style={[s.rowIconWrap, { backgroundColor: Colors.infoLight }]}>
+                    <Ionicons name="calendar-outline" size={18} color={Colors.info} />
+                </View>
+                <View style={s.rowContent}>
+                    <Text style={s.rowTitle} numberOfLines={1}>
+                        {name}
+                    </Text>
+                    <Text style={s.rowMetaText}>{fmtDate(booking.bookingDate)}</Text>
+                </View>
+                <View style={s.rowRight}>
+                    <Text style={s.rowAmount}>{fmtCurrency(booking.amount)}</Text>
+                    <View style={[s.statusTag, { backgroundColor: st.bg }]}>
+                        <Text style={[s.statusTagText, { color: st.color }]}>{st.label}</Text>
+                    </View>
+                </View>
+            </TouchableOpacity>
+            {!last && <View style={s.separator} />}
+        </>
     );
 }
 
@@ -155,214 +228,81 @@ function SectionHeader({ title, onViewAll }: { title: string; onViewAll: () => v
 function EmptyState({
     icon,
     title,
-    subtitle,
+    sub,
     ctaLabel,
     onCta,
 }: {
     icon: string;
     title: string;
-    subtitle: string;
+    sub: string;
     ctaLabel?: string;
     onCta?: () => void;
 }) {
-    const scaleAnim = useRef(new Animated.Value(1)).current;
-    const pulse = () => {
-        Animated.sequence([
-            Animated.spring(scaleAnim, {
-                toValue: 1.08,
-                useNativeDriver: true,
-                speed: 20,
-                bounciness: 10,
-            }),
-            Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 20 }),
-        ]).start();
-    };
-
     return (
-        <View style={styles.emptyWrap}>
-            <View style={styles.emptyIconCircle}>
-                <Ionicons name={icon as any} size={40} color={Colors.primaryBorder} />
+        <View style={s.emptyWrap}>
+            <View style={s.emptyIconWrap}>
+                <Ionicons name={icon as any} size={28} color={Colors.primaryBorder} />
             </View>
-            <Text style={styles.emptyTitle}>{title}</Text>
-            <Text style={styles.emptySubtitle}>{subtitle}</Text>
+            <Text style={s.emptyTitle}>{title}</Text>
+            <Text style={s.emptySub}>{sub}</Text>
             {ctaLabel && (
-                <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-                    <TouchableOpacity
-                        style={styles.ctaBtn}
-                        onPress={() => {
-                            pulse();
-                            onCta?.();
-                        }}
-                        activeOpacity={0.85}
-                    >
-                        <Ionicons name="add" size={16} color={Colors.white} />
-                        <Text style={styles.ctaBtnText}>{ctaLabel}</Text>
-                    </TouchableOpacity>
-                </Animated.View>
+                <TouchableOpacity style={s.emptyCta} onPress={onCta} activeOpacity={0.85}>
+                    <Ionicons name="add" size={14} color={Colors.charcoal} />
+                    <Text style={s.emptyCtaText}>{ctaLabel}</Text>
+                </TouchableOpacity>
             )}
         </View>
     );
 }
 
-// ─── Insight row ─────────────────────────────────────────────────────────────
-function InsightRow({
-    icon,
-    label,
-    value,
-    color,
-}: {
-    icon: string;
-    label: string;
-    value: string;
-    color: string;
-}) {
-    return (
-        <View style={styles.insightRow}>
-            <View style={[styles.insightIcon, { backgroundColor: color + '22' }]}>
-                <Ionicons name={icon as any} size={15} color={color} />
-            </View>
-            <Text style={styles.insightLabel}>{label}</Text>
-            <Text style={[styles.insightValue, { color }]}>{value}</Text>
-        </View>
-    );
-}
-
-// ─── Recent venue row ─────────────────────────────────────────────────────────
-function VenueRow({ venue }: { venue: RecentVenue }) {
-    const st = STATUS_MAP[venue.status] ?? STATUS_MAP.pending;
-    return (
-        <View style={styles.listRow}>
-            <View style={[styles.listAccent, { backgroundColor: st.color }]} />
-            <View style={styles.listBody}>
-                <View style={styles.listTopRow}>
-                    <Text style={styles.listTitle} numberOfLines={1}>
-                        {venue.businessName}
-                    </Text>
-                    <View style={[styles.statusChip, { backgroundColor: st.bg }]}>
-                        <Text style={[styles.statusChipText, { color: st.color }]}>{st.label}</Text>
-                    </View>
-                </View>
-                <View style={styles.listMeta}>
-                    {venue.location?.city ? (
-                        <View style={styles.metaItem}>
-                            <Ionicons
-                                name="location-outline"
-                                size={11}
-                                color={Colors.charcoalLight}
-                            />
-                            <Text style={styles.metaText}>{venue.location.city}</Text>
-                        </View>
-                    ) : null}
-                    {venue.venueType?.length ? (
-                        <View style={styles.metaItem}>
-                            <Ionicons
-                                name="business-outline"
-                                size={11}
-                                color={Colors.charcoalLight}
-                            />
-                            <Text style={styles.metaText}>{venue.venueType[0]}</Text>
-                        </View>
-                    ) : null}
-                    {venue.totalBookings !== undefined ? (
-                        <View style={styles.metaItem}>
-                            <Ionicons
-                                name="bookmark-outline"
-                                size={11}
-                                color={Colors.charcoalLight}
-                            />
-                            <Text style={styles.metaText}>{venue.totalBookings} bookings</Text>
-                        </View>
-                    ) : null}
-                </View>
-            </View>
-            <Ionicons name="chevron-forward" size={15} color={Colors.border} />
-        </View>
-    );
-}
-
-// ─── Recent booking row ───────────────────────────────────────────────────────
-function BookingRow({ booking }: { booking: RecentBooking }) {
-    const st = STATUS_MAP[booking.status] ?? STATUS_MAP.pending;
-    return (
-        <View style={styles.listRow}>
-            <View style={[styles.listAccent, { backgroundColor: st.color }]} />
-            <View style={styles.listBody}>
-                <View style={styles.listTopRow}>
-                    <Text style={styles.listTitle} numberOfLines={1}>
-                        {booking.venue?.businessName ?? booking.customerDetails?.name ?? '—'}
-                    </Text>
-                    <View style={[styles.statusChip, { backgroundColor: st.bg }]}>
-                        <Text style={[styles.statusChipText, { color: st.color }]}>{st.label}</Text>
-                    </View>
-                </View>
-                <View style={styles.listMeta}>
-                    <View style={styles.metaItem}>
-                        <Ionicons name="calendar-outline" size={11} color={Colors.charcoalLight} />
-                        <Text style={styles.metaText}>{fmtDate(booking.bookingDate)}</Text>
-                    </View>
-                    {booking.customerDetails?.eventType ? (
-                        <View style={styles.metaItem}>
-                            <Ionicons name="flag-outline" size={11} color={Colors.charcoalLight} />
-                            <Text style={styles.metaText}>{booking.customerDetails.eventType}</Text>
-                        </View>
-                    ) : null}
-                </View>
-                <Text style={styles.bookingAmount}>{fmtCurrency(booking.amount)}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={15} color={Colors.border} />
-        </View>
-    );
-}
-
 // ─── Screen ───────────────────────────────────────────────────────────────────
-type dashboardProps = NativeBottomTabScreenProps<OwnerTabParamList, 'dashboard'>;
+type Props = NativeBottomTabScreenProps<OwnerTabParamList, 'dashboard'>;
 
-export default function OwnerDashboardScreen({ navigation }: dashboardProps) {
+export default function OwnerDashboardScreen({ navigation }: Props) {
     const { user } = useAuthStore();
-    const headerSlide = useRef(new Animated.Value(-20)).current;
-    const headerFade = useRef(new Animated.Value(0)).current;
 
-    // FIX: properly typed state
     const [stats, setStats] = useState<DashboardStats | null>(null);
     const [recentBookings, setRecentBookings] = useState<RecentBooking[]>([]);
     const [recentVenues, setRecentVenues] = useState<RecentVenue[]>([]);
+    const [refreshing, setRefreshing] = useState(false);
 
-    // FIX: call fetchStats on mount
+    const headerFade = useRef(new Animated.Value(0)).current;
+    const headerSlide = useRef(new Animated.Value(-14)).current;
+
     useEffect(() => {
         Animated.parallel([
-            Animated.timing(headerFade, { toValue: 1, duration: 420, useNativeDriver: true }),
+            Animated.timing(headerFade, { toValue: 1, duration: 380, useNativeDriver: true }),
             Animated.spring(headerSlide, {
                 toValue: 0,
-                useNativeDriver: true,
                 speed: 16,
-                bounciness: 5,
+                bounciness: 4,
+                useNativeDriver: true,
             }),
         ]).start();
-
         fetchStats();
     }, []);
 
     const fetchStats = async () => {
         try {
-            const response = await ownerAPI.getDashboard();
-            if (response?.success) {
-                setStats(response.stats);
-                setRecentBookings(response.recentBookings ?? []);
-                setRecentVenues(response.recentVenues ?? []);
+            const res = await ownerAPI.getDashboard();
+            if (res?.success) {
+                setStats(res.stats);
+                setRecentBookings(res.recentBookings ?? []);
+                setRecentVenues(res.recentVenues ?? []);
             }
-        } catch (error) {
-            console.error('FETCH OWNER DASHBOARD STATS ERROR : ', error);
+        } catch (e) {
+            console.error('FETCH OWNER DASHBOARD STATS ERROR : ', e);
+        } finally {
+            setRefreshing(false);
         }
     };
 
-    // FIX: build STATS array from API response instead of undefined constant
-    const statCards: StatConfig[] = useMemo(
+    const statCards = useMemo(
         () => [
             {
                 id: 'venues',
                 label: 'Total Venues',
-                value: stats?.totalVenues ?? 0,
-                prefix: '',
+                value: String(stats?.totalVenues ?? 0),
                 icon: 'business-outline',
                 color: Colors.primary,
                 bg: Colors.primaryLight,
@@ -370,8 +310,7 @@ export default function OwnerDashboardScreen({ navigation }: dashboardProps) {
             {
                 id: 'bookings',
                 label: 'Total Bookings',
-                value: stats?.totalBookings ?? 0,
-                prefix: '',
+                value: String(stats?.totalBookings ?? 0),
                 icon: 'calendar-outline',
                 color: Colors.info,
                 bg: Colors.infoLight,
@@ -379,8 +318,7 @@ export default function OwnerDashboardScreen({ navigation }: dashboardProps) {
             {
                 id: 'earnings',
                 label: 'Earnings',
-                value: stats?.totalEarnings ?? 0,
-                prefix: '₹',
+                value: fmtCurrency(stats?.totalEarnings ?? 0),
                 icon: 'cash-outline',
                 color: Colors.success,
                 bg: Colors.successLight,
@@ -388,8 +326,7 @@ export default function OwnerDashboardScreen({ navigation }: dashboardProps) {
             {
                 id: 'pending',
                 label: 'Pending',
-                value: stats?.pendingBookings ?? 0,
-                prefix: '',
+                value: String(stats?.pendingBookings ?? 0),
                 icon: 'time-outline',
                 color: Colors.warning,
                 bg: Colors.warningLight,
@@ -398,151 +335,185 @@ export default function OwnerDashboardScreen({ navigation }: dashboardProps) {
         [stats],
     );
 
+    const totalVenues = stats?.totalVenues ?? 0;
+
     return (
-        <View style={styles.container}>
+        <View style={s.root}>
             {/* ── Header ── */}
             <Animated.View
                 style={[
-                    styles.header,
+                    s.header,
                     { opacity: headerFade, transform: [{ translateY: headerSlide }] },
                 ]}
             >
-                <View style={styles.headerAccentBar} />
-                <View style={styles.headerContent}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.headerEyebrow}>WELCOME BACK!</Text>
-                        <Text style={styles.headerTitle}>Dashboard</Text>
+                <View style={s.headerAccent} />
+                <View style={s.headerContent}>
+                    <View>
+                        <Text style={s.headerEyebrow}>OWNER DASHBOARD</Text>
+                        <Text style={s.headerTitle}>
+                            Welcome, {user?.name?.split(' ')[0] ?? 'Owner'} 👋
+                        </Text>
                     </View>
-                    <View style={styles.headerRight}>
+                    <View style={s.headerRight}>
                         <TouchableOpacity
-                            style={styles.headerIconBtn}
+                            style={s.notifBtn}
                             onPress={() => Alert.alert('Notifications')}
                         >
                             <Ionicons
                                 name="notifications-outline"
                                 size={20}
-                                color={Colors.charcoal}
+                                color={Colors.charcoalMid}
                             />
-                            <View style={styles.notifDot} />
+                            <View style={s.notifDot} />
                         </TouchableOpacity>
-                        <View style={styles.avatar}>
-                            <Text style={styles.avatarText}>{user?.name.slice(0,2).toUpperCase()}</Text>
+                        <View style={s.avatarCircle}>
+                            <Text style={s.avatarText}>
+                                {user?.name?.slice(0, 2).toUpperCase() ?? 'OW'}
+                            </Text>
                         </View>
                     </View>
                 </View>
-                <View style={styles.ownerChip}>
-                    <View style={styles.ownerChipDot} />
-                    <Text style={styles.ownerChipText}>{user?.role}</Text>
+                {/* Role pill */}
+                <View style={s.rolePillWrap}>
+                    <View style={s.rolePill}>
+                        <View style={s.roleDot} />
+                        <Text style={s.rolePillText}>{(user?.role ?? 'Owner').toUpperCase()}</Text>
+                    </View>
                 </View>
             </Animated.View>
 
             <ScrollView
-                style={styles.content}
-                contentContainerStyle={styles.contentPadding}
                 showsVerticalScrollIndicator={false}
+                contentContainerStyle={s.scroll}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={() => {
+                            setRefreshing(true);
+                            fetchStats();
+                        }}
+                        tintColor={Colors.primary}
+                        colors={[Colors.primary]}
+                    />
+                }
             >
-                {/* ── Stats grid from API ── */}
-                <View style={styles.statsGrid}>
-                    {statCards.map((stat, i) => (
-                        <StatCard key={stat.id} stat={stat} index={i} />
+                {/* ── 2×2 Stats grid ── */}
+                <View style={s.statsGrid}>
+                    {statCards.map((sc, i) => (
+                        <StatCard key={sc.id} {...sc} index={i} />
                     ))}
                 </View>
 
-                {/* ── Performance insights ── */}
-                <View style={styles.insightsCard}>
-                    <View style={styles.insightsHeader}>
-                        <Ionicons name="trending-up-outline" size={18} color={Colors.primary} />
-                        <Text style={styles.insightsTitle}>Venue Status</Text>
+                {/* ── Venue breakdown card ── */}
+                <View style={s.card}>
+                    <CardHeader title="Listing Overview" />
+
+                    <View style={s.breakdownRow}>
+                        <View style={s.breakdownItem}>
+                            <Text style={[s.breakdownValue, { color: Colors.success }]}>
+                                {stats?.approvedVenues ?? 0}
+                            </Text>
+                            <Text style={s.breakdownLabel}>Approved</Text>
+                            <ProgressBar
+                                value={stats?.approvedVenues ?? 0}
+                                total={totalVenues}
+                                color={Colors.success}
+                            />
+                        </View>
+                        <View style={s.breakdownDivider} />
+                        <View style={s.breakdownItem}>
+                            <Text style={[s.breakdownValue, { color: Colors.warning }]}>
+                                {stats?.pendingVenues ?? 0}
+                            </Text>
+                            <Text style={s.breakdownLabel}>In Review</Text>
+                            <ProgressBar
+                                value={stats?.pendingVenues ?? 0}
+                                total={totalVenues}
+                                color={Colors.warning}
+                            />
+                        </View>
+                        <View style={s.breakdownDivider} />
+                        <View style={s.breakdownItem}>
+                            <Text style={[s.breakdownValue, { color: Colors.info }]}>
+                                {stats?.confirmedBookings ?? 0}
+                            </Text>
+                            <Text style={s.breakdownLabel}>Confirmed</Text>
+                            <ProgressBar
+                                value={stats?.confirmedBookings ?? 0}
+                                total={stats?.totalBookings ?? 0}
+                                color={Colors.info}
+                            />
+                        </View>
+                        <View style={s.breakdownDivider} />
+                        <View style={s.breakdownItem}>
+                            <Text style={[s.breakdownValue, { color: Colors.danger }]}>
+                                {stats?.rejectedVenues ?? 0}
+                            </Text>
+                            <Text style={s.breakdownLabel}>Rejected</Text>
+                            <ProgressBar
+                                value={stats?.rejectedVenues ?? 0}
+                                total={totalVenues}
+                                color={Colors.danger}
+                            />
+                        </View>
                     </View>
-                    <InsightRow
-                        icon="checkmark-circle-outline"
-                        label="Approved Venues"
-                        value={String(stats?.approvedVenues ?? 0)}
-                        color={Colors.success}
-                    />
-                    <View style={styles.insightDivider} />
-                    <InsightRow
-                        icon="time-outline"
-                        label="Pending Approval"
-                        value={String(stats?.pendingVenues ?? 0)}
-                        color={Colors.warning}
-                    />
-                    <View style={styles.insightDivider} />
-                    <InsightRow
-                        icon="checkmark-done-outline"
-                        label="Confirmed Bookings"
-                        value={String(stats?.confirmedBookings ?? 0)}
-                        color={Colors.info}
-                    />
-                    <View style={styles.insightDivider} />
-                    <InsightRow
-                        icon="close-circle-outline"
-                        label="Rejected Venues"
-                        value={String(stats?.rejectedVenues ?? 0)}
-                        color={Colors.danger}
-                    />
                 </View>
 
-                {/* ── My Venues — from API ── */}
-                <View style={styles.section}>
-                    <SectionHeader title="My Venues" onViewAll={() => Alert.alert('My Venues')} />
+                {/* ── My Venues ── */}
+                <View style={s.card}>
+                    <CardHeader
+                        title="My Venues"
+                        count={recentVenues.length || undefined}
+                        onViewAll={() => Alert.alert('My Venues')}
+                    />
                     {recentVenues.length === 0 ? (
                         <EmptyState
                             icon="business-outline"
-                            title="No venues yet"
-                            subtitle="Start by adding your first venue and reach thousands of clients."
-                            ctaLabel="Add Your First Venue"
+                            title="No venues listed yet"
+                            sub="Add your first venue to start receiving bookings from clients."
+                            ctaLabel="Add Venue"
                             onCta={() => Alert.alert('Add Venue')}
                         />
                     ) : (
-                        <View style={styles.listContainer}>
-                            {recentVenues.map((v, i) => (
-                                <View key={v._id}>
-                                    <VenueRow venue={v} />
-                                    {i < recentVenues.length - 1 && (
-                                        <View style={styles.rowDivider} />
-                                    )}
-                                </View>
-                            ))}
-                        </View>
+                        recentVenues.map((v, i) => (
+                            <VenueRow key={v._id} venue={v} last={i === recentVenues.length - 1} />
+                        ))
                     )}
                 </View>
 
-                {/* ── Recent Bookings — from API ── */}
-                <View style={[styles.section, { marginBottom: 110 }]}>
-                    <SectionHeader
+                {/* ── Recent Bookings ── */}
+                <View style={s.card}>
+                    <CardHeader
                         title="Recent Bookings"
+                        count={recentBookings.length || undefined}
                         onViewAll={() => Alert.alert('Bookings')}
                     />
                     {recentBookings.length === 0 ? (
                         <EmptyState
                             icon="calendar-outline"
                             title="No bookings yet"
-                            subtitle="Bookings will appear here once customers book your venues."
+                            sub="Bookings from clients will appear here once your venues go live."
                         />
                     ) : (
-                        <View style={styles.listContainer}>
-                            {recentBookings.map((b, i) => (
-                                <View key={b._id}>
-                                    <BookingRow booking={b} />
-                                    {i < recentBookings.length - 1 && (
-                                        <View style={styles.rowDivider} />
-                                    )}
-                                </View>
-                            ))}
-                        </View>
+                        recentBookings.map((b, i) => (
+                            <BookingRow
+                                key={b._id}
+                                booking={b}
+                                last={i === recentBookings.length - 1}
+                            />
+                        ))
                     )}
                 </View>
+
+                <View style={{ height: 24 }} />
             </ScrollView>
         </View>
     );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const STAT_W = (SCREEN_WIDTH - 32 - Spacing.lg * 3) / 2;
-
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: Colors.background },
+const s = StyleSheet.create({
+    root: { flex: 1, backgroundColor: Colors.background },
 
     // Header
     header: {
@@ -552,39 +523,42 @@ const styles = StyleSheet.create({
         paddingBottom: Spacing.lg,
         ...Shadows.header,
     },
-    headerAccentBar: {
+    headerAccent: {
         height: 4,
         backgroundColor: Colors.primary,
-        borderTopLeftRadius: Radii.xxl,
-        borderTopRightRadius: Radii.xxl,
+        borderTopLeftRadius: 0,
+        borderTopRightRadius: 0,
     },
     headerContent: {
         flexDirection: 'row',
+        justifyContent: 'space-between',
         alignItems: 'flex-start',
         paddingHorizontal: Spacing.xl,
-        paddingTop: Spacing.xl,
+        paddingTop: Platform.OS === 'ios' ? Spacing.xl : Spacing.lg,
     },
     headerEyebrow: {
-        fontSize: Typography.sm,
+        fontSize: Typography.xs,
         fontWeight: Typography.bold,
         color: Colors.primary,
         letterSpacing: Typography.wider,
-        marginBottom: Spacing.xxs,
+        marginBottom: 3,
     },
     headerTitle: {
-        fontSize: Typography.xxl,
+        fontSize: 22,
         fontWeight: Typography.extraBold,
         color: Colors.charcoal,
-        letterSpacing: Typography.tight,
+        letterSpacing: -0.4,
     },
-    headerRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-    headerIconBtn: {
-        width: 44,
-        height: 44,
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: 4 },
+    notifBtn: {
+        width: 42,
+        height: 42,
         borderRadius: Radii.md,
         backgroundColor: Colors.background,
         alignItems: 'center',
         justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: Colors.border,
     },
     notifDot: {
         position: 'absolute',
@@ -597,45 +571,38 @@ const styles = StyleSheet.create({
         borderWidth: 1.5,
         borderColor: Colors.surface,
     },
-    avatar: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+    avatarCircle: {
+        width: 42,
+        height: 42,
+        borderRadius: 21,
         backgroundColor: Colors.primary,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    avatarText: {
-        fontSize: 14,
-        fontWeight: Typography.extraBold,
-        color: Colors.white,
-        letterSpacing: 0.5,
-    },
-    ownerChip: {
+    avatarText: { fontSize: 13, fontWeight: Typography.extraBold, color: Colors.charcoal },
+    rolePillWrap: { paddingHorizontal: Spacing.xl, marginTop: Spacing.sm },
+    rolePill: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        marginHorizontal: Spacing.xl,
-        marginTop: Spacing.sm,
+        gap: 5,
         alignSelf: 'flex-start',
         backgroundColor: Colors.primaryLight,
-        paddingHorizontal: 12,
-        paddingVertical: 5,
-        borderRadius: Radii.full,
         borderWidth: 1,
         borderColor: Colors.primaryBorder,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: Radii.full,
     },
-    ownerChipDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: Colors.primary },
-    ownerChipText: {
-        fontSize: 10,
+    roleDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primary },
+    rolePillText: {
+        fontSize: 9,
         fontWeight: Typography.extraBold,
         color: Colors.primaryDark,
         letterSpacing: 1.5,
     },
 
-    // Content
-    content: { flex: 1 },
-    contentPadding: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.xl },
+    // Scroll
+    scroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.xl, paddingBottom: 100 },
 
     // Stats
     statsGrid: {
@@ -651,188 +618,197 @@ const styles = StyleSheet.create({
         overflow: 'hidden',
         ...Shadows.card,
     },
-    statCardInner: { padding: Spacing.lg, position: 'relative' },
-    statArc: {
-        position: 'absolute',
-        top: -28,
-        right: -28,
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        opacity: 0.4,
-    },
-    statIconWrap: {
-        width: 44,
-        height: 44,
+    statTopBar: { height: 4 },
+    statBody: { padding: Spacing.lg },
+    statIconBox: {
+        width: 46,
+        height: 46,
         borderRadius: Radii.md,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: Spacing.sm,
     },
-    statValueNum: {
-        fontSize: 28,
+    statValue: {
+        fontSize: 26,
         fontWeight: Typography.extraBold,
-        letterSpacing: -1.5,
+        letterSpacing: -1,
         marginBottom: 2,
+        color: Colors.charcoal,
     },
     statLabel: {
         fontSize: 11,
         color: Colors.charcoalLight,
         fontWeight: Typography.semiBold,
-        letterSpacing: 0.2,
-    },
-    statAccentLine: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 3,
-        borderBottomLeftRadius: Radii.xl,
-        borderBottomRightRadius: Radii.xl,
     },
 
-    // Insights
-    insightsCard: {
+    // Card
+    card: {
         backgroundColor: Colors.surface,
         borderRadius: Radii.xl,
         padding: Spacing.lg,
         marginBottom: Spacing.lg,
         ...Shadows.card,
     },
-    insightsHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-        marginBottom: Spacing.lg,
-    },
-    insightsTitle: {
-        fontSize: 15,
-        fontWeight: Typography.extraBold,
-        color: Colors.charcoal,
-        letterSpacing: -0.2,
-    },
-    insightRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-        paddingVertical: 10,
-    },
-    insightIcon: {
-        width: 32,
-        height: 32,
-        borderRadius: Spacing.sm,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    insightLabel: {
-        flex: 1,
-        fontSize: 13,
-        color: Colors.charcoalMid,
-        fontWeight: Typography.medium,
-    },
-    insightValue: { fontSize: 14, fontWeight: Typography.extraBold },
-    insightDivider: { height: 1, backgroundColor: Colors.divider },
-
-    // Section
-    section: {
-        backgroundColor: Colors.surface,
-        borderRadius: Radii.xl,
-        padding: Spacing.lg,
-        marginBottom: Spacing.lg,
-        ...Shadows.card,
-    },
-    sectionHeader: {
+    cardHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: Spacing.lg,
     },
-    sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-    sectionAccentBar: { width: 4, height: 20, backgroundColor: Colors.primary, borderRadius: 2 },
-    sectionTitle: {
-        fontSize: 17,
+    cardHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    cardAccent: { width: 4, height: 20, backgroundColor: Colors.primary, borderRadius: 2 },
+    cardTitle: {
+        fontSize: 16,
         fontWeight: Typography.extraBold,
         color: Colors.charcoal,
         letterSpacing: -0.3,
     },
-    viewAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    viewAllText: { fontSize: 13, fontWeight: Typography.bold, color: Colors.primary },
+    countBadge: {
+        backgroundColor: Colors.primaryLight,
+        borderRadius: Radii.full,
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderWidth: 1,
+        borderColor: Colors.primaryBorder,
+    },
+    countBadgeText: {
+        fontSize: 10,
+        fontWeight: Typography.extraBold,
+        color: Colors.primaryDark,
+    },
+    seeAllText: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.primary,
+    },
 
-    // List rows (venues & bookings)
-    listContainer: { gap: 0 },
-    listRow: {
+    // Breakdown row
+    breakdownRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 0,
+    },
+    breakdownItem: { flex: 1, alignItems: 'center', gap: 3, paddingHorizontal: 4 },
+    breakdownValue: {
+        fontSize: 20,
+        fontWeight: Typography.extraBold,
+        letterSpacing: -0.5,
+    },
+    breakdownLabel: {
+        fontSize: 9.5,
+        color: Colors.charcoalLight,
+        fontWeight: Typography.semiBold,
+        textAlign: 'center',
+    },
+    breakdownDivider: {
+        width: 1,
+        height: 48,
+        backgroundColor: Colors.divider,
+        marginTop: 4,
+    },
+    progressTrack: {
+        width: '100%',
+        height: 3,
+        backgroundColor: Colors.border,
+        borderRadius: 2,
+        marginTop: 4,
+        overflow: 'hidden',
+    },
+    progressFill: { height: '100%', borderRadius: 2 },
+
+    // List rows
+    row: {
         flexDirection: 'row',
         alignItems: 'center',
         paddingVertical: Spacing.md,
         gap: Spacing.sm,
     },
-    listAccent: { width: 3, height: 52, borderRadius: 2 },
-    listBody: { flex: 1 },
-    listTopRow: {
-        flexDirection: 'row',
+    rowIconWrap: {
+        width: 42,
+        height: 42,
+        borderRadius: Radii.md,
         alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 5,
+        justifyContent: 'center',
+        flexShrink: 0,
     },
-    listTitle: {
-        flex: 1,
-        fontSize: 14,
+    rowEmoji: { fontSize: 20 },
+    rowContent: { flex: 1 },
+    rowTitle: {
+        fontSize: 13.5,
         fontWeight: Typography.bold,
         color: Colors.charcoal,
-        marginRight: Spacing.sm,
+        letterSpacing: -0.2,
+        marginBottom: 3,
     },
-    listMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-    metaItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-    metaText: { fontSize: 11, color: Colors.charcoalLight, fontWeight: Typography.medium },
-    statusChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radii.full },
-    statusChipText: { fontSize: 10, fontWeight: Typography.bold, letterSpacing: 0.3 },
-    bookingAmount: {
-        fontSize: 14,
+    rowMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    rowMetaText: {
+        fontSize: 11,
+        color: Colors.charcoalLight,
+        fontWeight: Typography.medium,
+    },
+    rowMetaSep: { fontSize: 11, color: Colors.border },
+    rowRight: { alignItems: 'flex-end', gap: 4 },
+    rowAmount: {
+        fontSize: 13,
         fontWeight: Typography.extraBold,
         color: Colors.primary,
-        marginTop: 3,
     },
-    rowDivider: { height: 1, backgroundColor: Colors.background, marginLeft: 15 },
+    separator: { height: 1, backgroundColor: Colors.divider },
+
+    // Status tag
+    statusTag: {
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: Radii.full,
+        flexShrink: 0,
+    },
+    statusTagText: {
+        fontSize: 10,
+        fontWeight: Typography.bold,
+        letterSpacing: 0.2,
+    },
 
     // Empty state
-    emptyWrap: { alignItems: 'center', paddingVertical: Spacing.xxl, gap: Spacing.sm },
-    emptyIconCircle: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
+    emptyWrap: { alignItems: 'center', paddingVertical: Spacing.xl, gap: Spacing.sm },
+    emptyIconWrap: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
         backgroundColor: Colors.primaryLight,
         alignItems: 'center',
         justifyContent: 'center',
+        borderWidth: 1.5,
+        borderColor: Colors.primaryBorder,
         marginBottom: Spacing.xs,
     },
     emptyTitle: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: Typography.bold,
         color: Colors.charcoal,
         letterSpacing: -0.2,
     },
-    emptySubtitle: {
-        fontSize: 13,
+    emptySub: {
+        fontSize: 12.5,
         color: Colors.charcoalLight,
         textAlign: 'center',
-        paddingHorizontal: 24,
-        lineHeight: 20,
+        lineHeight: 18,
+        paddingHorizontal: Spacing.xl,
     },
-    ctaBtn: {
+    emptyCta: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: Spacing.sm,
+        gap: 6,
         backgroundColor: Colors.primary,
-        paddingHorizontal: Spacing.xl,
-        paddingVertical: 13,
+        paddingHorizontal: Spacing.lg,
+        paddingVertical: 10,
         borderRadius: Radii.full,
-        marginTop: Spacing.sm,
+        marginTop: Spacing.xs,
         ...Shadows.primary,
     },
-    ctaBtnText: {
-        fontSize: 14,
+    emptyCtaText: {
+        fontSize: 13,
         fontWeight: Typography.extraBold,
-        color: Colors.white,
+        color: Colors.charcoal,
         letterSpacing: 0.2,
     },
 });

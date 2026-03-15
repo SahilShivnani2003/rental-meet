@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -15,6 +15,30 @@ import { RootStackParamList } from '../../navigations/RootNavigation';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
 import { OwnerTabParamList } from '../../navigations/tabNavigations/OwnerTabNavigation';
 import { useAuthStore } from '../../store/auth-store';
+import { useAlert } from '../../context/AlertContext';
+import { bookingAPI } from '../../service/apis/booking';
+import { authAPI } from '../../service/apis/auth';
+
+// ─── Types matching API responses ─────────────────────────────────────────────
+type UserProfile = {
+    _id: string;
+    userId: string;
+    name: string;
+    email: string;
+    phone: string;
+    role: string;
+    isActive: boolean;
+    referralCode?: string;
+    referralCount?: number;
+    createdAt: string;
+};
+
+type Booking = {
+    _id: string;
+    status: string;
+    amount: number;
+    bookingDate: string;
+};
 
 const USER_TYPE_CONFIG: Record<string, { label: string; icon: string; color: string; bg: string }> =
     {
@@ -96,38 +120,86 @@ function MenuSection({ title, items }: { title: string; items: any[] }) {
 }
 
 type profileProps = NativeBottomTabScreenProps<OwnerTabParamList, 'profile'>;
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function ProfileScreen({ navigation }: profileProps) {
-    const { user } = useAuthStore();
-    const typeCfg = USER_TYPE_CONFIG[user.userType] ?? USER_TYPE_CONFIG.client;
-    const initials = user.name
-        .split(' ')
-        .map((n: string) => n[0])
-        .join('')
-        .toUpperCase();
+    const alert = useAlert();
+    const { user, logOut } = useAuthStore();
+
+    // FIX: properly typed states
+    const [bookings, setBookings] = useState<Booking[]>([]);
+    const [profile, setProfile] = useState<UserProfile | null>(null);
+
+    // FIX: use user.role (not user.userType — API returns role)
+    const typeCfg = USER_TYPE_CONFIG[user?.role ?? 'client'] ?? USER_TYPE_CONFIG.client;
+
+    // FIX: call both fetch functions on mount
+    useEffect(() => {
+        fetchBookingData();
+        fetchMe();
+    }, []);
+
+    const fetchBookingData = async () => {
+        try {
+            const response = await bookingAPI.getAll();
+            if (response?.success) {
+                setBookings(response.bookings ?? []);
+            }
+        } catch (error: any) {
+            console.error('FETCH BOOKING ERROR FROM PROFILE : ', error);
+        }
+    };
+
+    // FIX: fetchMe was broken — `set` with no argument → now calls setProfile correctly
+    const fetchMe = async () => {
+        try {
+            const response = await authAPI.getUser();
+            if (response?.success) {
+                setProfile(response.user ?? response.data ?? null);
+            }
+        } catch (error: any) {
+            console.error('FETCH PROFILE ERROR : ', error);
+        }
+    };
+
+    // FIX: compute stats from real API data instead of hardcoded numbers
+    const totalBookings = bookings.length;
+    const completedCount = bookings.filter(b => b.status === 'completed').length;
+    const pendingCount = bookings.filter(
+        b => b.status === 'pending' || b.status === 'confirmed',
+    ).length;
+
+    // Display name & initials — prefer fetched profile, fall back to auth store
+    const displayName = profile?.name ?? user?.name ?? 'User';
+    const displayEmail = profile?.email ?? user?.email ?? '';
+    const displayPhone = profile?.phone ?? '';
+    const referralCode = profile?.referralCode ?? '';
+    const initials = displayName.slice(0, 2).toUpperCase();
 
     const handleLogout = () => {
-        Alert.alert(
-            'Log out',
-            'Are you sure you want to log out?',
-            [
-                { text: 'Cancel', style: 'cancel' },
+        alert.show({
+            type: 'confirm',
+            title: 'Log Out',
+            message: 'Are you sure want to log out?',
+            buttons: [
+                { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },
                 {
-                    text: 'Log out',
-                    style: 'destructive',
-                    onPress: () => {
+                    label: 'Log Out',
+                    onPress: async () => {
                         navigation
                             .getParent<NativeStackNavigationProp<RootStackParamList>>()
-                            .navigate('login');
+                            .reset({ index: 0, routes: [{ name: 'login' }] });
+                        await logOut();
+                        alert.dismiss();
                     },
                 },
             ],
-            { cancelable: true },
-        );
+        });
     };
 
+    // FIX: use user.role (not user.userType)
     const accountItems = [
-        user.userType === 'owner' && {
+        user?.role === 'owner' && {
             id: 'my-venues',
             icon: 'business-outline',
             iconColor: Colors.primary,
@@ -136,7 +208,7 @@ export default function ProfileScreen({ navigation }: profileProps) {
             subtitle: 'Manage your listed spaces',
             onPress: () => console.log('Navigate to /my-venues'),
         },
-        user.userType === 'vendor' && {
+        user?.role === 'vendor' && {
             id: 'my-services',
             icon: 'construct-outline',
             iconColor: Colors.success,
@@ -219,9 +291,7 @@ export default function ProfileScreen({ navigation }: profileProps) {
             >
                 {/* ── Profile card ── */}
                 <View style={styles.profileCard}>
-                    {/* Amber banner */}
                     <View style={styles.profileBanner} />
-
                     <View style={styles.profileContent}>
                         {/* Avatar */}
                         <View style={styles.avatarWrapper}>
@@ -235,9 +305,22 @@ export default function ProfileScreen({ navigation }: profileProps) {
                             </TouchableOpacity>
                         </View>
 
-                        <Text style={styles.userName}>{user.name}</Text>
-                        <Text style={styles.userEmail}>{user.email}</Text>
+                        <Text style={styles.userName}>{displayName}</Text>
+                        <Text style={styles.userEmail}>{displayEmail}</Text>
 
+                        {/* Phone — from API */}
+                        {!!displayPhone && (
+                            <View style={styles.phoneRow}>
+                                <Ionicons
+                                    name="call-outline"
+                                    size={13}
+                                    color={Colors.charcoalLight}
+                                />
+                                <Text style={styles.phoneText}>{displayPhone}</Text>
+                            </View>
+                        )}
+
+                        {/* Role badge */}
                         <View style={[styles.typeBadge, { backgroundColor: typeCfg.bg }]}>
                             <Ionicons name={typeCfg.icon as any} size={13} color={typeCfg.color} />
                             <Text style={[styles.typeBadgeText, { color: typeCfg.color }]}>
@@ -245,21 +328,34 @@ export default function ProfileScreen({ navigation }: profileProps) {
                             </Text>
                         </View>
 
-                        {/* Stats */}
+                        {/* Referral code — from API */}
+                        {!!referralCode && (
+                            <View style={styles.referralRow}>
+                                <Ionicons
+                                    name="gift-outline"
+                                    size={13}
+                                    color={Colors.primaryDark}
+                                />
+                                <Text style={styles.referralLabel}>Referral Code</Text>
+                                <Text style={styles.referralCode}>{referralCode}</Text>
+                            </View>
+                        )}
+
+                        {/* FIX: Stats from real API data */}
                         <View style={styles.statsRow}>
                             <View style={styles.statItem}>
-                                <Text style={styles.statNum}>12</Text>
+                                <Text style={styles.statNum}>{totalBookings}</Text>
                                 <Text style={styles.statLabel}>Bookings</Text>
                             </View>
                             <View style={styles.statDivider} />
                             <View style={styles.statItem}>
-                                <Text style={styles.statNum}>5</Text>
-                                <Text style={styles.statLabel}>Favorites</Text>
+                                <Text style={styles.statNum}>{completedCount}</Text>
+                                <Text style={styles.statLabel}>Completed</Text>
                             </View>
                             <View style={styles.statDivider} />
                             <View style={styles.statItem}>
-                                <Text style={styles.statNum}>4.9</Text>
-                                <Text style={styles.statLabel}>Rating</Text>
+                                <Text style={styles.statNum}>{pendingCount}</Text>
+                                <Text style={styles.statLabel}>Pending</Text>
                             </View>
                         </View>
                     </View>
@@ -332,15 +428,13 @@ const styles = StyleSheet.create({
     content: { flex: 1 },
     contentPadding: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.xl, paddingBottom: 120 },
 
-    // Profile card — no overflow:hidden so avatar ring isn't clipped
+    // Profile card
     profileCard: {
         backgroundColor: Colors.surface,
         borderRadius: 24,
         marginBottom: Spacing.xl,
         ...Shadows.card,
     },
-
-    // Amber banner — matches brand primary
     profileBanner: {
         height: 72,
         backgroundColor: Colors.primaryLight,
@@ -349,7 +443,6 @@ const styles = StyleSheet.create({
         borderBottomLeftRadius: 48,
         borderBottomRightRadius: 48,
     },
-
     profileContent: {
         alignItems: 'center',
         paddingHorizontal: Spacing.xl,
@@ -407,7 +500,18 @@ const styles = StyleSheet.create({
         fontSize: Typography.base,
         color: Colors.charcoalLight,
         fontWeight: Typography.regular,
-        marginBottom: 12,
+        marginBottom: 6,
+    },
+    phoneRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        marginBottom: 10,
+    },
+    phoneText: {
+        fontSize: Typography.base,
+        color: Colors.charcoalMid,
+        fontWeight: Typography.medium,
     },
     typeBadge: {
         flexDirection: 'row',
@@ -416,7 +520,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 14,
         paddingVertical: 7,
         borderRadius: Radii.full,
-        marginBottom: Spacing.xl,
+        marginBottom: Spacing.sm,
     },
     typeBadgeText: {
         fontSize: Typography.base,
@@ -424,7 +528,32 @@ const styles = StyleSheet.create({
         letterSpacing: Typography.normal,
     },
 
-    // Stats strip — warm background from theme
+    // Referral code row
+    referralRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: Colors.primaryLight,
+        borderWidth: 1,
+        borderColor: Colors.primaryBorder,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: Radii.full,
+        marginBottom: Spacing.lg,
+    },
+    referralLabel: {
+        fontSize: Typography.sm,
+        color: Colors.charcoalLight,
+        fontWeight: Typography.medium,
+    },
+    referralCode: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.extraBold,
+        color: Colors.primaryDark,
+        letterSpacing: 1,
+    },
+
+    // Stats — from API
     statsRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -531,7 +660,6 @@ const styles = StyleSheet.create({
         color: Colors.danger,
         letterSpacing: Typography.normal,
     },
-
     versionText: {
         textAlign: 'center',
         fontSize: 12,
