@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import {
     View,
     Text,
@@ -13,10 +13,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
 import { useAlert } from '../../context/AlertContext';
 import { useAuthStore } from '../../store/auth-store';
-import {
-    NativeBottomTabBarProps,
-    NativeBottomTabScreenProps,
-} from '@react-navigation/bottom-tabs/unstable';
+import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
 import { ClientTabParamList } from '../../navigations/tabNavigations/ClientTabNavigation';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigations/RootNavigation';
@@ -24,14 +21,34 @@ import { bookingAPI } from '../../service/apis/booking';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
+// ── Booking type matching API response ────────────────────────────────────────
+type Booking = {
+    _id: string;
+    bookingNumber: string;
+    venue: {
+        _id: string;
+        businessName: string;
+        images: { url: string; isFeatured: boolean }[];
+        location?: { city: string };
+    };
+    bookingDate: string;
+    startTime: string;
+    endTime: string;
+    bookingType: string;
+    amount: number;
+    status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
+    paymentStatus: string;
+    customerDetails?: {
+        eventType: string;
+        guestCount: number;
+    };
+    createdAt: string;
+};
+
+// ── User type config ──────────────────────────────────────────────────────────
 const USER_TYPE_CONFIG: Record<string, { label: string; icon: string; color: string; bg: string }> =
     {
-        client: {
-            label: 'Client',
-            icon: 'person',
-            color: Colors.info,
-            bg: Colors.infoLight,
-        },
+        client: { label: 'Client', icon: 'person', color: Colors.info, bg: Colors.infoLight },
         owner: {
             label: 'Space Owner',
             icon: 'business',
@@ -46,90 +63,38 @@ const USER_TYPE_CONFIG: Record<string, { label: string; icon: string; color: str
         },
     };
 
-const STATS = [
-    {
-        id: 'total',
-        label: 'Total',
-        value: 12,
-        icon: 'calendar',
-        color: Colors.info,
-        bg: Colors.infoLight,
-    },
-    {
-        id: 'upcoming',
-        label: 'Upcoming',
-        value: 3,
-        icon: 'time',
-        color: Colors.primary,
-        bg: Colors.primaryLight,
-    },
-    {
-        id: 'done',
-        label: 'Completed',
-        value: 8,
-        icon: 'checkmark-circle',
-        color: Colors.success,
-        bg: Colors.successLight,
-    },
-    {
-        id: 'cancel',
-        label: 'Cancelled',
-        value: 1,
-        icon: 'close-circle',
-        color: Colors.danger,
-        bg: Colors.dangerLight,
-    },
-];
-
-const RECENT_BOOKINGS = [
-    {
-        id: '1',
-        venue: 'The Grand Hall',
-        date: 'Mar 20, 2026',
-        time: '10:00 AM – 2:00 PM',
-        amount: 450,
-        status: 'confirmed',
-    },
-    {
-        id: '2',
-        venue: 'Studio Loft',
-        date: 'Mar 25, 2026',
-        time: '2:00 PM – 6:00 PM',
-        amount: 175,
-        status: 'pending',
-    },
-    {
-        id: '3',
-        venue: 'Rooftop Lounge',
-        date: 'Feb 10, 2026',
-        time: '6:00 PM – 10:00 PM',
-        amount: 300,
-        status: 'completed',
-    },
-];
-
+// ── Status config ─────────────────────────────────────────────────────────────
 const STATUS_MAP: Record<string, { color: string; bg: string; label: string }> = {
-    confirmed: {
-        color: Colors.success,
-        bg: Colors.successLight,
-        label: 'Confirmed',
-    },
-    pending: {
-        color: Colors.warning,
-        bg: Colors.warningLight,
-        label: 'Pending',
-    },
-    completed: {
-        color: Colors.info,
-        bg: Colors.infoLight,
-        label: 'Completed',
-    },
-    cancelled: {
-        color: Colors.danger,
-        bg: Colors.dangerLight,
-        label: 'Cancelled',
-    },
+    confirmed: { color: Colors.success, bg: Colors.successLight, label: 'Confirmed' },
+    pending: { color: Colors.warning, bg: Colors.warningLight, label: 'Pending' },
+    completed: { color: Colors.info, bg: Colors.infoLight, label: 'Completed' },
+    cancelled: { color: Colors.danger, bg: Colors.dangerLight, label: 'Cancelled' },
 };
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function formatBookingDate(dateStr: string): string {
+    try {
+        return new Date(dateStr).toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+        });
+    } catch {
+        return dateStr;
+    }
+}
+
+function formatTime(t: string): string {
+    if (!t) return '';
+    // Already formatted like "02:30 PM" or "14:30"
+    if (t.includes('AM') || t.includes('PM')) return t;
+    const [h, m] = t.split(':').map(Number);
+    const suffix = h < 12 ? 'AM' : 'PM';
+    const displayH = h % 12 === 0 ? 12 : h % 12;
+    return `${displayH}:${m.toString().padStart(2, '0')} ${suffix}`;
+}
+
+const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
 // ── Entrance animation hook ───────────────────────────────────────────────────
 function useEntrance(delay: number) {
@@ -137,12 +102,7 @@ function useEntrance(delay: number) {
     const slide = useRef(new Animated.Value(20)).current;
     useEffect(() => {
         Animated.parallel([
-            Animated.timing(fade, {
-                toValue: 1,
-                delay,
-                duration: 320,
-                useNativeDriver: true,
-            }),
+            Animated.timing(fade, { toValue: 1, delay, duration: 320, useNativeDriver: true }),
             Animated.spring(slide, {
                 toValue: 0,
                 delay,
@@ -156,7 +116,16 @@ function useEntrance(delay: number) {
 }
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
-function StatCard({ stat, index }: { stat: (typeof STATS)[0]; index: number }) {
+type StatItem = {
+    id: string;
+    label: string;
+    value: number;
+    icon: string;
+    color: string;
+    bg: string;
+};
+
+function StatCard({ stat, index }: { stat: StatItem; index: number }) {
     const { fade, slide } = useEntrance(320 + index * 60);
     return (
         <Animated.View
@@ -172,7 +141,7 @@ function StatCard({ stat, index }: { stat: (typeof STATS)[0]; index: number }) {
 }
 
 // ── Booking row ───────────────────────────────────────────────────────────────
-function BookingRow({ item, index }: { item: (typeof RECENT_BOOKINGS)[0]; index: number }) {
+function BookingRow({ item, index }: { item: Booking; index: number }) {
     const { fade, slide } = useEntrance(600 + index * 80);
     const scaleAnim = useRef(new Animated.Value(1)).current;
     const st = STATUS_MAP[item.status] ?? STATUS_MAP.pending;
@@ -201,7 +170,7 @@ function BookingRow({ item, index }: { item: (typeof RECENT_BOOKINGS)[0]; index:
                 <View style={styles.bookingBody}>
                     <View style={styles.bookingTop}>
                         <Text style={styles.bookingVenue} numberOfLines={1}>
-                            {item.venue}
+                            {item.venue?.businessName ?? '—'}
                         </Text>
                         <View style={[styles.statusChip, { backgroundColor: st.bg }]}>
                             <Text style={[styles.statusChipText, { color: st.color }]}>
@@ -216,14 +185,19 @@ function BookingRow({ item, index }: { item: (typeof RECENT_BOOKINGS)[0]; index:
                                 size={11}
                                 color={Colors.charcoalLight}
                             />
-                            <Text style={styles.bookingMetaText}>{item.date}</Text>
+                            <Text style={styles.bookingMetaText}>
+                                {formatBookingDate(item.bookingDate)}
+                            </Text>
                         </View>
                         <View style={styles.bookingMetaItem}>
                             <Ionicons name="time-outline" size={11} color={Colors.charcoalLight} />
-                            <Text style={styles.bookingMetaText}>{item.time}</Text>
+                            <Text style={styles.bookingMetaText}>
+                                {formatTime(item.startTime)} – {formatTime(item.endTime)}
+                            </Text>
                         </View>
                     </View>
-                    <Text style={styles.bookingAmount}>${item.amount}</Text>
+                    {/* FIX: use ₹ and format correctly */}
+                    <Text style={styles.bookingAmount}>{fmt(item.amount)}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={Colors.border} />
             </TouchableOpacity>
@@ -247,11 +221,7 @@ function MenuItem({ item }: { item: any }) {
                     }).start()
                 }
                 onPressOut={() =>
-                    Animated.spring(scale, {
-                        toValue: 1,
-                        useNativeDriver: true,
-                        speed: 22,
-                    }).start()
+                    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 22 }).start()
                 }
                 activeOpacity={1}
             >
@@ -259,9 +229,7 @@ function MenuItem({ item }: { item: any }) {
                     <View
                         style={[
                             styles.menuIconWrap,
-                            {
-                                backgroundColor: item.iconBg ?? Colors.primaryLight,
-                            },
+                            { backgroundColor: item.iconBg ?? Colors.primaryLight },
                         ]}
                     >
                         <Ionicons
@@ -311,19 +279,16 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
     const alert = useAlert();
     const { logOut } = useAuthStore();
 
-    //for booking stats and recent bookings
-    const [bookings, setBookings] = useState([]);
+    // FIX: typed state
+    const [bookings, setBookings] = useState<Booking[]>([]);
 
     const headerFade = useRef(new Animated.Value(0)).current;
     const heroSlide = useRef(new Animated.Value(-16)).current;
 
+    // FIX: call fetchBookingData on mount
     useEffect(() => {
         Animated.parallel([
-            Animated.timing(headerFade, {
-                toValue: 1,
-                duration: 400,
-                useNativeDriver: true,
-            }),
+            Animated.timing(headerFade, { toValue: 1, duration: 400, useNativeDriver: true }),
             Animated.spring(heroSlide, {
                 toValue: 0,
                 useNativeDriver: true,
@@ -331,19 +296,80 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                 bounciness: 6,
             }),
         ]).start();
+
+        fetchBookingData();
     }, []);
 
     const fetchBookingData = async () => {
         try {
             const response = await bookingAPI.getAll();
-
-            if (response.success) {
-                setBookings(response?.bookings);
+            if (response?.success) {
+                setBookings(response.bookings ?? []);
             }
         } catch (error: any) {
             console.error('FETCH BOOKING ERROR FROM PROFILE : ', error);
         }
     };
+
+    // FIX: compute stats from real bookings data
+    const stats: StatItem[] = useMemo(() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const upcoming = bookings.filter(b => {
+            const d = new Date(b.bookingDate);
+            d.setHours(0, 0, 0, 0);
+            return (b.status === 'confirmed' || b.status === 'pending') && d >= today;
+        }).length;
+
+        const completed = bookings.filter(b => b.status === 'completed').length;
+        const cancelled = bookings.filter(b => b.status === 'cancelled').length;
+
+        return [
+            {
+                id: 'total',
+                label: 'Total',
+                value: bookings.length,
+                icon: 'calendar',
+                color: Colors.info,
+                bg: Colors.infoLight,
+            },
+            {
+                id: 'upcoming',
+                label: 'Upcoming',
+                value: upcoming,
+                icon: 'time',
+                color: Colors.primary,
+                bg: Colors.primaryLight,
+            },
+            {
+                id: 'done',
+                label: 'Completed',
+                value: completed,
+                icon: 'checkmark-circle',
+                color: Colors.success,
+                bg: Colors.successLight,
+            },
+            {
+                id: 'cancel',
+                label: 'Cancelled',
+                value: cancelled,
+                icon: 'close-circle',
+                color: Colors.danger,
+                bg: Colors.dangerLight,
+            },
+        ];
+    }, [bookings]);
+
+    // FIX: recent 3 bookings from API, sorted by createdAt desc
+    const recentBookings = useMemo(
+        () =>
+            [...bookings]
+                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+                .slice(0, 3),
+        [bookings],
+    );
+
     const handleLogout = () => {
         alert.show({
             type: 'confirm',
@@ -356,10 +382,7 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                     onPress: async () => {
                         navigation
                             .getParent<NativeStackNavigationProp<RootStackParamList>>()
-                            .reset({
-                                index: 0,
-                                routes: [{ name: 'login' }],
-                            });
+                            .reset({ index: 0, routes: [{ name: 'login' }] });
                         await logOut();
                         alert.dismiss;
                     },
@@ -440,14 +463,11 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
 
     return (
         <View style={styles.container}>
-            {/* ── Header ──────────────────────────────────────────────────────── */}
+            {/* ── Header ── */}
             <Animated.View
                 style={[
                     styles.header,
-                    {
-                        opacity: headerFade,
-                        transform: [{ translateY: heroSlide }],
-                    },
+                    { opacity: headerFade, transform: [{ translateY: heroSlide }] },
                 ]}
             >
                 <View style={styles.headerAccentBar} />
@@ -487,13 +507,10 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                 contentContainerStyle={styles.contentPadding}
                 showsVerticalScrollIndicator={false}
             >
-                {/* ── Profile card ──────────────────────────────────────────────── */}
+                {/* ── Profile card ── */}
                 <Animated.View style={[styles.profileCard, { opacity: headerFade }]}>
-                    {/* Amber banner */}
                     <View style={styles.profileBanner} />
-
                     <View style={styles.profileContent}>
-                        {/* Avatar */}
                         <View style={styles.avatarWrapper}>
                             <View style={styles.avatarRing}>
                                 <View style={styles.avatar}>
@@ -504,17 +521,12 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                                 <Ionicons name="camera" size={14} color={Colors.white} />
                             </TouchableOpacity>
                         </View>
-
                         <Text style={styles.userName}>{user.name}</Text>
                         <Text style={styles.userEmail}>{user.email}</Text>
-
-                        {/* Member badge */}
                         <View style={styles.memberBadge}>
                             <View style={styles.memberDot} />
                             <Text style={styles.memberText}>{user.role}</Text>
                         </View>
-
-                        {/* User type badge */}
                         <View style={[styles.typeBadge, { backgroundColor: typeCfg.bg }]}>
                             <Ionicons name={typeCfg.icon as any} size={13} color={typeCfg.color} />
                             <Text style={[styles.typeBadgeText, { color: typeCfg.color }]}>
@@ -524,14 +536,14 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                     </View>
                 </Animated.View>
 
-                {/* ── Booking stats row ─────────────────────────────────────────── */}
+                {/* ── Booking stats — computed from API ── */}
                 <View style={styles.statsRow}>
-                    {STATS.map((s, i) => (
+                    {stats.map((s, i) => (
                         <StatCard key={s.id} stat={s} index={i} />
                     ))}
                 </View>
 
-                {/* ── Quick actions ─────────────────────────────────────────────── */}
+                {/* ── Quick actions ── */}
                 <Animated.View style={[{ opacity: headerFade }, styles.quickSection]}>
                     <Text style={styles.sectionHeading}>Quick Actions</Text>
                     <View style={styles.quickRow}>
@@ -543,9 +555,7 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                             <View
                                 style={[
                                     styles.quickTileIcon,
-                                    {
-                                        backgroundColor: 'rgba(255,255,255,0.12)',
-                                    },
+                                    { backgroundColor: 'rgba(255,255,255,0.12)' },
                                 ]}
                             >
                                 <Ionicons name="calendar" size={20} color={Colors.white} />
@@ -562,9 +572,7 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                             <View
                                 style={[
                                     styles.quickTileIcon,
-                                    {
-                                        backgroundColor: 'rgba(255,255,255,0.2)',
-                                    },
+                                    { backgroundColor: 'rgba(255,255,255,0.2)' },
                                 ]}
                             >
                                 <Ionicons name="search" size={20} color={Colors.white} />
@@ -581,9 +589,7 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                             <View
                                 style={[
                                     styles.quickTileIcon,
-                                    {
-                                        backgroundColor: 'rgba(255,255,255,0.18)',
-                                    },
+                                    { backgroundColor: 'rgba(255,255,255,0.18)' },
                                 ]}
                             >
                                 <Ionicons name="heart" size={20} color={Colors.white} />
@@ -594,7 +600,7 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                     </View>
                 </Animated.View>
 
-                {/* ── Recent Bookings ───────────────────────────────────────────── */}
+                {/* ── Recent Bookings — from API ── */}
                 <Animated.View style={[styles.bookingsCard, { opacity: headerFade }]}>
                     <View style={styles.bookingsCardHeader}>
                         <View style={styles.sectionTitleRow}>
@@ -610,21 +616,28 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                         </TouchableOpacity>
                     </View>
 
-                    {RECENT_BOOKINGS.map((b, i) => (
-                        <View key={b.id}>
-                            <BookingRow item={b} index={i} />
-                            {i < RECENT_BOOKINGS.length - 1 && (
-                                <View style={styles.bookingDivider} />
-                            )}
+                    {recentBookings.length === 0 ? (
+                        <View style={styles.emptyBookings}>
+                            <Ionicons name="calendar-outline" size={36} color={Colors.border} />
+                            <Text style={styles.emptyBookingsText}>No bookings yet</Text>
                         </View>
-                    ))}
+                    ) : (
+                        recentBookings.map((b, i) => (
+                            <View key={b._id}>
+                                <BookingRow item={b} index={i} />
+                                {i < recentBookings.length - 1 && (
+                                    <View style={styles.bookingDivider} />
+                                )}
+                            </View>
+                        ))
+                    )}
                 </Animated.View>
 
-                {/* ── Account menu ──────────────────────────────────────────────── */}
+                {/* ── Account menu ── */}
                 <MenuSection title="ACCOUNT" items={accountItems} />
                 <MenuSection title="PREFERENCES" items={preferenceItems} />
 
-                {/* ── Logout ────────────────────────────────────────────────────── */}
+                {/* ── Logout ── */}
                 <TouchableOpacity
                     style={styles.logoutBtn}
                     onPress={handleLogout}
@@ -648,7 +661,7 @@ const STAT_W = (SCREEN_WIDTH - Spacing.lg * 2 - Spacing.sm * 3) / 4;
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
 
-    // ── Header ──
+    // Header
     header: {
         backgroundColor: Colors.surface,
         borderBottomLeftRadius: Radii.xxl,
@@ -678,11 +691,7 @@ const styles = StyleSheet.create({
         color: Colors.charcoal,
         letterSpacing: Typography.tight,
     },
-    headerActions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.xs,
-    },
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
     iconBtn: {
         width: 38,
         height: 38,
@@ -711,15 +720,11 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
 
-    // ── Content ──
+    // Content
     content: { flex: 1 },
-    contentPadding: {
-        paddingHorizontal: Spacing.lg,
-        paddingTop: Spacing.xl,
-        paddingBottom: 120,
-    },
+    contentPadding: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.xl, paddingBottom: 120 },
 
-    // ── Profile card ──
+    // Profile card
     profileCard: {
         backgroundColor: Colors.surface,
         borderRadius: 24,
@@ -740,7 +745,6 @@ const styles = StyleSheet.create({
         paddingBottom: 24,
         marginTop: -44,
     },
-
     avatarWrapper: { position: 'relative', marginBottom: 14 },
     avatarRing: {
         width: 96,
@@ -777,7 +781,6 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: Colors.surface,
     },
-
     userName: {
         fontSize: 22,
         fontWeight: Typography.extraBold,
@@ -791,7 +794,6 @@ const styles = StyleSheet.create({
         fontWeight: Typography.regular,
         marginBottom: 10,
     },
-
     memberBadge: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -805,19 +807,13 @@ const styles = StyleSheet.create({
         borderColor: Colors.primaryBorder,
         marginBottom: 10,
     },
-    memberDot: {
-        width: 6,
-        height: 6,
-        borderRadius: 3,
-        backgroundColor: Colors.primary,
-    },
+    memberDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primary },
     memberText: {
         fontSize: 9,
         fontWeight: Typography.extraBold,
         color: Colors.primaryDark,
         letterSpacing: 1.2,
     },
-
     typeBadge: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -832,12 +828,8 @@ const styles = StyleSheet.create({
         letterSpacing: Typography.normal,
     },
 
-    // ── Stats ──
-    statsRow: {
-        flexDirection: 'row',
-        gap: Spacing.sm,
-        marginBottom: Spacing.lg,
-    },
+    // Stats
+    statsRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
     statCard: {
         width: STAT_W,
         backgroundColor: Colors.surface,
@@ -855,11 +847,7 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         marginBottom: 2,
     },
-    statNum: {
-        fontSize: 20,
-        fontWeight: Typography.extraBold,
-        letterSpacing: -1,
-    },
+    statNum: { fontSize: 20, fontWeight: Typography.extraBold, letterSpacing: -1 },
     statLabel: {
         fontSize: 9.5,
         color: Colors.charcoalLight,
@@ -867,47 +855,7 @@ const styles = StyleSheet.create({
         textAlign: 'center',
     },
 
-    // ── CTA banner ──
-    ctaBanner: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colors.charcoal,
-        borderRadius: Radii.xl,
-        padding: Spacing.lg,
-        gap: Spacing.md,
-        marginBottom: Spacing.lg,
-        ...Shadows.floating,
-    },
-    ctaBannerTitle: {
-        fontSize: 16,
-        fontWeight: Typography.extraBold,
-        color: Colors.white,
-        letterSpacing: -0.3,
-        marginBottom: 3,
-    },
-    ctaBannerSub: {
-        fontSize: 12,
-        color: 'rgba(255,255,255,0.55)',
-        lineHeight: 17,
-    },
-    ctaBannerBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        backgroundColor: Colors.primary,
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: 11,
-        borderRadius: Radii.full,
-        ...Shadows.primary,
-    },
-    ctaBannerBtnText: {
-        fontSize: 13,
-        fontWeight: Typography.extraBold,
-        color: Colors.white,
-        letterSpacing: 0.3,
-    },
-
-    // ── Quick actions ──
+    // Quick actions
     quickSection: { marginBottom: Spacing.lg },
     quickRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
     quickTile: {
@@ -934,32 +882,19 @@ const styles = StyleSheet.create({
         marginTop: Spacing.md,
         marginBottom: 2,
     },
-    quickTileSub: {
-        fontSize: 9.5,
-        color: 'rgba(255,255,255,0.68)',
-        fontWeight: Typography.medium,
-    },
+    quickTileSub: { fontSize: 9.5, color: 'rgba(255,255,255,0.68)', fontWeight: Typography.medium },
 
-    // ── Section header helpers ──
+    // Section helpers
     sectionHeading: {
         fontSize: 17,
         fontWeight: Typography.extraBold,
         color: Colors.charcoal,
         letterSpacing: -0.3,
     },
-    sectionTitleRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-    },
-    sectionAccent: {
-        width: 4,
-        height: 20,
-        backgroundColor: Colors.primary,
-        borderRadius: 2,
-    },
+    sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    sectionAccent: { width: 4, height: 20, backgroundColor: Colors.primary, borderRadius: 2 },
 
-    // ── Bookings card ──
+    // Bookings card
     bookingsCard: {
         backgroundColor: Colors.surface,
         borderRadius: Radii.xl,
@@ -974,11 +909,7 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.lg,
     },
     viewAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    viewAllText: {
-        fontSize: 13,
-        fontWeight: Typography.bold,
-        color: Colors.primary,
-    },
+    viewAllText: { fontSize: 13, fontWeight: Typography.bold, color: Colors.primary },
 
     bookingRow: {
         flexDirection: 'row',
@@ -1001,35 +932,23 @@ const styles = StyleSheet.create({
         flex: 1,
         marginRight: Spacing.sm,
     },
-    statusChip: {
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: Radii.full,
-    },
-    statusChipText: {
-        fontSize: 10,
-        fontWeight: Typography.bold,
-        letterSpacing: 0.3,
-    },
+    statusChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radii.full },
+    statusChipText: { fontSize: 10, fontWeight: Typography.bold, letterSpacing: 0.3 },
     bookingMeta: { flexDirection: 'row', gap: Spacing.md, marginBottom: 4 },
     bookingMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    bookingMetaText: {
-        fontSize: 11,
+    bookingMetaText: { fontSize: 11, color: Colors.charcoalLight, fontWeight: Typography.medium },
+    bookingAmount: { fontSize: 15, fontWeight: Typography.extraBold, color: Colors.primary },
+    bookingDivider: { height: 1, backgroundColor: Colors.background, marginLeft: 15 },
+
+    // Empty bookings state
+    emptyBookings: { alignItems: 'center', paddingVertical: 28, gap: 8 },
+    emptyBookingsText: {
+        fontSize: Typography.base,
         color: Colors.charcoalLight,
         fontWeight: Typography.medium,
     },
-    bookingAmount: {
-        fontSize: 15,
-        fontWeight: Typography.extraBold,
-        color: Colors.primary,
-    },
-    bookingDivider: {
-        height: 1,
-        backgroundColor: Colors.background,
-        marginLeft: 15,
-    },
 
-    // ── Menu sections ──
+    // Menu
     menuSection: { marginBottom: Spacing.lg },
     menuSectionLabel: {
         fontSize: Typography.sm,
@@ -1055,12 +974,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: Spacing.lg,
         paddingVertical: 14,
     },
-    menuItemLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 14,
-        flex: 1,
-    },
+    menuItemLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
     menuIconWrap: {
         width: 42,
         height: 42,
@@ -1074,11 +988,7 @@ const styles = StyleSheet.create({
         color: Colors.charcoal,
         marginBottom: 2,
     },
-    menuItemSubtitle: {
-        fontSize: 12,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.regular,
-    },
+    menuItemSubtitle: { fontSize: 12, color: Colors.charcoalLight, fontWeight: Typography.regular },
     menuChevronWrap: {
         width: 28,
         height: 28,
@@ -1087,13 +997,9 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
-    menuDivider: {
-        height: 1,
-        backgroundColor: Colors.background,
-        marginLeft: 72,
-    },
+    menuDivider: { height: 1, backgroundColor: Colors.background, marginLeft: 72 },
 
-    // ── Logout ──
+    // Logout
     logoutBtn: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1125,7 +1031,6 @@ const styles = StyleSheet.create({
         color: Colors.danger,
         letterSpacing: Typography.normal,
     },
-
     versionText: {
         textAlign: 'center',
         fontSize: 12,

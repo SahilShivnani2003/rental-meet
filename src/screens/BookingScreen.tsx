@@ -36,7 +36,7 @@ type DurationOption = {
 };
 
 type PlatformSettings = {
-    gstRate: number;
+    gstRate: number; // e.g. 18  (percent, not decimal)
     platformFee: { feeType: 'percentage' | 'flat'; feeValue: number };
     commissionRate: number;
 };
@@ -65,9 +65,12 @@ function generateTimeSlots(openingTime: string, closingTime: string): string[] {
     return slots;
 }
 
-// Convert display time "2:30 PM" → "14:30" (API expects 24-hr HH:mm)
+// "2:30 PM" → "14:30"   (API expects 24-hr HH:mm)
 function to24Hr(display: string): string {
-    const [time, period] = display.split(' ');
+    if (!display || display === '—' || display === 'Closing') return display;
+    const parts = display.split(' ');
+    if (parts.length < 2) return display; // already "HH:mm" or unknown
+    const [time, period] = parts;
     let [h, m] = time.split(':').map(Number);
     if (period === 'PM' && h !== 12) h += 12;
     if (period === 'AM' && h === 12) h = 0;
@@ -97,8 +100,7 @@ function parseTermsList(raw: any): string[] {
     return [];
 }
 
-// Map DurationOption.type → bookingType string expected by API
-// Sample shows "fullday" (lowercase, no camel)
+// DurationOption.type → API bookingType string  (sample: "fullday")
 function toBookingType(type: DurationOption['type']): string {
     switch (type) {
         case 'perHour':
@@ -111,7 +113,7 @@ function toBookingType(type: DurationOption['type']): string {
 }
 
 // ─── Build selectedAmenities payload ──────────────────────────────────────────
-// Matches the exact shape from the sample:
+// Produces the exact nested shape expected by the API:
 // { basic[], beverages[], refreshmentFood[], lunchThalis[], additional[] }
 
 function buildSelectedAmenitiesPayload(items: SelectedAmenityItem[]) {
@@ -138,7 +140,7 @@ function buildSelectedAmenitiesPayload(items: SelectedAmenityItem[]) {
                     name: item.name,
                     type: 'Paid',
                     rate: item.unitPrice,
-                    rateType: item.rateType ?? 'Fixed',
+                    rateType: item.rateType ?? 'Per Use',
                     quantity: item.qty,
                     total: item.total,
                 });
@@ -146,9 +148,8 @@ function buildSelectedAmenitiesPayload(items: SelectedAmenityItem[]) {
             case 'additional':
                 additional.push({
                     name: item.name,
-                    type: 'Paid',
                     rate: item.unitPrice,
-                    rateType: 'Fixed',
+                    rateType: item.rateType ?? 'Fixed',
                     quantity: item.qty,
                     total: item.total,
                 });
@@ -157,7 +158,7 @@ function buildSelectedAmenitiesPayload(items: SelectedAmenityItem[]) {
                 beverages.push({
                     name: item.name,
                     rate: item.unitPrice,
-                    rateType: 'Per Person',
+                    rateType: item.rateType ?? 'Per Person',
                     quantity: item.qty,
                     total: item.total,
                 });
@@ -192,14 +193,19 @@ function buildSelectedAmenitiesPayload(items: SelectedAmenityItem[]) {
 export default function BookingScreen({ navigation, route }: BookingScreenProps) {
     const params = route.params as {
         venue: Venue;
-        selectedAmenities?: SelectedAmenityItem[];
-        amenitiesTotal?: number;
+        selectedAmenities?: SelectedAmenityItem[]; // ALL items (incl. free)
+        amenitiesTotal?: number; // sum of PAID items only
         preselectedDurationHours?: number;
+        preselectedDurationType?: 'perHour' | 'halfDay' | 'fullDay';
     };
 
     const venue = params?.venue;
-    const incomingAmenities: SelectedAmenityItem[] = params?.selectedAmenities ?? [];
+    // allAmenities = includes free included items, needed for the API payload
+    const allAmenities: SelectedAmenityItem[] = params?.selectedAmenities ?? [];
+    // amenitiesTotal = only paid items total (free items = ₹0)
     const incomingAmenitiesTotal: number = params?.amenitiesTotal ?? 0;
+    // paidAmenities = subset shown in the UI card and counted in badge
+    const paidAmenities = allAmenities.filter(i => i.category !== 'basic_included');
 
     const { user } = useAuthStore();
     const alert = useAlert();
@@ -209,13 +215,18 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
     const [timePickerVisible, setTimePickerVisible] = useState(false);
     const [eventPickerVisible, setEventPickerVisible] = useState(false);
 
-    // ── Platform settings & terms ─────────────────────────────────────────────
+    // ── Platform settings from API ────────────────────────────────────────────
+    // Default matches API response shape:
+    // { success, settings: { gstRate: 18, platformFee: { feeType: "percentage", feeValue: 5 }, commissionRate: 0 } }
     const [platformSettings, setPlatformSettings] = useState<PlatformSettings>({
         gstRate: 18,
         platformFee: { feeType: 'percentage', feeValue: 5 },
         commissionRate: 0,
     });
+
+    // ── Terms from API ────────────────────────────────────────────────────────
     const [termsList, setTermsList] = useState<string[]>([]);
+    const [termsLoading, setTermsLoading] = useState(true);
 
     useEffect(() => {
         fetchPlatformSettings();
@@ -225,7 +236,7 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
     const fetchPlatformSettings = async () => {
         try {
             const res = await venueAPI.platformSetting();
-            // Response: { success, settings: { gstRate, platformFee: { feeType, feeValue }, commissionRate } }
+            // API: { success: true, settings: { gstRate, platformFee: { feeType, feeValue }, commissionRate } }
             if (res?.success && res?.settings) {
                 setPlatformSettings({
                     gstRate: res.settings.gstRate ?? 18,
@@ -249,6 +260,8 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
             }
         } catch (e) {
             console.error('FETCH TERMS ERROR:', e);
+        } finally {
+            setTermsLoading(false);
         }
     };
 
@@ -269,11 +282,18 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
     const today = new Date().toISOString().split('T')[0];
     const wknd = isWeekend(today);
 
-    // ── Duration options ──────────────────────────────────────────────────────
+    // ── Duration options — from venue.pricing, no hardcoded values ───────────
     const durationOptions: DurationOption[] = useMemo(() => {
         const opts: DurationOption[] = [];
 
-        if (pricing?.enabledOptions?.perHour) {
+        // Use enabledOptions if present; otherwise fall through to show all available rates
+        const useEnabled = !!(
+            pricing?.enabledOptions?.perHour ||
+            pricing?.enabledOptions?.halfDay ||
+            pricing?.enabledOptions?.fullDay
+        );
+
+        if (!useEnabled || pricing?.enabledOptions?.perHour) {
             const rate = wknd ? pricing.perHour?.weekend : pricing.perHour?.weekday;
             if (rate) {
                 [1, 2, 4].forEach(h =>
@@ -288,60 +308,25 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                 );
             }
         }
-        if (pricing?.enabledOptions?.halfDay) {
+        if (!useEnabled || pricing?.enabledOptions?.halfDay) {
             const rate = wknd ? pricing.halfDay?.weekend : pricing.halfDay?.weekday;
             if (rate)
                 opts.push({
                     key: 'halfDay',
                     label: 'Half Day',
-                    hours: null,
+                    hours: 4,
                     price: rate,
                     type: 'halfDay',
                 });
         }
-        if (pricing?.enabledOptions?.fullDay) {
+        if (!useEnabled || pricing?.enabledOptions?.fullDay) {
             const rate = wknd ? pricing.fullDay?.weekend : pricing.fullDay?.weekday;
             if (rate)
                 opts.push({
                     key: 'fullDay',
                     label: 'Full Day',
-                    hours: null,
+                    hours: 8,
                     price: rate,
-                    type: 'fullDay',
-                });
-        }
-
-        // Fallback: build from raw pricing if enabledOptions not set
-        if (opts.length === 0) {
-            const rate = wknd ? pricing.perHour?.weekend : pricing.perHour?.weekday;
-            if (rate) {
-                [1, 2, 4].forEach(h =>
-                    opts.push({
-                        key: `${h}h`,
-                        label: `${h}h`,
-                        hours: h,
-                        price: rate * h,
-                        type: 'perHour',
-                        multiplier: h,
-                    }),
-                );
-            }
-            const halfRate = wknd ? pricing.halfDay?.weekend : pricing.halfDay?.weekday;
-            if (halfRate)
-                opts.push({
-                    key: 'halfDay',
-                    label: 'Half Day',
-                    hours: null,
-                    price: halfRate,
-                    type: 'halfDay',
-                });
-            const fullRate = wknd ? pricing.fullDay?.weekend : pricing.fullDay?.weekday;
-            if (fullRate)
-                opts.push({
-                    key: 'fullDay',
-                    label: 'Full Day',
-                    hours: null,
-                    price: fullRate,
                     type: 'fullDay',
                 });
         }
@@ -358,15 +343,20 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
         [availability],
     );
 
-    // ── Default duration (pre-selected from VenueDetailScreen) ────────────────
+    // ── Match pre-selected duration from BookingSheet ─────────────────────────
     const defaultDuration = useMemo(() => {
+        const preType = params?.preselectedDurationType;
         const preHours = params?.preselectedDurationHours;
+        if (preType) {
+            const match = durationOptions.find(o => o.type === preType);
+            if (match) return match;
+        }
         if (preHours) {
             const match = durationOptions.find(o => o.hours === preHours);
             if (match) return match;
         }
         return durationOptions[0] ?? null;
-    }, [durationOptions, params?.preselectedDurationHours]);
+    }, [durationOptions, params?.preselectedDurationType, params?.preselectedDurationHours]);
 
     // ── Form state ────────────────────────────────────────────────────────────
     const [selectedDuration, setSelectedDuration] = useState<DurationOption | null>(
@@ -382,41 +372,43 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
     const [specialRequirements, setSpecialRequirements] = useState('');
     const [agreedToTerms, setAgreedToTerms] = useState(false);
 
-    // ── Computed end time ─────────────────────────────────────────────────────
+    // ── Computed end time (display string for the UI, converted on submit) ────
     const endTime = useMemo(() => {
         if (!selectedDuration || selectedDuration.hours === null) return '—';
         const idx = timeSlots.indexOf(startTime);
         if (idx === -1) return '—';
-        const endIdx = idx + selectedDuration.hours * 2; // 30-min slots
+        const endIdx = idx + selectedDuration.hours * 2; // each slot = 30 min
         return timeSlots[endIdx] ?? 'Closing';
     }, [selectedDuration, startTime, timeSlots]);
 
-    // ── Price calculation ─────────────────────────────────────────────────────
-    const basePrice = selectedDuration?.price ?? 0; // venue rental only
-    const subtotal = basePrice + incomingAmenitiesTotal;
+    // ── Price calculation — all values come from API/venue, nothing hardcoded ─
+    const basePrice = selectedDuration?.price ?? 0; // venue rental for selected duration
+    const subtotal = basePrice + incomingAmenitiesTotal; // base + amenities
 
+    // Platform fee: venue-level custom override takes priority over platform settings
     const platformFeeRate = useMemo(() => {
         if (venue.customPlatformFee?.enabled)
             return (venue.customPlatformFee.percentage ?? 5) / 100;
         if (platformSettings.platformFee.feeType === 'percentage')
-            return platformSettings.platformFee.feeValue / 100;
+            return platformSettings.platformFee.feeValue / 100; // API: feeValue=5 → 0.05
         return 0;
     }, [venue.customPlatformFee, platformSettings]);
 
     const platformFlatFee = useMemo(() => {
-        if (venue.customPlatformFee?.enabled) return 0;
+        if (venue.customPlatformFee?.enabled) return 0; // custom % overrides flat
         if (platformSettings.platformFee.feeType === 'flat')
             return platformSettings.platformFee.feeValue;
         return 0;
     }, [venue.customPlatformFee, platformSettings]);
 
+    // GST: venue-level override takes priority over platform gstRate
     const gstRate = useMemo(() => {
         if (venue.customGST?.enabled) return (venue.customGST.rate ?? 0) / 100;
-        return platformSettings.gstRate / 100;
+        return platformSettings.gstRate / 100; // API: gstRate=18 → 0.18
     }, [venue.customGST, platformSettings]);
 
     const platformFee = Math.round(subtotal * platformFeeRate) + platformFlatFee;
-    const gstAmount = Math.round(subtotal * gstRate); // GST on subtotal (pre-fee)
+    const gstAmount = Math.round(subtotal * gstRate); // GST applied to subtotal
     const total = subtotal + platformFee + gstAmount;
 
     // ── Validation ────────────────────────────────────────────────────────────
@@ -457,22 +449,23 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
         }
         setSubmitting(true);
         try {
-            // Matches the exact payload shape from the API sample
+            // Payload matches the API sample exactly:
+            // startTime/endTime in 24-hr format, bookingType lowercase, amount at top level, etc.
             const bookingData = {
                 venue: venue._id ?? venue.id,
                 bookingDate,
-                startTime: to24Hr(startTime), // "14:30"  ← 24-hr
-                endTime: endTime === '—' ? null : endTime, // display string or null
-                bookingType: toBookingType(selectedDuration!.type), // "fullday" / "halfday" / "perhour"
-                amount: total, // top-level total
-                amenitiesTotal: incomingAmenitiesTotal, // top-level
-                selectedAmenities: buildSelectedAmenitiesPayload(incomingAmenities),
+                startTime: to24Hr(startTime), // "14:30"
+                endTime: to24Hr(endTime), // "22:30" or null
+                bookingType: toBookingType(selectedDuration!.type), // "fullday" | "halfday" | "perhour"
+                amount: total, // top-level total amount
+                amenitiesTotal: incomingAmenitiesTotal, // top-level amenities sum
+                selectedAmenities: buildSelectedAmenitiesPayload(allAmenities),
                 priceBreakdown: {
                     basePrice, // venue rental only
                     amenitiesTotal: incomingAmenitiesTotal,
                     subtotal, // basePrice + amenitiesTotal
                     gst: gstAmount,
-                    gstRate: Math.round(gstRate * 100),
+                    gstRate: Math.round(gstRate * 100), // stored as percent
                     platformFee,
                     total,
                 },
@@ -481,14 +474,13 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                     email: email.trim().toLowerCase(),
                     phone: phone.trim().replace(/\s/g, ''),
                     eventType,
-                    guestCount: Number(guestCount), // included in customerDetails
+                    guestCount: Number(guestCount),
                     specialRequirements: specialRequirements.trim(),
                 },
             };
 
-            debugger;
             const response = await bookingAPI.create(bookingData);
-            debugger;
+
             if (response?.success) {
                 (alert.success ?? alert.show)?.(
                     'Booking Requested! 🎉',
@@ -639,7 +631,7 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                             </TouchableOpacity>
                         </View>
 
-                        {/* End Time */}
+                        {/* End Time — read only, computed from duration */}
                         <View style={s.dateTimeCol}>
                             <Text style={s.fieldLabel}>End Time</Text>
                             <View style={[s.inputWrap, s.inputDisabled]}>
@@ -777,17 +769,19 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                     </View>
                 </View>
 
-                {/* ── Selected Amenities (passed from VenueDetailScreen) ────── */}
-                {incomingAmenities.length > 0 && (
+                {/* ── Selected Amenities ───────────────────────────────────────
+                     Only shows paid items (basic_included are free & hidden here).
+                     The full allAmenities list (incl. free) is sent in the API payload. */}
+                {paidAmenities.length > 0 && (
                     <View style={s.amenitiesCard}>
                         <View style={s.amenitiesHeader}>
                             <Ionicons name="options-outline" size={17} color={Colors.charcoal} />
                             <Text style={s.amenitiesTitle}>Selected Amenities</Text>
                             <View style={s.amenitiesCountBadge}>
-                                <Text style={s.amenitiesCountText}>{incomingAmenities.length}</Text>
+                                <Text style={s.amenitiesCountText}>{paidAmenities.length}</Text>
                             </View>
                         </View>
-                        {incomingAmenities.map((item, i) => (
+                        {paidAmenities.map((item, i) => (
                             <View key={i} style={s.amenityRow}>
                                 <View style={s.amenityDot} />
                                 <Text style={s.amenityName} numberOfLines={1}>
@@ -811,35 +805,44 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                         <Ionicons name="receipt-outline" size={17} color={Colors.charcoal} />
                         <Text style={s.priceSummaryTitle}>Price Summary</Text>
                     </View>
+
                     <View style={s.priceRow}>
                         <Text style={s.priceRowLabel}>Base Price</Text>
                         <Text style={s.priceRowValue}>{fmt(basePrice)}</Text>
                     </View>
+
                     {incomingAmenitiesTotal > 0 && (
-                        <View style={s.priceRow}>
-                            <Text style={s.priceRowLabel}>Amenities</Text>
-                            <Text style={s.priceRowValue}>{fmt(incomingAmenitiesTotal)}</Text>
-                        </View>
+                        <>
+                            <View style={s.priceRow}>
+                                <Text style={s.priceRowLabel}>Amenities</Text>
+                                <Text style={s.priceRowValue}>{fmt(incomingAmenitiesTotal)}</Text>
+                            </View>
+                            <View style={s.priceRow}>
+                                <Text style={s.priceRowLabel}>Subtotal</Text>
+                                <Text style={s.priceRowValue}>{fmt(subtotal)}</Text>
+                            </View>
+                        </>
                     )}
-                    {incomingAmenitiesTotal > 0 && (
-                        <View style={s.priceRow}>
-                            <Text style={s.priceRowLabel}>Subtotal</Text>
-                            <Text style={s.priceRowValue}>{fmt(subtotal)}</Text>
-                        </View>
-                    )}
+
+                    {/* Platform fee — from API platformSettings or venue override */}
                     <View style={s.priceRow}>
                         <Text style={s.priceRowLabel}>
-                            Platform Fee ({Math.round(platformFeeRate * 100)}%)
+                            Platform Fee
+                            {platformFeeRate > 0 ? ` (${Math.round(platformFeeRate * 100)}%)` : ''}
                         </Text>
                         <Text style={[s.priceRowValue, s.priceRowFee]}>{fmt(platformFee)}</Text>
                     </View>
+
+                    {/* GST — only shown when rate > 0 (from API platformSettings or venue override) */}
                     {gstRate > 0 && (
                         <View style={s.priceRow}>
                             <Text style={s.priceRowLabel}>GST ({Math.round(gstRate * 100)}%)</Text>
                             <Text style={s.priceRowValue}>{fmt(gstAmount)}</Text>
                         </View>
                     )}
+
                     <View style={s.priceDivider} />
+
                     <View style={s.priceTotalRow}>
                         <Text style={s.priceTotalLabel}>Total Amount</Text>
                         <View style={s.priceTotalRight}>
@@ -851,8 +854,9 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                     </View>
                 </View>
 
-                {/* ── Terms & Conditions ───────────────────────────────────── */}
-                {termsList.length > 0 && (
+                {/* ── Terms & Conditions — from bookingAPI.terms() ────────────
+                     Shows nothing while loading, renders list once API responds. */}
+                {!termsLoading && termsList.length > 0 && (
                     <View style={s.termsCard}>
                         <Text style={s.termsTitle}>Terms & Conditions</Text>
                         {termsList.map((t, i) => (
@@ -884,7 +888,7 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                 <View style={{ height: 120 }} />
             </ScrollView>
 
-            {/* ── Footer actions ───────────────────────────────────────────── */}
+            {/* ── Footer ───────────────────────────────────────────────────── */}
             <View style={s.footer}>
                 <TouchableOpacity
                     style={s.footerCancel}
@@ -1137,7 +1141,7 @@ const s = StyleSheet.create({
     },
     durationPriceActive: { color: Colors.primary },
 
-    // Date / time row
+    // Date / time
     dateTimeRow: { flexDirection: 'row', gap: Spacing.sm },
     dateTimeCol: { flex: 1 },
 
@@ -1168,7 +1172,7 @@ const s = StyleSheet.create({
     textarea: { height: 60, textAlignVertical: 'top' },
     hintText: { fontSize: Typography.xs, color: Colors.charcoalLight, marginTop: 4 },
 
-    // Selected amenities
+    // Selected amenities (paid only)
     amenitiesCard: {
         backgroundColor: Colors.surface,
         borderRadius: Radii.xl,
@@ -1417,7 +1421,7 @@ const s = StyleSheet.create({
     },
     footerDim: { opacity: 0.45 },
 
-    // Picker modals (shared by time + event type pickers)
+    // Picker modals (shared by time + event type)
     modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
     pickerSheet: {
         position: 'absolute',

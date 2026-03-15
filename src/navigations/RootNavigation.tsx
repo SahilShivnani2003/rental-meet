@@ -35,6 +35,7 @@ export type RootStackParamList = {
         selectedAmenities?: SelectedAmenityItem[];
         amenitiesTotal?: number;
         preselectedDurationHours?: number;
+        preselectedDurationType?: string;
     };
     bookingDetail: {
         booking: any;

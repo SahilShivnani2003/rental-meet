@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
@@ -31,7 +31,27 @@ export type BasicAmenity = { name: string; type: string; rate: number };
 export type AdditionalAmenity = { name: string; charges: number };
 export type Beverage = { name: string; ratePerUnit: number };
 export type RefreshmentFood = { name: string; ratePerPlate: number };
-export type LunchThali = { type: string; itemNames: string; ratePerPlate: number };
+// Format 1 (flat):   { type, itemNames, ratePerPlate, numberOfItems }
+// Format 2 (nested): { thaliType, available, categories: [{ category, ratePerPlate, ... }] }
+export type LunchThaliCategory = {
+    _id?: string;
+    category: string;
+    ratePerPlate: number;
+    numberOfItems?: number;
+    itemNames?: string;
+};
+export type LunchThali = {
+    // Format 1 fields
+    type?: string;
+    itemNames?: string;
+    ratePerPlate?: number;
+    numberOfItems?: number;
+    // Format 2 fields
+    thaliType?: string;
+    available?: boolean;
+    categories?: LunchThaliCategory[];
+    _id?: string;
+};
 export type FacilityItem = { available: boolean; type: string; charges: number };
 
 export type Amenities = {
@@ -90,29 +110,25 @@ export type Venue = {
     customGST?: { enabled: boolean; rate: number };
 };
 
-// ─── Selected amenity snapshot passed to BookingScreen ────────────────────────
-
 export type SelectedAmenityItem = {
     name: string;
-    category:
-        | 'basic_included'
-        | 'basic_paid'
-        | 'additional'
-        | 'beverage'
-        | 'refreshment'
-        | 'thali'
-        | 'facility';
+    category: 'basic_included' | 'basic_paid' | 'additional' | 'beverage' | 'refreshment' | 'thali';
     qty: number;
     unitPrice: number;
     total: number;
-    // Extra fields forwarded to the API payload builder
-    rateType?: string; // "Fixed" | "Per Use" | "Per Person" etc.
-    thaliCategory?: string; // e.g. "Regular Thali"
-    numberOfItems?: number; // thali item count
-    itemNames?: string; // thali item names string
+    rateType?: string;
+    thaliCategory?: string;
+    numberOfItems?: number;
+    itemNames?: string;
 };
 
-// Helper row types
+type SheetDurationOption = {
+    label: string;
+    hours: number;
+    price: number;
+    type: 'perHour' | 'halfDay' | 'fullDay';
+};
+
 type StatItem = { icon: string; value: string };
 type PricingCard = { icon: string; label: string; price: number; sub: string };
 type TransitItem = { icon: string; label: string; value: string };
@@ -138,7 +154,43 @@ function formatTime(t: string): string {
     return `${hour % 12 || 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
 }
 
-// ─── Small reusable pieces ────────────────────────────────────────────────────
+function isWeekend(dateStr: string): boolean {
+    const d = new Date(dateStr);
+    return d.getDay() === 0 || d.getDay() === 6;
+}
+
+// FIX 1: Removed thaliGroupKey() entirely — not needed for direct flat list
+
+function buildSheetDurations(pricing: Pricing, wknd: boolean): SheetDurationOption[] {
+    const opts: SheetDurationOption[] = [];
+
+    const useEnabled = !!(
+        pricing.enabledOptions?.perHour ||
+        pricing.enabledOptions?.halfDay ||
+        pricing.enabledOptions?.fullDay
+    );
+
+    if (!useEnabled || pricing.enabledOptions?.perHour) {
+        const rate = wknd ? pricing.perHour?.weekend : pricing.perHour?.weekday;
+        if (rate) {
+            [1, 2, 4].forEach(h =>
+                opts.push({ label: `${h}H`, hours: h, price: rate * h, type: 'perHour' }),
+            );
+        }
+    }
+    if (!useEnabled || pricing.enabledOptions?.halfDay) {
+        const rate = wknd ? pricing.halfDay?.weekend : pricing.halfDay?.weekday;
+        if (rate) opts.push({ label: 'Half Day', hours: 4, price: rate, type: 'halfDay' });
+    }
+    if (!useEnabled || pricing.enabledOptions?.fullDay) {
+        const rate = wknd ? pricing.fullDay?.weekend : pricing.fullDay?.weekday;
+        if (rate) opts.push({ label: 'Full Day', hours: 8, price: rate, type: 'fullDay' });
+    }
+
+    return opts;
+}
+
+// ─── Small reusable UI pieces ─────────────────────────────────────────────────
 
 function SectionTitle({ icon, label }: { icon: string; label: string }) {
     return (
@@ -174,7 +226,7 @@ const util = StyleSheet.create({
     divider: { height: 1, backgroundColor: Colors.divider, marginVertical: Spacing.lg },
 });
 
-// ─── IncludedItem ─────────────────────────────────────────────────────────────
+// ─── IncludedItem ──────────────────────────────────────────────────────────────
 
 function IncludedItem({ name }: { name: string }) {
     return (
@@ -190,7 +242,7 @@ function IncludedItem({ name }: { name: string }) {
     );
 }
 
-// ─── PaidItem ─────────────────────────────────────────────────────────────────
+// ─── PaidItem ──────────────────────────────────────────────────────────────────
 
 type PaidItemProps = {
     name: string;
@@ -237,7 +289,7 @@ function PaidItem({
     );
 }
 
-// ─── BeverageItem ─────────────────────────────────────────────────────────────
+// ─── BeverageItem ──────────────────────────────────────────────────────────────
 
 type BeverageItemProps = {
     name: string;
@@ -305,84 +357,51 @@ function RefreshmentItem({ name, rate, checked, onToggle }: RefreshmentItemProps
     );
 }
 
-// ─── ThaliGroup ───────────────────────────────────────────────────────────────
-
-type ThaliGroupProps = {
-    groupName: string;
-    thalis: LunchThali[];
-    selectedThalis: Set<string>;
-    onToggle: (key: string) => void;
-};
-function ThaliGroup({ groupName, thalis, selectedThalis, onToggle }: ThaliGroupProps) {
-    return (
-        <View style={am.thaliGroup}>
-            <Text style={am.thaliGroupName}>{groupName}</Text>
-            {thalis.map((t, i) => {
-                const key = `${groupName}_${t.type}`;
-                const checked = selectedThalis.has(key);
-                return (
-                    <TouchableOpacity
-                        key={i}
-                        style={[am.thaliRow, checked && am.thaliRowActive]}
-                        onPress={() => onToggle(key)}
-                        activeOpacity={0.8}
-                    >
-                        <View style={[am.checkbox, checked && am.checkboxOn]}>
-                            {checked && (
-                                <Ionicons name="checkmark" size={11} color={Colors.white} />
-                            )}
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={am.thaliType}>{t.type}</Text>
-                            <Text style={am.thaliItems} numberOfLines={1}>
-                                {t.itemNames}
-                            </Text>
-                        </View>
-                        <Text style={am.thaliPrice}>₹{t.ratePerPlate}/plate</Text>
-                    </TouchableOpacity>
-                );
-            })}
-        </View>
-    );
-}
+// FIX 2: ThaliGroup component and ThaliGroupProps type REMOVED — replaced by direct flat map in JSX
 
 // ─── BookingSheet ─────────────────────────────────────────────────────────────
-
-const DURATIONS: Array<{ label: string; hours: number }> = [
-    { label: '1H', hours: 1 },
-    { label: '2H', hours: 2 },
-    { label: '4H', hours: 4 },
-    { label: 'Full Day', hours: 8 },
-];
 
 type BookingSheetProps = {
     visible: boolean;
     venue: Venue;
-    selectedAmenities: SelectedAmenityItem[];
+    paidAmenities: SelectedAmenityItem[];
     amenitiesTotal: number;
+    allAmenities: SelectedAmenityItem[];
     onClose: () => void;
 };
 
 function BookingSheet({
     visible,
     venue,
-    selectedAmenities,
+    paidAmenities,
     amenitiesTotal,
+    allAmenities,
     onClose,
 }: BookingSheetProps) {
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-    const [duration, setDuration] = useState(0);
-    const weekdayPrice = venue.pricing.perHour.weekday;
-    const venueRental = weekdayPrice * DURATIONS[duration].hours;
-    const estimated = venueRental + amenitiesTotal;
+
+    const today = new Date().toISOString().split('T')[0];
+    const wknd = isWeekend(today);
+
+    const durationOptions = useMemo(
+        () => buildSheetDurations(venue.pricing, wknd),
+        [venue.pricing, wknd],
+    );
+
+    const [durationIdx, setDurationIdx] = useState(0);
+    const selected = durationOptions[durationIdx];
+    const venueRental = selected?.price ?? 0;
+    const estimatedSubtotal = venueRental + amenitiesTotal;
 
     const handleReserve = () => {
+        if (!selected) return;
         onClose();
         navigation.navigate('booking', {
             venue,
-            selectedAmenities,
+            selectedAmenities: allAmenities,
             amenitiesTotal,
-            preselectedDurationHours: DURATIONS[duration].hours,
+            preselectedDurationHours: selected.hours,
+            preselectedDurationType: selected.type,
         });
     };
 
@@ -401,7 +420,13 @@ function BookingSheet({
                             <Text style={sheet.headerTitle}>Book This Venue</Text>
                             <View style={sheet.priceRow}>
                                 <Text style={sheet.startingFrom}>Starting from </Text>
-                                <Text style={sheet.price}>₹{weekdayPrice.toLocaleString()}</Text>
+                                <Text style={sheet.price}>
+                                    ₹
+                                    {(wknd
+                                        ? venue.pricing.perHour.weekend
+                                        : venue.pricing.perHour.weekday
+                                    ).toLocaleString()}
+                                </Text>
                                 <Text style={sheet.perHour}>/hour</Text>
                             </View>
                         </View>
@@ -412,28 +437,42 @@ function BookingSheet({
                     <Divider />
 
                     <Text style={sheet.fieldLabel}>Duration</Text>
-                    <View style={sheet.durationRow}>
-                        {DURATIONS.map((d, i) => (
-                            <TouchableOpacity
-                                key={d.label}
-                                style={[
-                                    sheet.durationBtn,
-                                    i === duration && sheet.durationBtnActive,
-                                ]}
-                                onPress={() => setDuration(i)}
-                                activeOpacity={0.8}
-                            >
-                                <Text
+                    {durationOptions.length === 0 ? (
+                        <Text style={sheet.noDurations}>
+                            No pricing options configured for this venue.
+                        </Text>
+                    ) : (
+                        <View style={sheet.durationRow}>
+                            {durationOptions.map((d, i) => (
+                                <TouchableOpacity
+                                    key={d.label}
                                     style={[
-                                        sheet.durationText,
-                                        i === duration && sheet.durationTextActive,
+                                        sheet.durationBtn,
+                                        i === durationIdx && sheet.durationBtnActive,
                                     ]}
+                                    onPress={() => setDurationIdx(i)}
+                                    activeOpacity={0.8}
                                 >
-                                    {d.label}
-                                </Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
+                                    <Text
+                                        style={[
+                                            sheet.durationText,
+                                            i === durationIdx && sheet.durationTextActive,
+                                        ]}
+                                    >
+                                        {d.label}
+                                    </Text>
+                                    <Text
+                                        style={[
+                                            sheet.durationPrice,
+                                            i === durationIdx && sheet.durationPriceActive,
+                                        ]}
+                                    >
+                                        ₹{d.price.toLocaleString()}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    )}
 
                     <View style={sheet.summaryBox}>
                         <View style={sheet.summaryRow}>
@@ -443,25 +482,30 @@ function BookingSheet({
                         {amenitiesTotal > 0 && (
                             <View style={[sheet.summaryRow, { marginTop: 6 }]}>
                                 <Text style={sheet.summaryLabel}>
-                                    Amenities ({selectedAmenities.length} selected)
+                                    Amenities ({paidAmenities.length} item
+                                    {paidAmenities.length !== 1 ? 's' : ''})
                                 </Text>
                                 <Text style={sheet.summaryValue}>
                                     ₹{amenitiesTotal.toLocaleString()}
                                 </Text>
                             </View>
                         )}
-                        <View style={[sheet.summaryRow, { marginTop: 6 }]}>
+                        <View style={[sheet.summaryRow, { marginTop: 8 }]}>
                             <Text style={[sheet.summaryLabel, { fontWeight: Typography.bold }]}>
-                                Estimated Total
+                                Subtotal (excl. taxes)
                             </Text>
-                            <Text style={sheet.estimatedTotal}>₹{estimated.toLocaleString()}</Text>
+                            <Text style={sheet.estimatedTotal}>
+                                ₹{estimatedSubtotal.toLocaleString()}
+                            </Text>
                         </View>
+                        <Text style={sheet.taxNote}>* Platform fee & GST applied at checkout</Text>
                     </View>
 
                     <TouchableOpacity
-                        style={sheet.reserveBtn}
+                        style={[sheet.reserveBtn, !selected && { opacity: 0.5 }]}
                         activeOpacity={0.85}
                         onPress={handleReserve}
+                        disabled={!selected}
                     >
                         <Ionicons
                             name="calendar"
@@ -505,7 +549,7 @@ function BookingSheet({
     );
 }
 
-// ─── Amenity summary badge shown in CTA bar ───────────────────────────────────
+// ─── Amenity summary badge ────────────────────────────────────────────────────
 
 function AmenitiesSummaryBadge({ count, total }: { count: number; total: number }) {
     if (count === 0) return null;
@@ -541,7 +585,6 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
     const [bookingVisible, setBookingVisible] = useState(false);
     const { pricing, availability, amenities, location } = venue;
 
-    // ── Amenity selection state ───────────────────────────────────────────────
     const [paidChecked, setPaidChecked] = useState<Set<string>>(new Set());
     const [paidQty, setPaidQty] = useState<Record<string, number>>({});
     const [bevChecked, setBevChecked] = useState<Set<string>>(new Set());
@@ -555,18 +598,14 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
         return next;
     }, []);
 
-    // ── Compute selected amenities snapshot ───────────────────────────────────
-    const { selectedAmenities, amenitiesTotal } = React.useMemo<{
-        selectedAmenities: SelectedAmenityItem[];
-        amenitiesTotal: number;
-    }>(() => {
-        const items: SelectedAmenityItem[] = [];
+    const { allAmenities, paidAmenities, amenitiesTotal } = useMemo(() => {
+        const all: SelectedAmenityItem[] = [];
 
-        // Basic included (free) — always sent so the API knows what's in the booking
+        // 1. Basic included (free)
         amenities.basic
             .filter(a => a.type !== 'Paid')
             .forEach(a => {
-                items.push({
+                all.push({
                     name: a.name,
                     category: 'basic_included',
                     qty: 1,
@@ -576,12 +615,12 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                 });
             });
 
-        // Basic paid
+        // 2. Basic paid
         amenities.basic
             .filter(a => a.type === 'Paid' && paidChecked.has(a.name))
             .forEach(a => {
                 const qty = paidQty[a.name] ?? 1;
-                items.push({
+                all.push({
                     name: a.name,
                     category: 'basic_paid',
                     qty,
@@ -591,12 +630,12 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                 });
             });
 
-        // Additional services
+        // 3. Additional services
         amenities.additional
             .filter(a => paidChecked.has(`add_${a.name}`))
             .forEach(a => {
                 const qty = paidQty[`add_${a.name}`] ?? 1;
-                items.push({
+                all.push({
                     name: a.name,
                     category: 'additional',
                     qty,
@@ -606,12 +645,12 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                 });
             });
 
-        // Beverages
+        // 4. Beverages
         amenities.beverages
             .filter(b => bevChecked.has(b.name))
             .forEach(b => {
                 const qty = bevQty[b.name] ?? 1;
-                items.push({
+                all.push({
                     name: b.name,
                     category: 'beverage',
                     qty,
@@ -621,11 +660,11 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                 });
             });
 
-        // Refreshments
+        // 5. Refreshments
         amenities.refreshmentFood
             .filter(f => refChecked.has(f.name))
             .forEach(f => {
-                items.push({
+                all.push({
                     name: f.name,
                     category: 'refreshment',
                     qty: 1,
@@ -635,31 +674,52 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                 });
             });
 
-        // Thalis — carry thaliCategory, numberOfItems, itemNames for the payload
+        // 6. Thalis — handle both API formats
+        //    Format 1: flat { type, ratePerPlate, itemNames, numberOfItems }
+        //    Format 2: nested { thaliType, categories: [{ category, ratePerPlate, ... }] }
         amenities.lunchThalis.forEach(t => {
-            const group = thaliGroupKey(t.type);
-            const key = `${group}_${t.type}`;
-            if (thaliChecked.has(key)) {
-                items.push({
-                    name: t.type,
-                    category: 'thali',
-                    qty: 1,
-                    unitPrice: t.ratePerPlate,
-                    total: t.ratePerPlate,
-                    thaliCategory: 'Regular Thali',
-                    numberOfItems: (t as any).numberOfItems ?? 0,
-                    itemNames: t.itemNames ?? '',
+            if (t.thaliType && Array.isArray(t.categories)) {
+                // Format 2 — iterate each category row; key = `${thaliType}__${category}`
+                t.categories.forEach(cat => {
+                    const key = `${t.thaliType}__${cat.category}`;
+                    if (thaliChecked.has(key)) {
+                        all.push({
+                            name: `${t.thaliType} — ${cat.category}`,
+                            category: 'thali',
+                            qty: 1,
+                            unitPrice: cat.ratePerPlate,
+                            total: cat.ratePerPlate,
+                            rateType: 'Per Plate',
+                            thaliCategory: cat.category,
+                            numberOfItems: cat.numberOfItems ?? 0,
+                            itemNames: cat.itemNames ?? '',
+                        });
+                    }
                 });
+            } else if (t.type) {
+                // Format 1 — flat entry; key = t.type
+                if (thaliChecked.has(t.type)) {
+                    all.push({
+                        name: t.type,
+                        category: 'thali',
+                        qty: 1,
+                        unitPrice: t.ratePerPlate ?? 0,
+                        total: t.ratePerPlate ?? 0,
+                        rateType: 'Per Plate',
+                        thaliCategory: t.type,
+                        numberOfItems: t.numberOfItems ?? 0,
+                        itemNames: t.itemNames ?? '',
+                    });
+                }
             }
         });
 
-        // Only paid items count toward amenitiesTotal (included items are free)
-        const paidItems = items.filter(i => i.category !== 'basic_included');
-        const total = paidItems.reduce((sum, i) => sum + i.total, 0);
-        return { selectedAmenities: items, amenitiesTotal: total };
+        const paid = all.filter(i => i.category !== 'basic_included');
+        const total = paid.reduce((sum, i) => sum + i.total, 0);
+
+        return { allAmenities: all, paidAmenities: paid, amenitiesTotal: total };
     }, [paidChecked, paidQty, bevChecked, bevQty, refChecked, thaliChecked, amenities]);
 
-    // ─── Animated values ──────────────────────────────────────────────────────
     const heroTranslate = scrollY.interpolate({
         inputRange: [0, HERO_HEIGHT],
         outputRange: [0, -HERO_HEIGHT * 0.28],
@@ -676,13 +736,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
         extrapolate: 'clamp',
     });
 
-    // Thali grouping
-    const thaliGroups = amenities.lunchThalis.reduce<Record<string, LunchThali[]>>((acc, t) => {
-        const group = thaliGroupKey(t?.type ?? '');
-        if (!acc[group]) acc[group] = [];
-        acc[group].push(t);
-        return acc;
-    }, {});
+    // FIX 6: thaliGroups reduce REMOVED — no grouping needed
 
     return (
         <View style={s.container}>
@@ -921,7 +975,10 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                     onToggle={() => {
                                         setPaidChecked(prev => toggleSet(prev, `add_${item.name}`));
                                         if (!paidQty[`add_${item.name}`])
-                                            setPaidQty(p => ({ ...p, [`add_${item.name}`]: 1 }));
+                                            setPaidQty(p => ({
+                                                ...p,
+                                                [`add_${item.name}`]: 1,
+                                            }));
                                     }}
                                     onIncrement={() =>
                                         setPaidQty(p => ({
@@ -962,7 +1019,10 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                             setBevQty(p => ({ ...p, [b.name]: 1 }));
                                     }}
                                     onIncrement={() =>
-                                        setBevQty(p => ({ ...p, [b.name]: (p[b.name] ?? 1) + 1 }))
+                                        setBevQty(p => ({
+                                            ...p,
+                                            [b.name]: (p[b.name] ?? 1) + 1,
+                                        }))
                                     }
                                     onDecrement={() =>
                                         setBevQty(p => ({
@@ -1009,15 +1069,110 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                 />
                                 <Text style={am.subTitle}>Lunch Thalis</Text>
                             </View>
-                            {Object.entries(thaliGroups).map(([group, thalis]) => (
-                                <ThaliGroup
-                                    key={group}
-                                    groupName={group}
-                                    thalis={thalis}
-                                    selectedThalis={thaliChecked}
-                                    onToggle={key => setThaliChecked(prev => toggleSet(prev, key))}
-                                />
-                            ))}
+                            {/* Handles both API formats for lunchThalis */}
+                            {amenities.lunchThalis.map((t, i) => {
+                                // ── Format 2: nested { thaliType, categories[] } ──
+                                if (t.thaliType && Array.isArray(t.categories)) {
+                                    return (
+                                        <View key={t._id ?? t.thaliType ?? i} style={am.thaliGroup}>
+                                            {/* Cuisine header */}
+                                            <Text style={am.thaliGroupName}>{t.thaliType}</Text>
+                                            {t.categories.map((cat, ci) => {
+                                                const key = `${t.thaliType}__${cat.category}`;
+                                                const checked = thaliChecked.has(key);
+                                                return (
+                                                    <TouchableOpacity
+                                                        key={cat._id ?? ci}
+                                                        style={[
+                                                            am.thaliRow,
+                                                            checked && am.thaliRowActive,
+                                                        ]}
+                                                        onPress={() =>
+                                                            setThaliChecked(prev =>
+                                                                toggleSet(prev, key),
+                                                            )
+                                                        }
+                                                        activeOpacity={0.8}
+                                                    >
+                                                        <View
+                                                            style={[
+                                                                am.checkbox,
+                                                                checked && am.checkboxOn,
+                                                            ]}
+                                                        >
+                                                            {checked && (
+                                                                <Ionicons
+                                                                    name="checkmark"
+                                                                    size={11}
+                                                                    color={Colors.white}
+                                                                />
+                                                            )}
+                                                        </View>
+                                                        <View style={{ flex: 1 }}>
+                                                            <Text style={am.thaliType}>
+                                                                {cat.category}
+                                                            </Text>
+                                                            {!!cat.itemNames && (
+                                                                <Text
+                                                                    style={am.thaliItems}
+                                                                    numberOfLines={1}
+                                                                >
+                                                                    {cat.itemNames}
+                                                                </Text>
+                                                            )}
+                                                            {!!cat.numberOfItems && (
+                                                                <Text style={am.thaliItems}>
+                                                                    {cat.numberOfItems} items
+                                                                </Text>
+                                                            )}
+                                                        </View>
+                                                        <Text style={am.thaliPrice}>
+                                                            ₹{cat.ratePerPlate}/plate
+                                                        </Text>
+                                                    </TouchableOpacity>
+                                                );
+                                            })}
+                                        </View>
+                                    );
+                                }
+
+                                // ── Format 1: flat { type, ratePerPlate, ... } ──
+                                const checked = thaliChecked.has(t.type ?? '');
+                                return (
+                                    <TouchableOpacity
+                                        key={t.type ?? i}
+                                        style={[am.thaliRow, checked && am.thaliRowActive]}
+                                        onPress={() =>
+                                            setThaliChecked(prev => toggleSet(prev, t.type ?? ''))
+                                        }
+                                        activeOpacity={0.8}
+                                    >
+                                        <View style={[am.checkbox, checked && am.checkboxOn]}>
+                                            {checked && (
+                                                <Ionicons
+                                                    name="checkmark"
+                                                    size={11}
+                                                    color={Colors.white}
+                                                />
+                                            )}
+                                        </View>
+                                        <View style={{ flex: 1 }}>
+                                            <Text style={am.thaliType}>{t.type}</Text>
+                                            {!!t.itemNames && (
+                                                <Text style={am.thaliItems} numberOfLines={1}>
+                                                    {t.itemNames}
+                                                </Text>
+                                            )}
+                                            {!!t.numberOfItems && (
+                                                <Text style={am.thaliItems}>
+                                                    {t.numberOfItems} items
+                                                </Text>
+                                            )}
+                                        </View>
+                                        <Text style={am.thaliPrice}>₹{t.ratePerPlate}/plate</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
                         </View>
                     )}
 
@@ -1137,9 +1292,9 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                 },
                                 {
                                     icon: 'sunny-outline',
-                                    label: '4 Hours',
+                                    label: 'Half Day',
                                     price: pricing.halfDay.weekday,
-                                    sub: 'Half Day',
+                                    sub: '4 Hours',
                                 },
                                 {
                                     icon: 'calendar-outline',
@@ -1230,10 +1385,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                         <Text style={s.ctaPrice}>₹{pricing.perHour.weekday.toLocaleString()}</Text>
                         <Text style={s.ctaPerHour}>/hr</Text>
                     </View>
-                    <AmenitiesSummaryBadge
-                        count={selectedAmenities.length}
-                        total={amenitiesTotal}
-                    />
+                    <AmenitiesSummaryBadge count={paidAmenities.length} total={amenitiesTotal} />
                 </View>
                 <TouchableOpacity
                     style={s.ctaButton}
@@ -1253,20 +1405,13 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
             <BookingSheet
                 visible={bookingVisible}
                 venue={venue}
-                selectedAmenities={selectedAmenities}
+                paidAmenities={paidAmenities}
                 amenitiesTotal={amenitiesTotal}
+                allAmenities={allAmenities}
                 onClose={() => setBookingVisible(false)}
             />
         </View>
     );
-}
-
-// ─── Helper ───────────────────────────────────────────────────────────────────
-
-function thaliGroupKey(type: string): string {
-    if (type?.includes('Rajasthani')) return 'Rajasthani Thali';
-    if (type?.includes('South')) return 'South Indian Thali';
-    return 'North Indian Thali';
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
@@ -1609,6 +1754,7 @@ const am = StyleSheet.create({
         minWidth: 20,
         textAlign: 'center',
     },
+    // thaliGroup: bordered card container for Format 2 grouped thalis
     thaliGroup: {
         backgroundColor: Colors.background,
         borderRadius: Radii.md,
@@ -1617,6 +1763,7 @@ const am = StyleSheet.create({
         overflow: 'hidden',
         marginBottom: 10,
     },
+    // thaliGroupName: cuisine header shown at top of each Format 2 group
     thaliGroupName: {
         backgroundColor: Colors.primaryLight,
         paddingHorizontal: 14,
@@ -1868,15 +2015,19 @@ const sheet = StyleSheet.create({
         letterSpacing: 0.3,
         marginBottom: Spacing.sm,
     },
-    durationRow: { flexDirection: 'row', gap: 8, marginBottom: Spacing.lg },
+    noDurations: { fontSize: Typography.sm, color: Colors.charcoalLight, marginBottom: Spacing.lg },
+    durationRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: Spacing.lg },
     durationBtn: {
         flex: 1,
+        minWidth: 70,
         paddingVertical: 10,
+        paddingHorizontal: 6,
         borderRadius: Radii.md,
         borderWidth: 1.5,
         borderColor: Colors.border,
         alignItems: 'center',
         backgroundColor: Colors.background,
+        gap: 2,
     },
     durationBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
     durationText: {
@@ -1885,6 +2036,8 @@ const sheet = StyleSheet.create({
         color: Colors.charcoalMid,
     },
     durationTextActive: { color: Colors.white },
+    durationPrice: { fontSize: 10, fontWeight: Typography.semiBold, color: Colors.charcoalLight },
+    durationPriceActive: { color: Colors.white },
     summaryBox: {
         backgroundColor: Colors.background,
         borderRadius: Radii.md,
@@ -1907,6 +2060,7 @@ const sheet = StyleSheet.create({
         fontWeight: Typography.extraBold,
         color: Colors.primary,
     },
+    taxNote: { fontSize: 10, color: Colors.charcoalLight, marginTop: 6, fontStyle: 'italic' },
     reserveBtn: {
         flexDirection: 'row',
         alignItems: 'center',
