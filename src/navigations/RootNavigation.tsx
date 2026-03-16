@@ -2,7 +2,6 @@ import React from 'react';
 import { NavigationContainer, NavigatorScreenParams } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from '../screens/auth/login';
-import SplashScreen from '../screens/splashScreen';
 import RegisterTypeScreen from '../screens/auth/resigter-type';
 import { ClientTabNavigation, ClientTabParamList } from './tabNavigations/ClientTabNavigation';
 import { OwnerTabNavigation, OwnerTabParamList } from './tabNavigations/OwnerTabNavigation';
@@ -13,6 +12,8 @@ import { TabNavigation, tabParamList } from './tabNavigations/TabNavigation';
 import BrowseCategoryScreen from '../screens/CategoryList';
 import BookingScreen from '../screens/BookingScreen';
 import BookingDetailScreen from '../screens/BookingDetailScreen';
+import OnboardingScreen from '../screens/OnBoarding';
+import SplashScreen from '../screens/splashScreen';
 
 export type RootStackParamList = {
     splash: undefined;
@@ -38,6 +39,7 @@ export type RootStackParamList = {
     bookingDetail: {
         booking: any;
     };
+    onBoarding: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -73,6 +75,7 @@ export default function RootNavigator() {
                     <Stack.Screen name="category" component={BrowseCategoryScreen} />
                     <Stack.Screen name="booking" component={BookingScreen} />
                     <Stack.Screen name="bookingDetail" component={BookingDetailScreen} />
+                    <Stack.Screen name="onBoarding" component={OnboardingScreen} />
                 </Stack.Navigator>
             </NavigationContainer>
         </AlertProvider>
