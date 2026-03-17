@@ -166,7 +166,9 @@ export default function VenuesScreen({ navigation }: venueProps) {
                 if (activeFilters.maxPrice) params.maxPrice = activeFilters.maxPrice;
             }
 
-            const response = isOwner ? ownerAPI.getVenues() :  await venueAPI.getVenues(params);
+            debugger
+            const response = isOwner ? await ownerAPI.getVenues() :  await venueAPI.getVenues(params);
+            debugger
             setVenues(response?.venues ?? []);
 
             Animated.timing(fadeAnim, {

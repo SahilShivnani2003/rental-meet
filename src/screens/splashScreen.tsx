@@ -1,501 +1,472 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Image, Platform, StyleSheet, Text, View } from 'react-native';
-import Video from 'react-native-video';
-import { Colors, Typography, Spacing, Radii } from '../theme/theme';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, Animated, StyleSheet, Dimensions, StatusBar } from 'react-native';
+
+import { Colors, Typography, Spacing } from '../theme/theme'; // adjust path
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigations/RootNavigation';
 import { useAuthStore } from '../store/auth-store';
 
-const { width: W, height: H } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
-type splashProps = NativeStackScreenProps<RootStackParamList, 'splash'>;
 
-const MAIN_LOGO = require('../assets/MainLogo.png');
-Image.prefetch(Image.resolveAssetSource(MAIN_LOGO).uri).catch(() => null);
+// ─── How many sunburst rays to draw ──────────────────────────────────────────
+const RAY_COUNT = 16;
+const RAY_LENGTH = width * 0.3; // how far each ray extends from icon centre
+const RAY_WIDTH = 1.8;
 
-export default function SplashScreen({ navigation }: splashProps) {
-    const { loadUser } = useAuthStore();
-    const [videoFailed, setVideoFailed] = useState(false);
-    const [videoEnded, setVideoEnded] = useState(false);
+type splashProps = NativeStackScreenProps<RootStackParamList, 'splash'>
+const SplashScreen = ({navigation}:splashProps) => {
+    const {loadUser} = useAuthStore();
+    // ─── Zoom-out: map + icon scale together ─────────────────────────────────
+    const zoomScale = useRef(new Animated.Value(2.6)).current;
+    const zoomOpacity = useRef(new Animated.Value(0)).current;
 
-    // ── Animated values ──────────────────────────────────────────────────────
-    // Dark overlay fades in as video ends
-    const overlayOpacity = useRef(new Animated.Value(0)).current;
+    // ─── Glow halo ────────────────────────────────────────────────────────────
+    const glowOpacity = useRef(new Animated.Value(0)).current;
+    const glowPulse = useRef(new Animated.Value(1)).current;
 
-    // Decorative rings expand outward
-    const ring1Scale = useRef(new Animated.Value(0.4)).current;
-    const ring1Opacity = useRef(new Animated.Value(0)).current;
-    const ring2Scale = useRef(new Animated.Value(0.4)).current;
-    const ring2Opacity = useRef(new Animated.Value(0)).current;
-    const ring3Scale = useRef(new Animated.Value(0.4)).current;
-    const ring3Opacity = useRef(new Animated.Value(0)).current;
+    // ─── Sunburst rays ────────────────────────────────────────────────────────
+    const raysOpacity = useRef(new Animated.Value(0)).current;
+    const raysScale = useRef(new Animated.Value(0.4)).current;
 
-    // Logo
-    const logoOpacity = useRef(new Animated.Value(0)).current;
-    const logoScale = useRef(new Animated.Value(0.78)).current;
-    const logoY = useRef(new Animated.Value(24)).current;
+    // ─── Ripple rings ─────────────────────────────────────────────────────────
+    const r1Scale = useRef(new Animated.Value(0.15)).current;
+    const r1Alpha = useRef(new Animated.Value(0)).current;
+    const r2Scale = useRef(new Animated.Value(0.15)).current;
+    const r2Alpha = useRef(new Animated.Value(0)).current;
+    const r3Scale = useRef(new Animated.Value(0.15)).current;
+    const r3Alpha = useRef(new Animated.Value(0)).current;
 
-    // Brand sub-label
+    // ─── Tagline ──────────────────────────────────────────────────────────────
+    const taglineOpacity = useRef(new Animated.Value(0)).current;
+    const taglineY = useRef(new Animated.Value(-26)).current;
+
+    // ─── Brand wordmark ───────────────────────────────────────────────────────
     const brandOpacity = useRef(new Animated.Value(0)).current;
-    const brandY = useRef(new Animated.Value(10)).current;
+    const brandY = useRef(new Animated.Value(30)).current;
 
-    // Header badge
-    const headerOpacity = useRef(new Animated.Value(0)).current;
-    const headerY = useRef(new Animated.Value(-18)).current;
+    // ─── Powered by ───────────────────────────────────────────────────────────
+    const poweredOpacity = useRef(new Animated.Value(0)).current;
 
-    // Footer
-    const footerOpacity = useRef(new Animated.Value(0)).current;
-    const footerY = useRef(new Animated.Value(22)).current;
-
-    // Amber horizontal rule widths (animate from 0 to full)
-    const rulerWidth = useRef(new Animated.Value(0)).current;
+    const rippleLoop = useRef<Animated.CompositeAnimation | null>(null);
+    const glowLoop = useRef<Animated.CompositeAnimation | null>(null);
 
     const handleNavigation = async () => {
         await loadUser();
 
-        const { user, isAuthenticated } = useAuthStore.getState();
+        const { user, isAuthenticated, token } = useAuthStore.getState();
 
-        console.log(`User:${user} \n Authenticated: ${isAuthenticated}`);
+        console.log(`User:${user} \n Authenticated: ${isAuthenticated} \n token: ${token}`);
         if (isAuthenticated) {
             navigation.replace(user?.role === 'owner' ? 'owner' : 'client');
         } else {
             navigation.replace('onBoarding');
         }
     };
-    // ── Animation sequence ───────────────────────────────────────────────────
+
+    // ─── Ripple helper ────────────────────────────────────────────────────────
+    const makeRipple = (sc: Animated.Value, al: Animated.Value, delay: number) =>
+        Animated.loop(
+            Animated.sequence([
+                Animated.delay(delay),
+                Animated.parallel([
+                    Animated.timing(sc, { toValue: 3.2, duration: 1500, useNativeDriver: true }),
+                    Animated.sequence([
+                        Animated.timing(al, { toValue: 0.8, duration: 200, useNativeDriver: true }),
+                        Animated.timing(al, { toValue: 0, duration: 1300, useNativeDriver: true }),
+                    ]),
+                ]),
+                Animated.parallel([
+                    Animated.timing(sc, { toValue: 0.15, duration: 0, useNativeDriver: true }),
+                    Animated.timing(al, { toValue: 0, duration: 0, useNativeDriver: true }),
+                ]),
+            ]),
+        );
+
+    // ─── Main sequence ────────────────────────────────────────────────────────
     useEffect(() => {
-        if (!videoEnded) return;
+        StatusBar.setHidden(true);
 
-        Animated.sequence([
-            // 0. Dark overlay fades over video
-            Animated.timing(overlayOpacity, {
-                toValue: 1,
-                duration: 420,
-                useNativeDriver: true,
-            }),
+        // Instant screen fade-in
+        Animated.timing(zoomOpacity, {
+            toValue: 1,
+            duration: 200,
+            useNativeDriver: true,
+        }).start();
 
-            // 1. Rings bloom out from centre
-            Animated.stagger(100, [
-                Animated.parallel([
-                    Animated.timing(ring1Scale, {
-                        toValue: 1,
-                        duration: 550,
-                        useNativeDriver: true,
-                    }),
-                    Animated.timing(ring1Opacity, {
-                        toValue: 1,
-                        duration: 400,
-                        useNativeDriver: true,
-                    }),
-                ]),
-                Animated.parallel([
-                    Animated.timing(ring2Scale, {
-                        toValue: 1,
-                        duration: 580,
-                        useNativeDriver: true,
-                    }),
-                    Animated.timing(ring2Opacity, {
-                        toValue: 1,
-                        duration: 400,
-                        useNativeDriver: true,
-                    }),
-                ]),
-                Animated.parallel([
-                    Animated.timing(ring3Scale, {
-                        toValue: 1,
-                        duration: 610,
-                        useNativeDriver: true,
-                    }),
-                    Animated.timing(ring3Opacity, {
-                        toValue: 1,
-                        duration: 400,
-                        useNativeDriver: true,
-                    }),
-                ]),
-            ]),
+        // PHASE 1 — zoom out (0 → 900ms)
+        Animated.timing(zoomScale, {
+            toValue: 1,
+            duration: 900,
+            useNativeDriver: true,
+        }).start();
 
-            // 2. Logo rises in
-            Animated.parallel([
-                Animated.timing(logoOpacity, { toValue: 1, duration: 560, useNativeDriver: true }),
-                Animated.timing(logoScale, { toValue: 1, duration: 560, useNativeDriver: true }),
-                Animated.timing(logoY, { toValue: 0, duration: 560, useNativeDriver: true }),
-            ]),
-
-            // 3. Brand sub-label fades up
-            Animated.parallel([
-                Animated.timing(brandOpacity, { toValue: 1, duration: 380, useNativeDriver: true }),
-                Animated.timing(brandY, { toValue: 0, duration: 380, useNativeDriver: true }),
-            ]),
-
-            // 4. Header drops down
-            Animated.parallel([
-                Animated.timing(headerOpacity, {
-                    toValue: 1,
-                    duration: 400,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(headerY, { toValue: 0, duration: 400, useNativeDriver: true }),
-            ]),
-
-            // 5. Footer rises up
-            Animated.parallel([
-                Animated.timing(footerOpacity, {
-                    toValue: 1,
-                    duration: 400,
-                    useNativeDriver: true,
-                }),
-                Animated.timing(footerY, { toValue: 0, duration: 400, useNativeDriver: true }),
-            ]),
-        ]).start(() => {
-            setTimeout(() => handleNavigation(), 900);
-        });
-    }, [videoEnded]);
-
-    // Ruler animates separately via JS driver (width not supported by native)
-    useEffect(() => {
-        if (!videoEnded) return;
+        // PHASE 1b — glow blooms in during zoom
         setTimeout(() => {
-            Animated.timing(rulerWidth, {
+            Animated.timing(glowOpacity, {
                 toValue: 1,
-                duration: 700,
-                useNativeDriver: false,
+                duration: 600,
+                useNativeDriver: true,
+            }).start(() => {
+                glowLoop.current = Animated.loop(
+                    Animated.sequence([
+                        Animated.timing(glowPulse, {
+                            toValue: 1.18,
+                            duration: 1000,
+                            useNativeDriver: true,
+                        }),
+                        Animated.timing(glowPulse, {
+                            toValue: 1,
+                            duration: 1000,
+                            useNativeDriver: true,
+                        }),
+                    ]),
+                );
+                glowLoop.current.start();
+            });
+        }, 250);
+
+        // PHASE 2 — sunburst rays flash in (700ms)
+        setTimeout(() => {
+            Animated.parallel([
+                Animated.timing(raysOpacity, {
+                    toValue: 0.5,
+                    duration: 350,
+                    useNativeDriver: true,
+                }),
+                Animated.spring(raysScale, {
+                    toValue: 1,
+                    tension: 26,
+                    friction: 6,
+                    useNativeDriver: true,
+                }),
+            ]).start();
+        }, 700);
+
+        // PHASE 3 — ripples start (900ms)
+        setTimeout(() => {
+            rippleLoop.current = Animated.parallel([
+                makeRipple(r1Scale, r1Alpha, 0),
+                makeRipple(r2Scale, r2Alpha, 480),
+                makeRipple(r3Scale, r3Alpha, 960),
+            ]);
+            rippleLoop.current.start();
+        }, 900);
+
+        // PHASE 4 — tagline slides in (1100ms)
+        setTimeout(() => {
+            Animated.parallel([
+                Animated.timing(taglineOpacity, {
+                    toValue: 1,
+                    duration: 450,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(taglineY, { toValue: 0, duration: 450, useNativeDriver: true }),
+            ]).start();
+        }, 1100);
+
+        // PHASE 5 — brand wordmark rises (1500ms)
+        setTimeout(() => {
+            Animated.parallel([
+                Animated.timing(brandOpacity, { toValue: 1, duration: 480, useNativeDriver: true }),
+                Animated.timing(brandY, { toValue: 0, duration: 480, useNativeDriver: true }),
+            ]).start();
+        }, 1500);
+
+        // PHASE 6 — powered by fades in (1900ms)
+        setTimeout(() => {
+            Animated.timing(poweredOpacity, {
+                toValue: 1,
+                duration: 380,
+                useNativeDriver: true,
             }).start();
-        }, 1600); // kicks in after logo appears
-    }, [videoEnded]);
+        }, 1900);
 
-    const handleVideoEnd = () => setVideoEnded(true);
-    const handleVideoError = (e: any) => {
-        console.warn('Video error:', e);
-        setVideoFailed(true);
-        setVideoEnded(true);
-    };
+        // FINISH
+        const fin = setTimeout(() => {
+            rippleLoop.current?.stop();
+            glowLoop.current?.stop();
+            StatusBar.setHidden(false);
+            handleNavigation();
+        }, 3600);
 
-    // Interpolated ruler width
-    const leftRulerW = rulerWidth.interpolate({ inputRange: [0, 1], outputRange: [0, 40] });
-    const rightRulerW = rulerWidth.interpolate({ inputRange: [0, 1], outputRange: [0, 40] });
+        return () => {
+            clearTimeout(fin);
+            rippleLoop.current?.stop();
+            glowLoop.current?.stop();
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // ─── Derived layout sizes ─────────────────────────────────────────────────
+    const MAP_W = width * 0.82;
+    const MAP_H = height * 0.42;
+    const ICON_SIZE = width * 0.28;
+    const GLOW_SIZE = width * 0.5;
+    const RIPPLE_BASE = width * 0.3;
+
+    const MAP_TOP = height * 0.235;
+    // Icon sits at India's geographic centroid — ~55% down the map height
+    const ICON_TOP = MAP_TOP + MAP_H * 0.46;
+    const ICON_CX = width / 2; // horizontal centre of screen
+    const ICON_CY = ICON_TOP + ICON_SIZE / 2; // vertical centre of icon
 
     return (
-        <View style={s.root}>
-            {/* ── Video plays full-screen ── */}
-            {!videoFailed && (
-                <Video
-                    source={require('../assets/MapBackground_enhanced.mp4')}
-                    style={StyleSheet.absoluteFill}
-                    resizeMode="cover"
-                    muted
-                    paused={false}
-                    repeat={false}
-                    onEnd={handleVideoEnd}
-                    onError={handleVideoError}
+        <Animated.View style={[styles.container, { opacity: zoomOpacity }]}>
+            {/* ══════════════════════════════════════════════════════════════
+          ZOOM GROUP — map + glow + rays + rings + icon all scale
+          from the same centre point simultaneously (Video 3 effect).
+          ══════════════════════════════════════════════════════════════ */}
+            <Animated.View style={[styles.zoomGroup, { transform: [{ scale: zoomScale }] }]}>
+                {/* India map outline */}
+                <Animated.Image
+                    source={require('../assets/Map.png')}
+                    style={[
+                        styles.mapImage,
+                        {
+                            width: MAP_W,
+                            height: MAP_H,
+                            top: MAP_TOP,
+                            left: (width - MAP_W) / 2,
+                        },
+                    ]}
+                    resizeMode="contain"
                 />
-            )}
 
-            {/* ── Dark overlay fades in as video finishes ── */}
-            <Animated.View
-                style={[StyleSheet.absoluteFill, s.darkOverlay, { opacity: overlayOpacity }]}
-            />
-
-            {/* ── Decorative concentric rings — centre bloom ── */}
-            <Animated.View
-                style={[
-                    s.ring,
-                    s.ring3,
-                    { opacity: ring3Opacity, transform: [{ scale: ring3Scale }] },
-                ]}
-            />
-            <Animated.View
-                style={[
-                    s.ring,
-                    s.ring2,
-                    { opacity: ring2Opacity, transform: [{ scale: ring2Scale }] },
-                ]}
-            />
-            <Animated.View
-                style={[
-                    s.ring,
-                    s.ring1,
-                    { opacity: ring1Opacity, transform: [{ scale: ring1Scale }] },
-                ]}
-            />
-
-            {/* Amber corner glow — top right */}
-            {videoEnded && <View style={s.cornerGlowTR} />}
-            {/* Amber corner glow — bottom left */}
-            {videoEnded && <View style={s.cornerGlowBL} />}
-
-            {/* ── HEADER ── */}
-            <Animated.View
-                style={[s.header, { opacity: headerOpacity, transform: [{ translateY: headerY }] }]}
-            >
-                <View style={s.badgeOuter}>
-                    <View style={s.badgeDot} />
-                    <Text style={s.badgeText}>INDIA'S NO. 1</Text>
-                    <View style={s.badgeDot} />
-                </View>
-                <Text style={s.tagline}>Meeting Venues Booking Platform</Text>
-            </Animated.View>
-
-            {/* ── CENTER ── */}
-            <View style={s.center}>
-                {/* Amber ruler lines flanking logo */}
-                <View style={s.rulerRow}>
-                    <Animated.View style={[s.ruler, { width: leftRulerW }]} />
-                    <View style={s.rulerGap} />
-                    <Animated.View style={[s.ruler, { width: rightRulerW }]} />
-                </View>
-
+                {/* ── Sunburst rays — 16 thin lines rotated around icon centre ── */}
                 <Animated.View
                     style={[
-                        s.logoWrap,
+                        styles.raysContainer,
                         {
-                            opacity: logoOpacity,
-                            transform: [{ scale: logoScale }, { translateY: logoY }],
+                            top: ICON_CY - RAY_LENGTH,
+                            left: ICON_CX - RAY_LENGTH,
+                            width: RAY_LENGTH * 2,
+                            height: RAY_LENGTH * 2,
+                            opacity: raysOpacity,
+                            transform: [{ scale: raysScale }],
                         },
                     ]}
                 >
-                    <Image
-                        source={MAIN_LOGO}
-                        defaultSource={MAIN_LOGO}
-                        style={s.mainLogo}
-                        resizeMode="contain"
-                    />
+                    {Array.from({ length: RAY_COUNT }).map((_, i) => {
+                        const angle = (360 / RAY_COUNT) * i;
+                        return (
+                            <View
+                                key={i}
+                                style={[
+                                    styles.ray,
+                                    {
+                                        // Each ray is a thin rectangle starting from the centre.
+                                        // We rotate it around the container's centre point.
+                                        transform: [
+                                            { rotate: `${angle}deg` },
+                                            // Shift up so the ray starts just outside the icon radius
+                                            { translateY: -(RAY_LENGTH * 0.52) },
+                                        ],
+                                        height: RAY_LENGTH * 0.46, // length of visible ray segment
+                                        width: RAY_WIDTH,
+                                    },
+                                ]}
+                            />
+                        );
+                    })}
                 </Animated.View>
 
+                {/* Warm amber glow halo behind icon */}
                 <Animated.View
                     style={[
-                        s.brandRow,
-                        { opacity: brandOpacity, transform: [{ translateY: brandY }] },
+                        styles.glowHalo,
+                        {
+                            width: GLOW_SIZE,
+                            height: GLOW_SIZE,
+                            borderRadius: GLOW_SIZE / 2,
+                            top: ICON_CY - GLOW_SIZE / 2,
+                            left: ICON_CX - GLOW_SIZE / 2,
+                            opacity: glowOpacity,
+                            transform: [{ scale: glowPulse }],
+                        },
                     ]}
-                >
-                    <View style={s.brandLine} />
-                    <Text style={s.brandBy}>BY YUWAKA EDUTECH</Text>
-                    <View style={s.brandLine} />
-                </Animated.View>
-            </View>
+                />
 
-            {/* ── FOOTER ── */}
-            <Animated.View
-                style={[s.footer, { opacity: footerOpacity, transform: [{ translateY: footerY }] }]}
-            >
-                {/* Amber divider pip */}
-                <View style={s.footerPip} />
-                <Text style={s.footerPowered}>Powered by Yuwaka EduTech Pvt. Ltd.</Text>
-                <Text style={s.footerCin}>CIN No. : U86801MP2028PTC088010</Text>
-                <View style={s.footerMeta}>
-                    <View style={s.footerMetaDot} />
-                    <Text style={s.footerVersion}>Version 1.0.0</Text>
-                </View>
+                {/* Ripple rings */}
+                {(
+                    [
+                        { sc: r1Scale, al: r1Alpha },
+                        { sc: r2Scale, al: r2Alpha },
+                        { sc: r3Scale, al: r3Alpha },
+                    ] as const
+                ).map((r, i) => (
+                    <Animated.View
+                        key={i}
+                        style={[
+                            styles.rippleRing,
+                            {
+                                width: RIPPLE_BASE,
+                                height: RIPPLE_BASE,
+                                borderRadius: RIPPLE_BASE / 2,
+                                top: ICON_CY - RIPPLE_BASE / 2,
+                                left: ICON_CX - RIPPLE_BASE / 2,
+                                opacity: r.al,
+                                transform: [{ scale: r.sc }],
+                            },
+                        ]}
+                    />
+                ))}
+
+                {/* Logo pin icon */}
+                <Animated.Image
+                    source={require('../assets/logo1.png')}
+                    style={[
+                        styles.logoIcon,
+                        {
+                            width: ICON_SIZE,
+                            height: ICON_SIZE,
+                            top: ICON_TOP,
+                            left: ICON_CX - ICON_SIZE / 2,
+                        },
+                    ]}
+                    resizeMode="contain"
+                />
             </Animated.View>
-        </View>
+            {/* ══ end zoomGroup ══ */}
+
+            {/* ── Tagline — slides down from top ── */}
+            <Animated.View
+                style={[
+                    styles.taglineContainer,
+                    {
+                        opacity: taglineOpacity,
+                        transform: [{ translateY: taglineY }],
+                    },
+                ]}
+            >
+                <Text style={styles.taglineText}>
+                    {"India's 1st Meeting Venue\nBooking Platform"}
+                </Text>
+            </Animated.View>
+
+            {/* ── RentalMeet wordmark — rises from bottom ── */}
+            <Animated.Image
+                source={require('../assets/Name.png')}
+                style={[
+                    styles.brandLogo,
+                    {
+                        opacity: brandOpacity,
+                        transform: [{ translateY: brandY }],
+                    },
+                ]}
+                resizeMode="contain"
+            />
+
+            {/* ── Powered by ── */}
+            <Animated.View style={[styles.poweredByRow, { opacity: poweredOpacity }]}>
+                <Text style={styles.poweredByText}>{'Powered by: '}</Text>
+                <Text style={styles.poweredByBold}>Yuwaka Edutech Pvt. Ltd.</Text>
+            </Animated.View>
+        </Animated.View>
     );
-}
+};
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const s = StyleSheet.create({
-    root: {
+export default SplashScreen;
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
+const styles = StyleSheet.create({
+    container: {
         flex: 1,
-        width: W,
-        height: H,
-        backgroundColor: Colors.charcoal, // dark base
+        backgroundColor: Colors.surface, // pure white — matches reference videos
         alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingTop: Platform.OS === 'ios' ? 68 : 52,
-        paddingBottom: Platform.OS === 'ios' ? 48 : 36,
-        paddingHorizontal: Spacing.xxl,
     },
 
-    // Dark warm overlay — covers video, reveals dark UI
-    darkOverlay: {
-        backgroundColor: 'rgba(28,25,20,0.91)', // very dark warm black
-    },
-
-    // ── Decorative rings ──
-    ring: {
+    zoomGroup: {
         position: 'absolute',
-        alignSelf: 'center',
-        top: '50%' as any,
-        left: '50%' as any,
-        borderRadius: 999,
-        borderWidth: 1,
-    },
-    ring1: {
-        width: 160,
-        height: 160,
-        marginTop: -80,
-        marginLeft: -80,
-        borderColor: Colors.primary + '55',
-        backgroundColor: Colors.primaryGlow,
-    },
-    ring2: {
-        width: 260,
-        height: 260,
-        marginTop: -130,
-        marginLeft: -130,
-        borderColor: Colors.primary + '30',
-        backgroundColor: Colors.primaryGlow.replace('0.30', '0.06'),
-    },
-    ring3: {
-        width: 370,
-        height: 370,
-        marginTop: -185,
-        marginLeft: -185,
-        borderColor: Colors.primary + '18',
-        backgroundColor: 'transparent',
+        width,
+        height,
     },
 
-    // Corner glows
-    cornerGlowTR: {
+    mapImage: {
         position: 'absolute',
-        top: -30,
-        right: -30,
-        width: 160,
-        height: 160,
-        borderRadius: 80,
-        backgroundColor: Colors.primaryGlow,
-    },
-    cornerGlowBL: {
-        position: 'absolute',
-        bottom: 60,
-        left: -40,
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        backgroundColor: Colors.primaryDim,
+        tintColor: Colors.primary, // '#F5A623' — orange map outline
     },
 
-    // ── Header ──
-    header: {
+    // Container for all 16 rays; positioned/centred on icon centre
+    raysContainer: {
+        position: 'absolute',
         alignItems: 'center',
-        zIndex: 10,
+        justifyContent: 'center',
     },
-    badgeOuter: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.xs,
-        backgroundColor: 'rgba(245,166,35,0.12)',
-        borderWidth: 1,
-        borderColor: Colors.primaryBorder + '99',
-        borderRadius: Radii.full,
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.xxs + 1,
-        marginBottom: Spacing.sm,
-    },
-    badgeDot: {
-        width: 4,
-        height: 4,
+
+    // Individual ray — thin vertical rectangle, rotated per-instance
+    ray: {
+        position: 'absolute',
+        backgroundColor: Colors.primary, // '#F5A623'
         borderRadius: 2,
-        backgroundColor: Colors.primary,
-    },
-    badgeText: {
-        fontSize: Typography.xs,
-        letterSpacing: Typography.wider,
-        color: Colors.primary,
-        fontWeight: Typography.bold,
-    },
-    tagline: {
-        fontSize: Typography.sm,
-        color: Colors.charcoalLight,
-        letterSpacing: Typography.normal,
-        fontWeight: Typography.regular,
+        // Transform origin is the centre of the container (default RN behaviour),
+        // so rotation + translateY places each ray correctly around the icon.
     },
 
-    // ── Center ──
-    center: {
-        alignItems: 'center',
-        zIndex: 10,
-        gap: 0,
-    },
-    rulerRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: Spacing.lg,
-        width: W * 0.68,
-        justifyContent: 'center',
-    },
-    ruler: {
-        height: 1,
-        backgroundColor: Colors.primary,
-        opacity: 0.6,
-    },
-    rulerGap: {
-        width: 12,
-    },
-    logoWrap: {
-        alignItems: 'center',
-        justifyContent: 'center',
-        // Subtle amber glow halo behind logo
+    glowHalo: {
+        position: 'absolute',
+        backgroundColor: Colors.primaryGlow, // 'rgba(245,166,35,0.30)'
         shadowColor: Colors.primary,
         shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.35,
-        shadowRadius: 28,
-        elevation: 12,
-    },
-    mainLogo: {
-        width: W * 0.68,
-        height: W * 0.52,
-    },
-    brandRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-        marginTop: Spacing.sm,
-    },
-    brandLine: {
-        width: 22,
-        height: 1,
-        backgroundColor: Colors.primary,
-        opacity: 0.55,
-    },
-    brandBy: {
-        fontSize: Typography.xs,
-        color: Colors.primary,
-        fontWeight: Typography.bold,
-        letterSpacing: Typography.wider,
+        shadowOpacity: 0.5,
+        shadowRadius: 30,
+        elevation: 0,
     },
 
-    // ── Footer ──
-    footer: {
+    rippleRing: {
+        position: 'absolute',
+        borderWidth: 2,
+        borderColor: Colors.primary,
+        backgroundColor: Colors.transparent,
+    },
+
+    logoIcon: {
+        position: 'absolute',
+    },
+
+    // ── Tagline ──
+    taglineContainer: {
+        position: 'absolute',
+        top: height * 0.065,
+        width: '100%',
         alignItems: 'center',
-        zIndex: 10,
-        gap: Spacing.xxs,
+        paddingHorizontal: Spacing.xl,
     },
-    footerPip: {
-        width: 28,
-        height: 2,
-        borderRadius: 1,
-        backgroundColor: Colors.primary,
-        opacity: 0.7,
-        marginBottom: Spacing.sm,
-    },
-    footerPowered: {
-        fontSize: Typography.sm,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.medium,
+    taglineText: {
+        fontSize: Typography.lg + 2, // ~19px — matches reference
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoal, // '#2C2C2C'
         textAlign: 'center',
+        lineHeight: 28,
+        letterSpacing: Typography.normal,
     },
-    footerCin: {
-        fontSize: Typography.xs,
-        color: Colors.charcoalWarm,
-        textAlign: 'center',
-        marginTop: Spacing.xxs,
+
+    // ── Brand wordmark ──
+    brandLogo: {
+        position: 'absolute',
+        bottom: height * 0.13,
+        width: width * 0.72,
+        height: 72,
+        alignSelf: 'center',
     },
-    footerMeta: {
+
+    // ── Powered by ──
+    poweredByRow: {
+        position: 'absolute',
+        bottom: height * 0.048,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: Spacing.xs,
-        marginTop: Spacing.xs,
+        justifyContent: 'center',
     },
-    footerMetaDot: {
-        width: 3,
-        height: 3,
-        borderRadius: 1.5,
-        backgroundColor: Colors.primary,
-        opacity: 0.6,
+    poweredByText: {
+        fontSize: Typography.sm + 1,
+        color: Colors.charcoalLight, // '#8A8A8A'
+        letterSpacing: Typography.normal,
     },
-    footerVersion: {
-        fontSize: Typography.xs,
-        color: Colors.charcoalWarm,
-        fontWeight: Typography.medium,
+    poweredByBold: {
+        fontSize: Typography.sm + 1,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal, // '#2C2C2C'
         letterSpacing: Typography.normal,
     },
 });

@@ -10,8 +10,7 @@ import {
     NavButtons,
     PickerRow,
 } from '../UI/shared-components';
-
-// ─── Data ─────────────────────────────────────────────────────────────────────
+import { VenueFormData } from '../../types/venue.type';
 
 const BASIC_AMENITIES = [
     { id: 'firstAid', name: 'First Aid Box', isDefault: true },
@@ -29,7 +28,6 @@ const BASIC_AMENITIES = [
     { id: 'seating', name: 'Comfortable Seating' },
     { id: 'printing', name: 'Printing / Photocopy' },
 ];
-
 const BEVERAGES = [
     { id: 'tea', name: 'Tea', unit: 'Per Cup' },
     { id: 'coffee', name: 'Coffee', unit: 'Per Cup' },
@@ -43,7 +41,6 @@ const BEVERAGES = [
     { id: 'soft1125', name: 'Soft Drink (1/1.25 Ltr)', unit: 'Per Bottle' },
     { id: 'soft2225', name: 'Soft Drink (2/2.25 Ltr)', unit: 'Per Bottle' },
 ];
-
 const ADDITIONAL = [
     'Separate Washrooms',
     'Power Backup',
@@ -55,7 +52,6 @@ const ADDITIONAL = [
     'Wheelchair Access',
     'Elevator',
 ];
-
 const SNACK_PACKS = [{ id: 'snack3', name: 'Snacks Pack (3 Items)' }];
 const BREAKFAST_PACKS = [
     { id: 'bp1', name: 'Breakfast Pack (1 Item)' },
@@ -66,125 +62,129 @@ const THALI_TYPES = ['Select Thali Type', 'Regular', 'Special', 'Maharaja'];
 const RATE_TYPES = ['Fixed', 'Per Use'];
 const PRICING_OPTIONS = ['Select', 'Included', 'Paid'];
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
+type AmenityData = VenueFormData['amenities']['amenityData'][string];
 type PricingType = 'included' | 'paid';
-type AmenityData = { pricing: PricingType; rate: string; rateType: string; rateTypeOpen: boolean };
-type BevData = { checked: boolean; rate: string; brand: string };
-type PackData = { checked: boolean; rate: string; items: string };
-type ThaliRow = { type: string; rate: string; items: string };
 
 interface Props {
+    data: VenueFormData['amenities'];
+    onChange: (data: VenueFormData['amenities']) => void;
     onPrev: () => void;
     onNext: () => void;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
-export default function Step3Amenities({ onPrev, onNext }: Props) {
-    // Basic amenities
-    const [basicSelected, setBasicSelected] = useState<string[]>(['firstAid', 'fireSafety']);
-    const [amenityData, setAmenityData] = useState<Record<string, AmenityData>>({
-        firstAid: { pricing: 'included', rate: '', rateType: 'Fixed', rateTypeOpen: false },
-        fireSafety: { pricing: 'included', rate: '', rateType: 'Fixed', rateTypeOpen: false },
-    });
-
-    // Beverages
-    const [beverageData, setBeverageData] = useState<Record<string, BevData>>({});
-
-    // Additional
-    const [additionalSelected, setAdditionalSelected] = useState<string[]>([]);
-
-    // Food
-    const [snackData, setSnackData] = useState<Record<string, PackData>>({});
-    const [breakfastData, setBreakfastData] = useState<Record<string, PackData>>({});
-    const [thalis, setThalis] = useState<ThaliRow[]>([]);
-
-    // Kitchen / Dining
-    const [kitchenAvail, setKitchenAvail] = useState(false);
-    const [kitchenPricing, setKitchenPricing] = useState(PRICING_OPTIONS[0]);
-    const [kitchenOpen, setKitchenOpen] = useState(false);
-    const [diningAvail, setDiningAvail] = useState(false);
-    const [diningPricing, setDiningPricing] = useState(PRICING_OPTIONS[0]);
-    const [diningOpen, setDiningOpen] = useState(false);
+export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props) {
+    const set = (patch: Partial<VenueFormData['amenities']>) => onChange({ ...data, ...patch });
 
     // ── Basic amenity helpers ─────────────────────────────────────────────────
-
     const toggleBasic = (id: string, isDefault?: boolean) => {
         if (isDefault) return;
-        const nowSelected = !basicSelected.includes(id);
-        setBasicSelected(p => (nowSelected ? [...p, id] : p.filter(x => x !== id)));
-        if (nowSelected) {
-            setAmenityData(p => ({
-                ...p,
-                [id]: p[id] ?? {
-                    pricing: 'included',
-                    rate: '',
-                    rateType: 'Fixed',
-                    rateTypeOpen: false,
-                },
-            }));
-        }
+        const nowSelected = !data.basicSelected.includes(id);
+        const basicSelected = nowSelected
+            ? [...data.basicSelected, id]
+            : data.basicSelected.filter(x => x !== id);
+        const amenityData =
+            nowSelected && !data.amenityData[id]
+                ? {
+                      ...data.amenityData,
+                      [id]: {
+                          pricing: 'included' as PricingType,
+                          rate: '',
+                          rateType: 'Fixed',
+                          rateTypeOpen: false,
+                      },
+                  }
+                : data.amenityData;
+        set({ basicSelected, amenityData });
     };
 
     const setAmenityPricing = (id: string, pricing: PricingType) =>
-        setAmenityData(p => ({ ...p, [id]: { ...p[id], pricing, rate: '' } }));
+        set({
+            amenityData: {
+                ...data.amenityData,
+                [id]: { ...data.amenityData[id], pricing, rate: '' },
+            },
+        });
 
     const setAmenityRate = (id: string, rate: string) =>
-        setAmenityData(p => ({ ...p, [id]: { ...p[id], rate } }));
+        set({ amenityData: { ...data.amenityData, [id]: { ...data.amenityData[id], rate } } });
 
     const toggleRateTypeOpen = (id: string) =>
-        setAmenityData(p => ({ ...p, [id]: { ...p[id], rateTypeOpen: !p[id]?.rateTypeOpen } }));
+        set({
+            amenityData: {
+                ...data.amenityData,
+                [id]: {
+                    ...data.amenityData[id],
+                    rateTypeOpen: !data.amenityData[id]?.rateTypeOpen,
+                },
+            },
+        });
 
     const setAmenityRateType = (id: string, rateType: string) =>
-        setAmenityData(p => ({ ...p, [id]: { ...p[id], rateType, rateTypeOpen: false } }));
+        set({
+            amenityData: {
+                ...data.amenityData,
+                [id]: { ...data.amenityData[id], rateType, rateTypeOpen: false },
+            },
+        });
 
     // ── Beverage helpers ──────────────────────────────────────────────────────
-
     const toggleBeverage = (id: string) =>
-        setBeverageData(p => ({
-            ...p,
-            [id]: { checked: !p[id]?.checked, rate: p[id]?.rate || '', brand: p[id]?.brand || '' },
-        }));
+        set({
+            beverageData: {
+                ...data.beverageData,
+                [id]: {
+                    checked: !data.beverageData[id]?.checked,
+                    rate: data.beverageData[id]?.rate || '',
+                    brand: data.beverageData[id]?.brand || '',
+                },
+            },
+        });
 
     const updateBev = (id: string, field: 'rate' | 'brand', value: string) =>
-        setBeverageData(p => ({ ...p, [id]: { ...p[id], [field]: value } }));
+        set({
+            beverageData: {
+                ...data.beverageData,
+                [id]: { ...data.beverageData[id], [field]: value },
+            },
+        });
 
-    // ── Additional helpers ────────────────────────────────────────────────────
-
+    // ── Additional ────────────────────────────────────────────────────────────
     const toggleAdditional = (name: string) =>
-        setAdditionalSelected(p => (p.includes(name) ? p.filter(x => x !== name) : [...p, name]));
+        set({
+            additionalSelected: data.additionalSelected.includes(name)
+                ? data.additionalSelected.filter(x => x !== name)
+                : [...data.additionalSelected, name],
+        });
 
     // ── Food pack helpers ─────────────────────────────────────────────────────
+    type PackKey = 'snackData' | 'breakfastData';
 
-    const togglePack = (
-        id: string,
-        setter: React.Dispatch<React.SetStateAction<Record<string, PackData>>>,
-    ) =>
-        setter(p => ({
-            ...p,
-            [id]: { checked: !p[id]?.checked, rate: p[id]?.rate || '', items: p[id]?.items || '' },
-        }));
-
-    const updatePack = (
-        id: string,
-        field: 'rate' | 'items',
-        value: string,
-        setter: React.Dispatch<React.SetStateAction<Record<string, PackData>>>,
-    ) => setter(p => ({ ...p, [id]: { ...p[id], [field]: value } }));
-
-    // ── Thali helpers ─────────────────────────────────────────────────────────
-
-    const addThali = (type: string) => {
-        if (type === THALI_TYPES[0]) return;
-        setThalis(p => [...p, { type, rate: '', items: '' }]);
+    const togglePack = (id: string, packKey: PackKey) => {
+        const prev = data[packKey];
+        set({
+            [packKey]: {
+                ...prev,
+                [id]: {
+                    checked: !prev[id]?.checked,
+                    rate: prev[id]?.rate || '',
+                    items: prev[id]?.items || '',
+                },
+            },
+        });
     };
 
-    const removeThali = (idx: number) => setThalis(p => p.filter((_, i) => i !== idx));
-    const updateThali = (idx: number, field: keyof ThaliRow, value: string) =>
-        setThalis(p => p.map((t, i) => (i === idx ? { ...t, [field]: value } : t)));
+    const updatePack = (id: string, field: 'rate' | 'items', value: string, packKey: PackKey) => {
+        set({ [packKey]: { ...data[packKey], [id]: { ...data[packKey][id], [field]: value } } });
+    };
 
-    // ─── Render ───────────────────────────────────────────────────────────────
+    // ── Thali helpers ─────────────────────────────────────────────────────────
+    const addThali = (type: string) => {
+        if (type === THALI_TYPES[0]) return;
+        set({ thalis: [...data.thalis, { type, rate: '', items: '' }] });
+    };
+    const removeThali = (idx: number) => set({ thalis: data.thalis.filter((_, i) => i !== idx) });
+    const updateThali = (idx: number, field: 'type' | 'rate' | 'items', value: string) =>
+        set({ thalis: data.thalis.map((t, i) => (i === idx ? { ...t, [field]: value } : t)) });
 
     return (
         <ScrollView
@@ -200,13 +200,11 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                     title="Basic Amenities"
                     subtitle="Select amenities and specify if they are included or paid"
                 />
-
                 {BASIC_AMENITIES.map(item => {
-                    const selected = basicSelected.includes(item.id);
-                    const data = amenityData[item.id];
+                    const selected = data.basicSelected.includes(item.id);
+                    const d = data.amenityData[item.id];
                     return (
                         <View key={item.id} style={[s.amenCard, selected && s.amenCardActive]}>
-                            {/* Checkbox row */}
                             <TouchableOpacity
                                 style={s.amenRow}
                                 onPress={() => toggleBasic(item.id, item.isDefault)}
@@ -231,12 +229,9 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                                     </View>
                                 )}
                             </TouchableOpacity>
-
-                            {/* Included / Paid expanded area */}
-                            {selected && data && (
+                            {selected && d && (
                                 <View style={s.amenExpanded}>
                                     <View style={s.radioRow}>
-                                        {/* Included radio */}
                                         <TouchableOpacity
                                             style={s.radioBtn}
                                             onPress={() => setAmenityPricing(item.id, 'included')}
@@ -245,26 +240,22 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                                             <View
                                                 style={[
                                                     s.radioOuter,
-                                                    data.pricing === 'included' &&
-                                                        s.radioOuterActive,
+                                                    d.pricing === 'included' && s.radioOuterActive,
                                                 ]}
                                             >
-                                                {data.pricing === 'included' && (
+                                                {d.pricing === 'included' && (
                                                     <View style={s.radioInner} />
                                                 )}
                                             </View>
                                             <Text
                                                 style={[
                                                     s.radioLabel,
-                                                    data.pricing === 'included' &&
-                                                        s.radioLabelActive,
+                                                    d.pricing === 'included' && s.radioLabelActive,
                                                 ]}
                                             >
                                                 Included
                                             </Text>
                                         </TouchableOpacity>
-
-                                        {/* Paid radio */}
                                         <TouchableOpacity
                                             style={s.radioBtn}
                                             onPress={() => setAmenityPricing(item.id, 'paid')}
@@ -273,10 +264,10 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                                             <View
                                                 style={[
                                                     s.radioOuter,
-                                                    data.pricing === 'paid' && s.radioOuterPaid,
+                                                    d.pricing === 'paid' && s.radioOuterPaid,
                                                 ]}
                                             >
-                                                {data.pricing === 'paid' && (
+                                                {d.pricing === 'paid' && (
                                                     <View
                                                         style={[s.radioInner, s.radioInnerPaid]}
                                                     />
@@ -285,15 +276,13 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                                             <Text
                                                 style={[
                                                     s.radioLabel,
-                                                    data.pricing === 'paid' && s.radioLabelPaid,
+                                                    d.pricing === 'paid' && s.radioLabelPaid,
                                                 ]}
                                             >
                                                 Paid
                                             </Text>
                                         </TouchableOpacity>
-
-                                        {/* Rate + Fixed/Per Use — only when Paid */}
-                                        {data.pricing === 'paid' && (
+                                        {d.pricing === 'paid' && (
                                             <View style={s.rateRow}>
                                                 <Text style={s.rateLabel}>Rate:</Text>
                                                 <View style={s.rateInputBox}>
@@ -302,7 +291,7 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                                                         style={s.rateInputText}
                                                         placeholder="0"
                                                         placeholderTextColor={Colors.charcoalLight}
-                                                        value={data.rate}
+                                                        value={d.rate}
                                                         onChangeText={v =>
                                                             setAmenityRate(item.id, v)
                                                         }
@@ -311,9 +300,9 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                                                 </View>
                                                 <View style={s.miniPickerWrap}>
                                                     <PickerRow
-                                                        value={data.rateType}
+                                                        value={d.rateType}
                                                         options={RATE_TYPES}
-                                                        open={data.rateTypeOpen}
+                                                        open={d.rateTypeOpen}
                                                         onToggle={() => toggleRateTypeOpen(item.id)}
                                                         onSelect={v =>
                                                             setAmenityRateType(item.id, v)
@@ -340,8 +329,8 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                     bgColor={Colors.infoLight}
                 />
                 {BEVERAGES.map(bev => {
-                    const data = beverageData[bev.id];
-                    const checked = !!data?.checked;
+                    const d = data.beverageData[bev.id];
+                    const checked = !!d?.checked;
                     return (
                         <View key={bev.id}>
                             <TouchableOpacity
@@ -365,7 +354,6 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                                     <Text style={s.unitBadge}>{bev.unit}</Text>
                                 </View>
                             </TouchableOpacity>
-
                             {checked && (
                                 <View style={s.expandedFields}>
                                     <View style={s.fieldRow}>
@@ -374,7 +362,7 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                                                 label="Rate (₹)"
                                                 placeholder="0.00"
                                                 icon="cash-outline"
-                                                value={data?.rate || ''}
+                                                value={d?.rate || ''}
                                                 onChangeText={(v: string) =>
                                                     updateBev(bev.id, 'rate', v)
                                                 }
@@ -386,7 +374,7 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                                                 label="Brand (optional)"
                                                 placeholder="e.g. Bisleri"
                                                 icon="pricetag-outline"
-                                                value={data?.brand || ''}
+                                                value={d?.brand || ''}
                                                 onChangeText={(v: string) =>
                                                     updateBev(bev.id, 'brand', v)
                                                 }
@@ -410,16 +398,15 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                     bgColor={Colors.successLight}
                 />
 
-                {/* Snacks */}
                 <Text style={s.foodGroupLabel}>Snacks</Text>
                 {SNACK_PACKS.map(pack => {
-                    const data = snackData[pack.id];
-                    const checked = !!data?.checked;
+                    const d = data.snackData[pack.id];
+                    const checked = !!d?.checked;
                     return (
                         <View key={pack.id}>
                             <TouchableOpacity
                                 style={[s.amenCard, checked && s.amenCardActive]}
-                                onPress={() => togglePack(pack.id, setSnackData)}
+                                onPress={() => togglePack(pack.id, 'snackData')}
                                 activeOpacity={0.75}
                             >
                                 <View style={s.amenRow}>
@@ -445,9 +432,9 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                                                 label="Rate per plate (₹)"
                                                 placeholder="0"
                                                 icon="cash-outline"
-                                                value={data?.rate || ''}
+                                                value={d?.rate || ''}
                                                 onChangeText={(v: string) =>
-                                                    updatePack(pack.id, 'rate', v, setSnackData)
+                                                    updatePack(pack.id, 'rate', v, 'snackData')
                                                 }
                                                 keyboardType="numeric"
                                             />
@@ -457,9 +444,9 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                                                 label="Item names"
                                                 placeholder="Samosa, Kachori..."
                                                 icon="list-outline"
-                                                value={data?.items || ''}
+                                                value={d?.items || ''}
                                                 onChangeText={(v: string) =>
-                                                    updatePack(pack.id, 'items', v, setSnackData)
+                                                    updatePack(pack.id, 'items', v, 'snackData')
                                                 }
                                             />
                                         </View>
@@ -470,16 +457,15 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                     );
                 })}
 
-                {/* Breakfast */}
                 <Text style={[s.foodGroupLabel, { marginTop: Spacing.md }]}>Breakfast Packs</Text>
                 {BREAKFAST_PACKS.map(pack => {
-                    const data = breakfastData[pack.id];
-                    const checked = !!data?.checked;
+                    const d = data.breakfastData[pack.id];
+                    const checked = !!d?.checked;
                     return (
                         <View key={pack.id}>
                             <TouchableOpacity
                                 style={[s.amenCard, checked && s.amenCardActive]}
-                                onPress={() => togglePack(pack.id, setBreakfastData)}
+                                onPress={() => togglePack(pack.id, 'breakfastData')}
                                 activeOpacity={0.75}
                             >
                                 <View style={s.amenRow}>
@@ -505,9 +491,9 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                                                 label="Rate (₹)"
                                                 placeholder="0"
                                                 icon="cash-outline"
-                                                value={data?.rate || ''}
+                                                value={d?.rate || ''}
                                                 onChangeText={(v: string) =>
-                                                    updatePack(pack.id, 'rate', v, setBreakfastData)
+                                                    updatePack(pack.id, 'rate', v, 'breakfastData')
                                                 }
                                                 keyboardType="numeric"
                                             />
@@ -517,14 +503,9 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                                                 label="Item names"
                                                 placeholder="Poha, Idli..."
                                                 icon="list-outline"
-                                                value={data?.items || ''}
+                                                value={d?.items || ''}
                                                 onChangeText={(v: string) =>
-                                                    updatePack(
-                                                        pack.id,
-                                                        'items',
-                                                        v,
-                                                        setBreakfastData,
-                                                    )
+                                                    updatePack(pack.id, 'items', v, 'breakfastData')
                                                 }
                                             />
                                         </View>
@@ -535,21 +516,19 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                     );
                 })}
 
-                {/* Lunch Thalis */}
                 <Text style={[s.foodGroupLabel, { marginTop: Spacing.md }]}>Lunch Thalis</Text>
                 <Text style={s.foodGroupSub}>
                     Select thali type, then choose categories (Regular/Special/Maharaja)
                 </Text>
                 <ThaliAddRow onAdd={addThali} />
-
-                {thalis.length === 0 ? (
+                {data.thalis.length === 0 ? (
                     <View style={s.emptyThali}>
                         <Text style={s.emptyThaliText}>
                             No thalis added yet. Select from dropdown above.
                         </Text>
                     </View>
                 ) : (
-                    thalis.map((thali, idx) => (
+                    data.thalis.map((thali, idx) => (
                         <View key={idx} style={s.expandedFields}>
                             <View style={s.thaliHeader}>
                                 <Text style={s.thaliType}>{thali.type} Thali</Text>
@@ -582,34 +561,27 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                     ))
                 )}
 
-                {/* Kitchen & Dining */}
                 <View style={[s.fieldRow, { marginTop: Spacing.md }]}>
                     <View style={{ flex: 1 }}>
                         <FacilityToggle
                             label="Kitchen Access"
-                            available={kitchenAvail}
-                            onToggle={() => setKitchenAvail(v => !v)}
-                            pricing={kitchenPricing}
-                            open={kitchenOpen}
-                            onPricingToggle={() => setKitchenOpen(v => !v)}
-                            onPricingSelect={v => {
-                                setKitchenPricing(v);
-                                setKitchenOpen(false);
-                            }}
+                            available={data.kitchenAvail}
+                            onToggle={() => set({ kitchenAvail: !data.kitchenAvail })}
+                            pricing={data.kitchenPricing}
+                            open={false}
+                            onPricingToggle={() => {}}
+                            onPricingSelect={v => set({ kitchenPricing: v })}
                         />
                     </View>
                     <View style={{ flex: 1 }}>
                         <FacilityToggle
                             label="Dining Area"
-                            available={diningAvail}
-                            onToggle={() => setDiningAvail(v => !v)}
-                            pricing={diningPricing}
-                            open={diningOpen}
-                            onPricingToggle={() => setDiningOpen(v => !v)}
-                            onPricingSelect={v => {
-                                setDiningPricing(v);
-                                setDiningOpen(false);
-                            }}
+                            available={data.diningAvail}
+                            onToggle={() => set({ diningAvail: !data.diningAvail })}
+                            pricing={data.diningPricing}
+                            open={false}
+                            onPricingToggle={() => {}}
+                            onPricingSelect={v => set({ diningPricing: v })}
                         />
                     </View>
                 </View>
@@ -625,7 +597,7 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
                     bgColor={Colors.warningLight}
                 />
                 {ADDITIONAL.map(item => {
-                    const selected = additionalSelected.includes(item);
+                    const selected = data.additionalSelected.includes(item);
                     return (
                         <TouchableOpacity
                             key={item}
@@ -653,7 +625,7 @@ export default function Step3Amenities({ onPrev, onNext }: Props) {
     );
 }
 
-// ─── ThaliAddRow ──────────────────────────────────────────────────────────────
+// ── Sub-components (unchanged from original) ──────────────────────────────────
 
 function ThaliAddRow({ onAdd }: { onAdd: (type: string) => void }) {
     const [selected, setSelected] = useState(THALI_TYPES[0]);
@@ -686,8 +658,6 @@ function ThaliAddRow({ onAdd }: { onAdd: (type: string) => void }) {
         </View>
     );
 }
-
-// ─── FacilityToggle ───────────────────────────────────────────────────────────
 
 function FacilityToggle({
     label,
@@ -728,8 +698,6 @@ function FacilityToggle({
         </View>
     );
 }
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
     amenCard: {
@@ -791,15 +759,8 @@ const s = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.border,
     },
-
-    // Included / Paid expanded
     amenExpanded: { paddingHorizontal: Spacing.sm, paddingBottom: Spacing.sm },
-    radioRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: Spacing.sm,
-    },
+    radioRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Spacing.sm },
     radioBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
     radioOuter: {
         width: 18,
@@ -817,8 +778,6 @@ const s = StyleSheet.create({
     radioLabel: { fontSize: Typography.sm, color: Colors.charcoalMid },
     radioLabelActive: { color: Colors.primary, fontWeight: Typography.semiBold },
     radioLabelPaid: { color: Colors.warning, fontWeight: Typography.semiBold },
-
-    // Inline rate input
     rateRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -838,15 +797,8 @@ const s = StyleSheet.create({
         minWidth: 72,
     },
     rupee: { fontSize: Typography.sm, color: Colors.charcoalMid, marginRight: 2 },
-    rateInputText: {
-        fontSize: Typography.sm,
-        color: Colors.charcoal,
-        flex: 1,
-        padding: 0,
-    },
+    rateInputText: { fontSize: Typography.sm, color: Colors.charcoal, flex: 1, padding: 0 },
     miniPickerWrap: { width: 110 },
-
-    // Expanded Field panels
     expandedFields: {
         backgroundColor: Colors.primaryLight,
         borderRadius: Radii.sm,
@@ -856,8 +808,6 @@ const s = StyleSheet.create({
         marginBottom: 4,
     },
     fieldRow: { flexDirection: 'row', gap: Spacing.sm },
-
-    // Food
     foodGroupLabel: {
         fontSize: Typography.sm,
         fontWeight: Typography.bold,
@@ -885,11 +835,7 @@ const s = StyleSheet.create({
         alignItems: 'center',
         marginBottom: Spacing.xs,
     },
-    thaliType: {
-        fontSize: Typography.sm,
-        fontWeight: Typography.bold,
-        color: Colors.charcoalMid,
-    },
+    thaliType: { fontSize: Typography.sm, fontWeight: Typography.bold, color: Colors.charcoalMid },
 });
 
 const ft = StyleSheet.create({
@@ -909,11 +855,7 @@ const ft = StyleSheet.create({
         height: 54,
         justifyContent: 'center',
     },
-    addBtnText: {
-        fontSize: Typography.sm,
-        fontWeight: Typography.bold,
-        color: Colors.white,
-    },
+    addBtnText: { fontSize: Typography.sm, fontWeight: Typography.bold, color: Colors.white },
     facilityCard: {
         borderWidth: 1,
         borderColor: Colors.border,

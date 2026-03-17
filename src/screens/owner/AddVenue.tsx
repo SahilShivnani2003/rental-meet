@@ -11,18 +11,24 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows, TAB_BAR_HEIGHT } from '../../theme/theme';
-import Step3Amenities from '../../components/registerVenue/amenities-info';
+
 import Step1BasicInfo from '../../components/registerVenue/basic-info';
-import Step6Documents from '../../components/registerVenue/documents-info';
 import Step2Location from '../../components/registerVenue/location-info';
+import Step3Amenities from '../../components/registerVenue/amenities-info';
 import Step4Pricing from '../../components/registerVenue/pricing-info';
-import Step7Terms from '../../components/registerVenue/terms-info';
 import Step5Photos from '../../components/registerVenue/photos-upload';
+import Step6Documents from '../../components/registerVenue/documents-info';
+import Step7Terms from '../../components/registerVenue/terms-info';
+
+import { VenueFormData, initialVenueFormData } from '../../types/venue.type';
+import { buildVenuePayload } from '../../components/registerVenue/venuePayloadBuilder';
+
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
 import { OwnerTabParamList } from '../../navigations/tabNavigations/OwnerTabNavigation';
+import { useAlert } from '../../context/AlertContext';
+import { venueAPI } from '../../service/apis/venues';
 
 const TOTAL_STEPS = 7;
-
 const STEP_LABELS = [
     'Basic Info',
     'Location',
@@ -36,28 +42,107 @@ const STEP_LABELS = [
 type registerVenueProps = NativeBottomTabScreenProps<OwnerTabParamList, 'addVenue'>;
 
 export default function RegisterVenueScreen({ navigation }: registerVenueProps) {
+    const alert = useAlert();
     const [step, setStep] = useState(1);
     const [successModal, setSuccessModal] = useState(false);
+
+    // ── Single source of truth for the entire form ────────────────────────────
+    const [form, setForm] = useState<VenueFormData>(initialVenueFormData);
+
+    // Lookup map: venueType _id → name (populated by Step1 internally, pass via callback)
+    const [venueTypeNames, setVenueTypeNames] = useState<Record<string, string>>({});
+
+    const patchForm = <K extends keyof VenueFormData>(key: K, value: VenueFormData[K]) =>
+        setForm(prev => ({ ...prev, [key]: value }));
 
     const goNext = () => setStep(s => Math.min(s + 1, TOTAL_STEPS));
     const goPrev = () => setStep(s => Math.max(s - 1, 1));
 
+    // ── Submit ────────────────────────────────────────────────────────────────
+    const handleSubmit = async () => {
+        try {
+            const payload = buildVenuePayload(form, venueTypeNames);
+            console.log('VENUE PAYLOAD:', JSON.stringify(payload, null, 2));
+
+            const response = await venueAPI.createVenue(payload);
+
+            if (!response?.success) {
+                alert.error('Failed', response?.message || 'Something went wrong');
+                return;
+            }
+
+            setSuccessModal(true);
+        } catch (error: any) {
+            console.error('VENUE CREATING ERROR:', error);
+            alert.error('Failed', error?.description || 'Something went wrong');
+        }
+    };
+
+    // ── Step renderer ─────────────────────────────────────────────────────────
     const renderStep = () => {
         switch (step) {
             case 1:
-                return <Step1BasicInfo onNext={goNext} />;
+                return (
+                    <Step1BasicInfo
+                        data={form.basic}
+                        onChange={v => patchForm('basic', v)}
+                        onNext={goNext}
+                    />
+                );
             case 2:
-                return <Step2Location onPrev={goPrev} onNext={goNext} />;
+                return (
+                    <Step2Location
+                        data={form.location}
+                        onChange={v => patchForm('location', v)}
+                        onPrev={goPrev}
+                        onNext={goNext}
+                    />
+                );
             case 3:
-                return <Step3Amenities onPrev={goPrev} onNext={goNext} />;
+                return (
+                    <Step3Amenities
+                        data={form.amenities}
+                        onChange={v => patchForm('amenities', v)}
+                        onPrev={goPrev}
+                        onNext={goNext}
+                    />
+                );
             case 4:
-                return <Step4Pricing onPrev={goPrev} onNext={goNext} />;
+                return (
+                    <Step4Pricing
+                        data={form.pricing}
+                        onChange={v => patchForm('pricing', v)}
+                        onPrev={goPrev}
+                        onNext={goNext}
+                    />
+                );
             case 5:
-                return <Step5Photos onPrev={goPrev} onNext={goNext} />;
+                return (
+                    <Step5Photos
+                        data={form.photos}
+                        onChange={v => patchForm('photos', v)}
+                        onPrev={goPrev}
+                        onNext={goNext}
+                    />
+                );
             case 6:
-                return <Step6Documents onPrev={goPrev} onNext={goNext} />;
+                return (
+                    <Step6Documents
+                        data={form.documents}
+                        onChange={v => patchForm('documents', v)}
+                        onPrev={goPrev}
+                        onNext={goNext}
+                    />
+                );
             case 7:
-                return <Step7Terms onPrev={goPrev} onSubmit={() => setSuccessModal(true)} />;
+                return (
+                    <Step7Terms
+                        data={form.terms}
+                        onChange={v => patchForm('terms', v)}
+                        onPrev={goPrev}
+                        onSubmit={handleSubmit}
+                    />
+                );
             default:
                 return null;
         }
@@ -68,11 +153,9 @@ export default function RegisterVenueScreen({ navigation }: registerVenueProps) 
             style={s.root}
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-            {/* ── Header — matches app design pattern ── */}
+            {/* ── Header ── */}
             <View style={s.header}>
-                {/* Golden accent bar */}
                 <View style={s.headerAccentBar} />
-
                 <View style={s.headerContent}>
                     <View style={s.headerLeft}>
                         <Text style={s.headerEyebrow}>VENUE REGISTRATION</Text>
@@ -81,16 +164,12 @@ export default function RegisterVenueScreen({ navigation }: registerVenueProps) 
                             Step {step} of {TOTAL_STEPS} · Complete all steps to list your venue
                         </Text>
                     </View>
-
-                    {/* Step counter pill */}
                     <View style={s.stepPill}>
                         <Text style={s.stepPillNum}>{step}</Text>
                         <Text style={s.stepPillSep}>/</Text>
                         <Text style={s.stepPillTotal}>{TOTAL_STEPS}</Text>
                     </View>
                 </View>
-
-                {/* Progress bar */}
                 <View style={s.progressWrap}>
                     <View style={s.progressTrack}>
                         <View
@@ -104,7 +183,7 @@ export default function RegisterVenueScreen({ navigation }: registerVenueProps) 
                 </View>
             </View>
 
-            {/* ── Step indicator — inlined ── */}
+            {/* ── Step indicator ── */}
             <View style={s.stepsWrapper}>
                 <ScrollView
                     horizontal
@@ -176,22 +255,17 @@ export default function RegisterVenueScreen({ navigation }: registerVenueProps) 
             <Modal visible={successModal} transparent animationType="fade">
                 <View style={s.overlay}>
                     <View style={s.modalCard}>
-                        {/* Icon */}
                         <View style={s.successRing}>
                             <View style={s.successIcon}>
                                 <Ionicons name="checkmark" size={34} color={Colors.white} />
                             </View>
                         </View>
-
                         <Text style={s.modalTitle}>Venue Submitted!</Text>
                         <Text style={s.modalSub}>
                             Your venue has been submitted for review. We'll notify you within 24–48
                             hours once approved.
                         </Text>
-
-                        {/* Divider */}
                         <View style={s.modalDivider} />
-
                         <View style={s.modalInfoRow}>
                             <Ionicons name="time-outline" size={14} color={Colors.charcoalLight} />
                             <Text style={s.modalInfoText}>Review takes 24–48 hours</Text>
@@ -204,7 +278,6 @@ export default function RegisterVenueScreen({ navigation }: registerVenueProps) 
                             />
                             <Text style={s.modalInfoText}>You'll get notified on approval</Text>
                         </View>
-
                         <TouchableOpacity
                             style={s.modalBtn}
                             onPress={() => {
@@ -225,8 +298,6 @@ export default function RegisterVenueScreen({ navigation }: registerVenueProps) 
 
 const s = StyleSheet.create({
     root: { flex: 1, backgroundColor: Colors.background },
-
-    // ── Header ──
     header: {
         backgroundColor: Colors.surface,
         borderBottomLeftRadius: Radii.xxl,
@@ -234,10 +305,7 @@ const s = StyleSheet.create({
         paddingBottom: Spacing.lg,
         ...Shadows.header,
     },
-    headerAccentBar: {
-        height: 4,
-        backgroundColor: Colors.primary,
-    },
+    headerAccentBar: { height: 4, backgroundColor: Colors.primary },
     headerContent: {
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -266,8 +334,6 @@ const s = StyleSheet.create({
         color: Colors.charcoalLight,
         fontWeight: Typography.medium,
     },
-
-    // Step counter pill
     stepPill: {
         flexDirection: 'row',
         alignItems: 'baseline',
@@ -292,13 +358,7 @@ const s = StyleSheet.create({
         fontWeight: Typography.medium,
         marginHorizontal: 1,
     },
-    stepPillTotal: {
-        fontSize: 11,
-        fontWeight: Typography.semiBold,
-        color: Colors.charcoalLight,
-    },
-
-    // Progress bar
+    stepPillTotal: { fontSize: 11, fontWeight: Typography.semiBold, color: Colors.charcoalLight },
     progressWrap: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -312,11 +372,7 @@ const s = StyleSheet.create({
         borderRadius: 3,
         overflow: 'hidden',
     },
-    progressFill: {
-        height: '100%',
-        backgroundColor: Colors.primary,
-        borderRadius: 3,
-    },
+    progressFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 3 },
     progressPct: {
         fontSize: Typography.xs,
         fontWeight: Typography.bold,
@@ -324,27 +380,15 @@ const s = StyleSheet.create({
         minWidth: 30,
         textAlign: 'right',
     },
-
-    // ── Step indicator (inlined) ──
     stepsWrapper: {
-        marginTop:10,
+        marginTop: 10,
         backgroundColor: Colors.background,
         paddingVertical: Spacing.md,
         borderBottomColor: Colors.border,
     },
-    stepsScroll: {
-        paddingHorizontal: Spacing.lg,
-        alignItems: 'center',
-    },
-    stepRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-    },
-    stepConnector: {
-        width: 10,
-        height: 1.5,
-        borderRadius: 1,
-    },
+    stepsScroll: { paddingHorizontal: Spacing.lg, alignItems: 'center' },
+    stepRow: { flexDirection: 'row', alignItems: 'center' },
+    stepConnector: { width: 10, height: 1.5, borderRadius: 1 },
     connectorDone: { backgroundColor: Colors.success },
     connectorIdle: { backgroundColor: Colors.border },
     stepChip: {
@@ -379,14 +423,8 @@ const s = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.border,
     },
-    stepNumActive: {
-        backgroundColor: Colors.primary,
-        borderColor: Colors.primary,
-    },
-    stepNumDone: {
-        backgroundColor: Colors.success,
-        borderColor: Colors.success,
-    },
+    stepNumActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+    stepNumDone: { backgroundColor: Colors.success, borderColor: Colors.success },
     stepNumText: {
         fontSize: 11,
         fontWeight: Typography.extraBold,
@@ -395,22 +433,10 @@ const s = StyleSheet.create({
     },
     stepNumTextActive: { color: Colors.charcoal },
     stepNumTextDone: { color: Colors.white },
-    stepLabel: {
-        fontSize: 12,
-        fontWeight: Typography.bold,
-        color: Colors.charcoalLight,
-    },
+    stepLabel: { fontSize: 12, fontWeight: Typography.bold, color: Colors.charcoalLight },
     stepLabelActive: { color: Colors.primaryDark },
     stepLabelDone: { color: Colors.success, fontWeight: Typography.semiBold },
-
-    // ── Step content ──
-    content: {
-        flex: 1,
-        backgroundColor: Colors.background,
-        paddingBottom: TAB_BAR_HEIGHT,
-    },
-
-    // ── Success modal ──
+    content: { flex: 1, backgroundColor: Colors.background, paddingBottom: TAB_BAR_HEIGHT },
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.55)',

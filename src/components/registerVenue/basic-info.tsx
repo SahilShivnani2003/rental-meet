@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
     View,
     Text,
@@ -13,6 +13,7 @@ import { Colors, Typography, Spacing, Radii } from '../../theme/theme';
 import { StepHeader, SectionCard, PickerRow, NavButtons, Textarea } from '../UI/shared-components';
 import Field from '../UI/input-field';
 import { venueAPI } from '../../service/apis/venues';
+import { VenueFormData } from '../../types/venue.type';
 
 interface VenueType {
     _id: string;
@@ -32,26 +33,25 @@ const CAPACITY_RANGES = [
 ];
 
 interface Props {
+    data: VenueFormData['basic'];
+    onChange: (data: VenueFormData['basic']) => void;
     onNext: () => void;
 }
 
-export default function Step1BasicInfo({ onNext }: Props) {
-    const [venueName, setVenueName] = useState('');
-    const [selectedTypes, setSelectedTypes] = useState<string[]>([]); // stores _id values
-    const [description, setDescription] = useState('');
-    const [capacity, setCapacity] = useState(CAPACITY_RANGES[0]);
-    const [capOpen, setCapOpen] = useState(false);
-    const [totalArea, setTotalArea] = useState('');
-    const [errors, setErrors] = useState<Record<string, string>>({});
+export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
+    const set = (patch: Partial<VenueFormData['basic']>) => onChange({ ...data, ...patch });
 
+    const [errors, setErrors] = useState<Record<string, string>>({});
     const [venueTypes, setVenueTypes] = useState<VenueType[]>([]);
     const [loadingTypes, setLoadingTypes] = useState(false);
     const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
     const [typeSearch, setTypeSearch] = useState('');
+    const [capOpen, setCapOpen] = useState(false);
 
-    const wordCount = description.trim() === '' ? 0 : description.trim().split(/\s+/).length;
+    const wordCount =
+        data.description.trim() === '' ? 0 : data.description.trim().split(/\s+/).length;
 
-    useEffect(() => {
+    React.useEffect(() => {
         fetchVenueTypes();
     }, []);
 
@@ -59,11 +59,10 @@ export default function Step1BasicInfo({ onNext }: Props) {
         setLoadingTypes(true);
         try {
             const response = await venueAPI.venueTypes();
-            if (response?.success) {
+            if (response?.success)
                 setVenueTypes(response.venueTypes.filter((t: VenueType) => t.isActive));
-            }
-        } catch (error: any) {
-            console.error('FETCH VENUE TYPE ERROR:', error);
+        } catch (e: any) {
+            console.error('FETCH VENUE TYPE ERROR:', e);
         } finally {
             setLoadingTypes(false);
         }
@@ -74,24 +73,24 @@ export default function Step1BasicInfo({ onNext }: Props) {
     );
 
     const toggleType = (id: string) => {
-        setSelectedTypes(p => (p.includes(id) ? p.filter(x => x !== id) : [...p, id]));
+        const next = data.venueTypes.includes(id)
+            ? data.venueTypes.filter(x => x !== id)
+            : [...data.venueTypes, id];
+        set({ venueTypes: next });
         setErrors(p => ({ ...p, venueType: '' }));
     };
-
-    const removeType = (id: string) => setSelectedTypes(p => p.filter(x => x !== id));
-
+    const removeType = (id: string) => set({ venueTypes: data.venueTypes.filter(x => x !== id) });
     const getTypeName = (id: string) => venueTypes.find(t => t._id === id)?.name ?? '';
-
     const getTypeIcon = (id: string) => venueTypes.find(t => t._id === id)?.icon ?? '';
 
     const validate = () => {
         const e: Record<string, string> = {};
-        if (!venueName.trim()) e.venueName = 'Venue name is required';
-        if (selectedTypes.length === 0) e.venueType = 'Select at least one venue type';
-        if (!description.trim()) e.description = 'Description is required';
+        if (!data.businessName.trim()) e.venueName = 'Venue name is required';
+        if (data.venueTypes.length === 0) e.venueType = 'Select at least one venue type';
+        if (!data.description.trim()) e.description = 'Description is required';
         if (wordCount > 200) e.description = 'Maximum 200 words allowed';
-        if (capacity === CAPACITY_RANGES[0]) e.capacity = 'Select a capacity range';
-        if (!totalArea.trim()) e.totalArea = 'Total area is required';
+        if (data.capacity === CAPACITY_RANGES[0]) e.capacity = 'Select a capacity range';
+        if (!data.areaSqft.trim()) e.totalArea = 'Total area is required';
         setErrors(e);
         return Object.keys(e).length === 0;
     };
@@ -103,26 +102,23 @@ export default function Step1BasicInfo({ onNext }: Props) {
             keyboardShouldPersistTaps="handled"
         >
             <StepHeader title="Step 1: Basic Info" current={1} />
-
             <SectionCard>
                 <Field
                     label="Business/Venue Name"
                     placeholder="Elite Conference Center"
                     icon="business-outline"
-                    value={venueName}
+                    value={data.businessName}
                     onChangeText={v => {
-                        setVenueName(v);
+                        set({ businessName: v });
                         setErrors(p => ({ ...p, venueName: '' }));
                     }}
                     error={errors.venueName}
                 />
 
-                {/* ── Searchable Venue Type Dropdown ── */}
                 <View style={s.typeSection}>
                     <Text style={s.typeLabel}>
                         VENUE TYPE <Text style={s.req}>*</Text>
                     </Text>
-
                     <TouchableOpacity
                         style={[s.picker, !!errors.venueType && s.pickerError]}
                         onPress={() => {
@@ -133,12 +129,12 @@ export default function Step1BasicInfo({ onNext }: Props) {
                         }}
                         activeOpacity={0.8}
                     >
-                        <Text style={[s.pickerText, selectedTypes.length === 0 && s.placeholder]}>
+                        <Text style={[s.pickerText, data.venueTypes.length === 0 && s.placeholder]}>
                             {loadingTypes
                                 ? 'Loading types...'
-                                : selectedTypes.length > 0
-                                ? `${selectedTypes.length} type${
-                                      selectedTypes.length > 1 ? 's' : ''
+                                : data.venueTypes.length > 0
+                                ? `${data.venueTypes.length} type${
+                                      data.venueTypes.length > 1 ? 's' : ''
                                   } selected`
                                 : 'Select venue type(s)'}
                         </Text>
@@ -155,7 +151,6 @@ export default function Step1BasicInfo({ onNext }: Props) {
 
                     {typeDropdownOpen && (
                         <View style={s.list}>
-                            {/* Search row */}
                             <View style={s.searchRow}>
                                 <Ionicons
                                     name="search-outline"
@@ -182,8 +177,6 @@ export default function Step1BasicInfo({ onNext }: Props) {
                                     </TouchableOpacity>
                                 )}
                             </View>
-
-                            {/* Options */}
                             <ScrollView
                                 style={s.optionsList}
                                 nestedScrollEnabled
@@ -194,7 +187,7 @@ export default function Step1BasicInfo({ onNext }: Props) {
                                     <Text style={s.noResults}>No matching types found</Text>
                                 ) : (
                                     filteredTypes.map(type => {
-                                        const selected = selectedTypes.includes(type._id);
+                                        const selected = data.venueTypes.includes(type._id);
                                         return (
                                             <TouchableOpacity
                                                 key={type._id}
@@ -225,8 +218,6 @@ export default function Step1BasicInfo({ onNext }: Props) {
                                     })
                                 )}
                             </ScrollView>
-
-                            {/* Done */}
                             <TouchableOpacity
                                 style={s.doneRow}
                                 onPress={() => setTypeDropdownOpen(false)}
@@ -236,10 +227,9 @@ export default function Step1BasicInfo({ onNext }: Props) {
                         </View>
                     )}
 
-                    {/* Selected tag pills */}
-                    {selectedTypes.length > 0 && (
+                    {data.venueTypes.length > 0 && (
                         <View style={s.tagRow}>
-                            {selectedTypes.map(id => (
+                            {data.venueTypes.map(id => (
                                 <View key={id} style={s.tag}>
                                     <Text style={s.tagIcon}>{getTypeIcon(id)}</Text>
                                     <Text style={s.tagText}>{getTypeName(id)}</Text>
@@ -250,7 +240,6 @@ export default function Step1BasicInfo({ onNext }: Props) {
                             ))}
                         </View>
                     )}
-
                     {!!errors.venueType && (
                         <View style={s.errorRow}>
                             <Ionicons name="alert-circle" size={12} color={Colors.danger} />
@@ -262,9 +251,9 @@ export default function Step1BasicInfo({ onNext }: Props) {
                 <Textarea
                     label={`Venue Description (Max 200 words) *  —  ${wordCount}/200`}
                     placeholder="Description.."
-                    value={description}
+                    value={data.description}
                     onChangeText={v => {
-                        setDescription(v);
+                        set({ description: v });
                         setErrors(p => ({ ...p, description: '' }));
                     }}
                     numberOfLines={5}
@@ -282,12 +271,12 @@ export default function Step1BasicInfo({ onNext }: Props) {
                         MAXIMUM CAPACITY <Text style={s.req}>*</Text>
                     </Text>
                     <PickerRow
-                        value={capacity}
+                        value={data.capacity}
                         options={CAPACITY_RANGES}
                         open={capOpen}
-                        onToggle={() => setCapOpen(!capOpen)}
+                        onToggle={() => setCapOpen(v => !v)}
                         onSelect={v => {
-                            setCapacity(v);
+                            set({ capacity: v });
                             setCapOpen(false);
                             setErrors(p => ({ ...p, capacity: '' }));
                         }}
@@ -304,9 +293,9 @@ export default function Step1BasicInfo({ onNext }: Props) {
                     label="Total Area (sq.ft)"
                     placeholder="1000"
                     icon="resize-outline"
-                    value={totalArea}
+                    value={data.areaSqft}
                     onChangeText={v => {
-                        setTotalArea(v);
+                        set({ areaSqft: v });
                         setErrors(p => ({ ...p, totalArea: '' }));
                     }}
                     keyboardType="numeric"
@@ -366,18 +355,9 @@ const s = StyleSheet.create({
         borderBottomWidth: 1,
         borderBottomColor: Colors.border,
     },
-    searchInput: {
-        flex: 1,
-        fontSize: Typography.md,
-        color: Colors.charcoal,
-        padding: 0,
-    },
+    searchInput: { flex: 1, fontSize: Typography.md, color: Colors.charcoal, padding: 0 },
     optionsList: { maxHeight: 192 },
-    itemLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
-    },
+    itemLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
     itemIcon: { fontSize: 16 },
     item: {
         flexDirection: 'row',
@@ -404,17 +384,8 @@ const s = StyleSheet.create({
         borderTopColor: Colors.border,
         backgroundColor: Colors.primaryLight,
     },
-    doneText: {
-        fontSize: Typography.md,
-        fontWeight: Typography.semiBold,
-        color: Colors.primary,
-    },
-    tagRow: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: Spacing.sm,
-        marginTop: Spacing.sm,
-    },
+    doneText: { fontSize: Typography.md, fontWeight: Typography.semiBold, color: Colors.primary },
+    tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginTop: Spacing.sm },
     tag: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -427,11 +398,7 @@ const s = StyleSheet.create({
         backgroundColor: Colors.primaryLight,
     },
     tagIcon: { fontSize: 12 },
-    tagText: {
-        fontSize: Typography.xs,
-        fontWeight: Typography.semiBold,
-        color: Colors.primary,
-    },
+    tagText: { fontSize: Typography.xs, fontWeight: Typography.semiBold, color: Colors.primary },
     textarea: { height: 120 },
     pickerSection: { marginBottom: Spacing.md },
     errorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 },

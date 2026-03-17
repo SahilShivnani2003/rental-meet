@@ -1,15 +1,15 @@
-import { apiClient, header } from "../api-client";
+import { apiClient, getAuthHeader } from "../api-client";
 
 export const imageAPI = {
     uploadImage: (data: any) => apiClient.post('upload/image', data, {
-        headers: header
+        headers: getAuthHeader()
     }),
 
     uploadDocument: (data: any) => apiClient.post('upload/document', data, {
-        headers: header
+        headers: getAuthHeader()
     }),
 
     delete: (publicId: string) => apiClient.delete(`upload/${publicId}`, {
-        headers: header
+        headers: getAuthHeader()
     })
 }

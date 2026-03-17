@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii } from '../../theme/theme';
 import Field from '../UI/input-field';
 import {
@@ -10,6 +9,7 @@ import {
     NavButtons,
     PickerRow,
 } from '../UI/shared-components';
+import { VenueFormData } from '../../types/venue.type';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const ADVANCE_OPTIONS = [
@@ -29,24 +29,25 @@ const PRICE_ROWS = [
 ];
 
 interface Props {
+    data: VenueFormData['pricing'];
+    onChange: (data: VenueFormData['pricing']) => void;
     onPrev: () => void;
     onNext: () => void;
 }
 
-export default function Step4Pricing({ onPrev, onNext }: Props) {
-    const [prices, setPrices] = useState<Record<string, { weekday: string; weekend: string }>>({});
-    const [openTime, setOpenTime] = useState('');
-    const [closeTime, setCloseTime] = useState('');
-    const [availDays, setAvailDays] = useState<string[]>([]);
-    const [advanceBooking, setAdvanceBooking] = useState(ADVANCE_OPTIONS[0]);
+export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) {
+    const set = (patch: Partial<VenueFormData['pricing']>) => onChange({ ...data, ...patch });
     const [advOpen, setAdvOpen] = useState(false);
-    const [blackoutDate, setBlackoutDate] = useState('');
 
     const updatePrice = (key: string, type: 'weekday' | 'weekend', value: string) =>
-        setPrices(p => ({ ...p, [key]: { ...p[key], [type]: value } }));
+        set({ prices: { ...data.prices, [key]: { ...data.prices[key], [type]: value } } });
 
     const toggleDay = (day: string) =>
-        setAvailDays(p => (p.includes(day) ? p.filter(d => d !== day) : [...p, day]));
+        set({
+            availDays: data.availDays.includes(day)
+                ? data.availDays.filter(d => d !== day)
+                : [...data.availDays, day],
+        });
 
     return (
         <ScrollView
@@ -55,7 +56,6 @@ export default function Step4Pricing({ onPrev, onNext }: Props) {
         >
             <StepHeader title="Step 4: Pricing" current={4} />
 
-            {/* Pricing Structure — each row uses two Field components side by side */}
             <SectionCard accentColor={Colors.primary}>
                 <SectionTitle icon="logo-usd" title="Pricing Structure" />
                 <View style={s.tableHeader}>
@@ -71,7 +71,7 @@ export default function Step4Pricing({ onPrev, onNext }: Props) {
                                 label=""
                                 placeholder="₹ 0"
                                 icon="logo-usd"
-                                value={prices[row.key]?.weekday || ''}
+                                value={data.prices[row.key]?.weekday || ''}
                                 onChangeText={(v: any) => updatePrice(row.key, 'weekday', v)}
                                 keyboardType="numeric"
                             />
@@ -81,7 +81,7 @@ export default function Step4Pricing({ onPrev, onNext }: Props) {
                                 label=""
                                 placeholder="₹ 0"
                                 icon="logo-usd"
-                                value={prices[row.key]?.weekend || ''}
+                                value={data.prices[row.key]?.weekend || ''}
                                 onChangeText={(v: any) => updatePrice(row.key, 'weekend', v)}
                                 keyboardType="numeric"
                             />
@@ -90,7 +90,6 @@ export default function Step4Pricing({ onPrev, onNext }: Props) {
                 ))}
             </SectionCard>
 
-            {/* Availability Schedule */}
             <SectionCard accentColor={Colors.info}>
                 <SectionTitle
                     icon="time-outline"
@@ -98,15 +97,14 @@ export default function Step4Pricing({ onPrev, onNext }: Props) {
                     iconColor={Colors.info}
                     bgColor={Colors.infoLight}
                 />
-
                 <View style={s.row}>
                     <View style={{ flex: 1 }}>
                         <Field
                             label="Opening Time"
                             placeholder="09:00 AM"
                             icon="time-outline"
-                            value={openTime}
-                            onChangeText={setOpenTime}
+                            value={data.openTime}
+                            onChangeText={v => set({ openTime: v })}
                         />
                     </View>
                     <View style={{ flex: 1 }}>
@@ -114,18 +112,17 @@ export default function Step4Pricing({ onPrev, onNext }: Props) {
                             label="Closing Time"
                             placeholder="09:00 PM"
                             icon="time-outline"
-                            value={closeTime}
-                            onChangeText={setCloseTime}
+                            value={data.closeTime}
+                            onChangeText={v => set({ closeTime: v })}
                         />
                     </View>
                 </View>
-
                 <Text style={s.sectionLabel}>
                     AVAILABLE DAYS <Text style={s.req}>*</Text>
                 </Text>
                 <View style={s.daysGrid}>
                     {DAYS.map(day => {
-                        const active = availDays.includes(day);
+                        const active = data.availDays.includes(day);
                         return (
                             <TouchableOpacity
                                 key={day}
@@ -140,30 +137,28 @@ export default function Step4Pricing({ onPrev, onNext }: Props) {
                         );
                     })}
                 </View>
-
                 <View style={{ marginTop: Spacing.md }}>
                     <Text style={s.sectionLabel}>
                         MINIMUM ADVANCE BOOKING <Text style={s.req}>*</Text>
                     </Text>
                     <PickerRow
-                        value={advanceBooking}
+                        value={data.advanceBooking}
                         options={ADVANCE_OPTIONS}
                         open={advOpen}
                         onToggle={() => setAdvOpen(!advOpen)}
-                        onSelect={(v: any) => {
-                            setAdvanceBooking(v);
+                        onSelect={v => {
+                            set({ advanceBooking: v });
                             setAdvOpen(false);
                         }}
                     />
                 </View>
             </SectionCard>
 
-            {/* Blackout Dates */}
             <SectionCard accentColor={Colors.danger}>
                 <SectionTitle
                     icon="calendar-outline"
                     title="Blackout Dates (Optional)"
-                    subtitle="Dates when venue is unavailable for booking"
+                    subtitle="Dates when venue is unavailable"
                     iconColor={Colors.danger}
                     bgColor={Colors.dangerLight}
                 />
@@ -171,8 +166,8 @@ export default function Step4Pricing({ onPrev, onNext }: Props) {
                     label="Date"
                     placeholder="dd-mm-yyyy"
                     icon="calendar-outline"
-                    value={blackoutDate}
-                    onChangeText={setBlackoutDate}
+                    value={data.blackoutDate}
+                    onChangeText={v => set({ blackoutDate: v })}
                 />
                 <Text style={s.hint}>
                     Note: You can add multiple blackout dates after venue approval

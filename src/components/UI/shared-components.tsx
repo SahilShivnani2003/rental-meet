@@ -111,11 +111,33 @@ export function PickerRow({ value, options, open, onToggle, onSelect }: PickerRo
 }
 
 // ── File upload button ────────────────────────────────────────────────────────
-export function FileUploadBtn({ label, onPress }: { label: string; onPress: () => void }) {
+export function FileUploadBtn({
+    label,
+    onPress,
+    done = false,
+    disabled = false,
+    rightElement,
+}: {
+    label: string;
+    onPress: () => void;
+    done?: boolean;
+    disabled?: boolean;
+    rightElement?: React.ReactNode;
+}) {
     return (
-        <TouchableOpacity style={fu.btn} onPress={onPress} activeOpacity={0.8}>
-            <Ionicons name="cloud-upload-outline" size={15} color={Colors.primary} />
-            <Text style={fu.text}>{label}</Text>
+        <TouchableOpacity
+            style={[fu.btn, done && fu.btnDone, disabled && fu.btnDisabled]}
+            onPress={onPress}
+            activeOpacity={0.8}
+            disabled={disabled}
+        >
+            <Ionicons
+                name={done ? 'checkmark-circle-outline' : 'cloud-upload-outline'}
+                size={15}
+                color={disabled ? Colors.charcoalLight : done ? Colors.success : Colors.primary}
+            />
+            <Text style={[fu.text, done && fu.textDone, disabled && fu.textDisabled]}>{label}</Text>
+            {rightElement ?? null}
         </TouchableOpacity>
     );
 }
@@ -283,6 +305,20 @@ const fu = StyleSheet.create({
         marginTop: Spacing.xs,
     },
     text: { fontSize: Typography.base, fontWeight: Typography.bold, color: Colors.primary },
+    btnDone: {
+        borderColor: Colors.success,
+        backgroundColor: Colors.successLight,
+    },
+    btnDisabled: {
+        borderColor: Colors.border,
+        opacity: 0.6,
+    },
+    textDone: {
+        color: Colors.success,
+    },
+    textDisabled: {
+        color: Colors.charcoalLight,
+    },
 });
 
 const nb = StyleSheet.create({

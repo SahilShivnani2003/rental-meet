@@ -285,7 +285,9 @@ export default function OwnerDashboardScreen({ navigation }: Props) {
 
     const fetchStats = async () => {
         try {
+            debugger
             const res = await ownerAPI.getDashboard();
+            debugger
             if (res?.success) {
                 setStats(res.stats);
                 setRecentBookings(res.recentBookings ?? []);

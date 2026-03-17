@@ -1,24 +1,24 @@
-import { apiClient, header } from "../api-client";
+import { apiClient, getAuthHeader} from "../api-client";
 
 export const ownerAPI = {
 
     getDashboard: () => apiClient.get('owner/dashboard', {
-        headers: header
+        headers: getAuthHeader()
     }),
 
     getVenues: () => apiClient.get('owner/venues', {
-        headers: header
+        headers: getAuthHeader()
     }),
 
     getVenueById: (id: string) => apiClient.get(`owner/venues/${id}`, {
-        headers: header
+        headers: getAuthHeader()
     }),
 
     updateVenueStatus: (id: string, data: any) => apiClient.put(`owner/venues/${id}`, data, {
-        headers: header
+        headers: getAuthHeader()
     }),
 
     deleteVenue: (id: string) => apiClient.delete(`owner/venues/${id}`, {
-        headers: header
+        headers: getAuthHeader()
     })
 }

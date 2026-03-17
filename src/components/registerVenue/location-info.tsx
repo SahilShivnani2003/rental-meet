@@ -11,75 +11,58 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii } from '../../theme/theme';
 import Field from '../UI/input-field';
 import { StepHeader, SectionCard, PickerRow, NavButtons, Textarea } from '../UI/shared-components';
+import { VenueFormData } from '../../types/venue.type';
 
 const PARKING_TYPES = ['Select parking type', 'Free', 'Paid', 'Limited', 'No'];
 
 interface Props {
+    data: VenueFormData['location'];
+    onChange: (data: VenueFormData['location']) => void;
     onPrev: () => void;
     onNext: () => void;
 }
 
-export default function Step2Location({ onPrev, onNext }: Props) {
-    const [address, setAddress] = useState('');
-    const [landmark, setLandmark] = useState('');
-    const [city, setCity] = useState('');
-    const [area, setArea] = useState('');
-    const [pincode, setPincode] = useState('');
-    const [mapsLink, setMapsLink] = useState('');
-    const [parking, setParking] = useState(PARKING_TYPES[0]);
-    const [parkingOpen, setParkingOpen] = useState(false);
-    const [busStand, setBusStand] = useState('');
-    const [metroStation, setMetroStation] = useState('');
+export default function Step2Location({ data, onChange, onPrev, onNext }: Props) {
+    const set = (patch: Partial<VenueFormData['location']>) => onChange({ ...data, ...patch });
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [locating, setLocating] = useState(false);
+    const [parkingOpen, setParkingOpen] = useState(false);
 
     const clearErr = (key: string) => setErrors(p => ({ ...p, [key]: '' }));
 
-    // ── Dummy current-location handler ──────────────────────────────────────
     const handleUseCurrentLocation = async () => {
         setLocating(true);
         try {
-            // TODO: Replace with real geolocation + reverse-geocode logic
             setTimeout(() => {
-                console.log('Current location');
+                console.log('Fetching location');
             }, 500);
-
-            // Dummy data — swap with actual API response fields
-            setAddress('Floor 3, Skyline Tower, MP Nagar Zone II');
-            setLandmark('Near DB City Mall');
-            setCity('Bhopal');
-            setArea('MP Nagar');
-            setPincode('462011');
-            setMapsLink('https://maps.google.com/?q=23.2332,77.4345');
-
-            // Clear any existing errors for auto-filled fields
-            setErrors(p => ({
-                ...p,
-                address: '',
-                landmark: '',
-                city: '',
-                area: '',
-                pincode: '',
-                mapsLink: '',
-            }));
-        } catch (error: any) {
-            console.error('LOCATION ERROR:', error);
+            set({
+                address: 'Floor 3, Skyline Tower, MP Nagar Zone II',
+                landmark: 'Near DB City Mall',
+                city: 'Bhopal',
+                area: 'MP Nagar',
+                pincode: '462011',
+                googleMapLink: 'https://maps.google.com/?q=23.2332,77.4345',
+            });
+            setErrors({});
+        } catch (e: any) {
+            console.error('LOCATION ERROR:', e);
         } finally {
             setLocating(false);
         }
     };
-    // ────────────────────────────────────────────────────────────────────────
 
     const validate = () => {
         const e: Record<string, string> = {};
-        if (!address.trim()) e.address = 'Complete address is required';
-        if (!landmark.trim()) e.landmark = 'Landmark is required';
-        if (!city.trim()) e.city = 'City is required';
-        if (!area.trim()) e.area = 'Area/Locality is required';
-        if (!pincode.trim()) e.pincode = 'Pincode is required';
-        if (pincode.length > 0 && pincode.length !== 6) e.pincode = 'Enter a valid 6-digit pincode';
-        if (!mapsLink.trim()) e.mapsLink = 'Google Maps link is required';
-        if (parking === PARKING_TYPES[0]) e.parking = 'Select a parking type';
+        if (!data.address.trim()) e.address = 'Complete address is required';
+        if (!data.landmark.trim()) e.landmark = 'Landmark is required';
+        if (!data.city.trim()) e.city = 'City is required';
+        if (!data.area.trim()) e.area = 'Area/Locality is required';
+        if (!data.pincode.trim()) e.pincode = 'Pincode is required';
+        if (data.pincode.length > 0 && data.pincode.length !== 6)
+            e.pincode = 'Enter a valid 6-digit pincode';
+        if (!data.googleMapLink.trim()) e.mapsLink = 'Google Maps link is required';
+        if (data.parkingAvailability === PARKING_TYPES[0]) e.parking = 'Select a parking type';
         setErrors(e);
         return Object.keys(e).length === 0;
     };
@@ -90,9 +73,7 @@ export default function Step2Location({ onPrev, onNext }: Props) {
             contentContainerStyle={{ paddingBottom: 20 }}
         >
             <StepHeader title="Step 2: Location" current={2} />
-
             <SectionCard>
-                {/* ── Use Current Location button ── */}
                 <TouchableOpacity
                     style={[s.locationBtn, locating && s.locationBtnDisabled]}
                     onPress={handleUseCurrentLocation}
@@ -111,8 +92,6 @@ export default function Step2Location({ onPrev, onNext }: Props) {
                         </>
                     )}
                 </TouchableOpacity>
-
-                {/* ── Divider ── */}
                 <View style={s.divider}>
                     <View style={s.dividerLine} />
                     <Text style={s.dividerText}>or fill manually</Text>
@@ -122,9 +101,9 @@ export default function Step2Location({ onPrev, onNext }: Props) {
                 <Textarea
                     label="Complete Address *"
                     placeholder="Floor 3, Skyline Tower, MP Nagar"
-                    value={address}
+                    value={data.address}
                     onChangeText={v => {
-                        setAddress(v);
+                        set({ address: v });
                         clearErr('address');
                     }}
                     numberOfLines={3}
@@ -136,9 +115,9 @@ export default function Step2Location({ onPrev, onNext }: Props) {
                     label="Landmark"
                     placeholder="Near DB City Mall"
                     icon="flag-outline"
-                    value={landmark}
+                    value={data.landmark}
                     onChangeText={v => {
-                        setLandmark(v);
+                        set({ landmark: v });
                         clearErr('landmark');
                     }}
                     error={errors.landmark}
@@ -150,9 +129,9 @@ export default function Step2Location({ onPrev, onNext }: Props) {
                             label="City"
                             placeholder="Bhopal"
                             icon="location-outline"
-                            value={city}
+                            value={data.city}
                             onChangeText={v => {
-                                setCity(v);
+                                set({ city: v });
                                 clearErr('city');
                             }}
                             error={errors.city}
@@ -161,11 +140,11 @@ export default function Step2Location({ onPrev, onNext }: Props) {
                     <View style={{ flex: 1 }}>
                         <Field
                             label="Area / Locality"
-                            placeholder="MP Nagar, Arera Colony"
+                            placeholder="MP Nagar"
                             icon="map-outline"
-                            value={area}
+                            value={data.area}
                             onChangeText={v => {
-                                setArea(v);
+                                set({ area: v });
                                 clearErr('area');
                             }}
                             error={errors.area}
@@ -177,23 +156,22 @@ export default function Step2Location({ onPrev, onNext }: Props) {
                     label="Pincode"
                     placeholder="462001"
                     icon="location-outline"
-                    value={pincode}
+                    value={data.pincode}
                     onChangeText={v => {
-                        setPincode(v);
+                        set({ pincode: v });
                         clearErr('pincode');
                     }}
                     keyboardType="numeric"
                     maxLength={6}
                     error={errors.pincode}
                 />
-
                 <Field
                     label="Google Maps Link"
                     placeholder="https://maps.google.com/..."
                     icon="map-outline"
-                    value={mapsLink}
+                    value={data.googleMapLink}
                     onChangeText={v => {
-                        setMapsLink(v);
+                        set({ googleMapLink: v });
                         clearErr('mapsLink');
                     }}
                     keyboardType="url"
@@ -207,12 +185,12 @@ export default function Step2Location({ onPrev, onNext }: Props) {
                         PARKING AVAILABILITY <Text style={s.req}>*</Text>
                     </Text>
                     <PickerRow
-                        value={parking}
+                        value={data.parkingAvailability}
                         options={PARKING_TYPES}
                         open={parkingOpen}
                         onToggle={() => setParkingOpen(!parkingOpen)}
                         onSelect={v => {
-                            setParking(v);
+                            set({ parkingAvailability: v });
                             setParkingOpen(false);
                             clearErr('parking');
                         }}
@@ -226,8 +204,8 @@ export default function Step2Location({ onPrev, onNext }: Props) {
                             label="Nearest Bus/Auto Stand"
                             placeholder="MP Nagar Bus Stand - 500m"
                             icon="bus-outline"
-                            value={busStand}
-                            onChangeText={setBusStand}
+                            value={data.nearestBusAuto}
+                            onChangeText={v => set({ nearestBusAuto: v })}
                         />
                     </View>
                     <View style={{ flex: 1 }}>
@@ -235,13 +213,12 @@ export default function Step2Location({ onPrev, onNext }: Props) {
                             label="Nearest Metro/Train"
                             placeholder="MP Nagar Metro - 500m"
                             icon="train-outline"
-                            value={metroStation}
-                            onChangeText={setMetroStation}
+                            value={data.nearestMetroTrain}
+                            onChangeText={v => set({ nearestMetroTrain: v })}
                         />
                     </View>
                 </View>
             </SectionCard>
-
             <NavButtons
                 onPrev={onPrev}
                 onNext={() => {
@@ -272,7 +249,6 @@ function ErrorRow({ msg }: { msg: string }) {
 }
 
 const s = StyleSheet.create({
-    // ── Location button ──
     locationBtn: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -291,25 +267,18 @@ const s = StyleSheet.create({
         fontWeight: Typography.semiBold,
         color: Colors.primary,
     },
-
-    // ── Divider ──
     divider: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: Spacing.sm,
         marginBottom: Spacing.md,
     },
-    dividerLine: {
-        flex: 1,
-        height: 1,
-        backgroundColor: Colors.border,
-    },
+    dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
     dividerText: {
         fontSize: Typography.xs,
         color: Colors.charcoalLight,
         fontWeight: Typography.medium,
     },
-
     row: { flexDirection: 'row', gap: Spacing.sm },
     hint: {
         fontSize: Typography.xs,

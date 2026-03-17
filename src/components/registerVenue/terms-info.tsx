@@ -10,6 +10,7 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
 import { StepHeader } from '../UI/shared-components';
+import { VenueFormData } from '../../types/venue.type';
 
 const TERMS = [
     {
@@ -55,22 +56,23 @@ const TERMS = [
 ];
 
 interface Props {
+    data: VenueFormData['terms'];
+    onChange: (data: VenueFormData['terms']) => void;
     onPrev: () => void;
     onSubmit: () => void;
 }
 
-export default function Step7Terms({ onPrev, onSubmit }: Props) {
-    const [agreed, setAgreed] = useState(false);
+export default function Step7Terms({ data, onChange, onPrev, onSubmit }: Props) {
     const [submitting, setSubmitting] = useState(false);
 
     const handleSubmit = async () => {
-        if (!agreed) return;
+        if (!data.agreed) return;
         setSubmitting(true);
-        await new Promise(r => setTimeout(() => {
-            console.log('testing')
-        }, 500));
-        setSubmitting(false);
-        onSubmit();
+        try {
+            await onSubmit();
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -79,7 +81,6 @@ export default function Step7Terms({ onPrev, onSubmit }: Props) {
             contentContainerStyle={{ paddingBottom: 20 }}
         >
             <StepHeader title="Step 7: Terms" current={7} />
-
             <View style={s.infoBanner}>
                 <Ionicons name="information-circle-outline" size={22} color={Colors.primary} />
                 <View style={{ flex: 1 }}>
@@ -89,12 +90,11 @@ export default function Step7Terms({ onPrev, onSubmit }: Props) {
                     </Text>
                 </View>
             </View>
-
             <View style={s.termsBox}>
                 <Text style={s.agreementTitle}>RentalMeet Venue Owner Agreement</Text>
                 <ScrollView
-                    showsVerticalScrollIndicator={true}
-                    nestedScrollEnabled={true}
+                    showsVerticalScrollIndicator
+                    nestedScrollEnabled
                     contentContainerStyle={{ paddingBottom: 4 }}
                 >
                     {TERMS.map((t, i) => (
@@ -110,31 +110,28 @@ export default function Step7Terms({ onPrev, onSubmit }: Props) {
                     ))}
                 </ScrollView>
             </View>
-
             <TouchableOpacity
-                style={[s.checkRow, agreed && s.checkRowActive]}
-                onPress={() => setAgreed(!agreed)}
+                style={[s.checkRow, data.agreed && s.checkRowActive]}
+                onPress={() => onChange({ agreed: !data.agreed })}
                 activeOpacity={0.8}
             >
-                <View style={[s.checkbox, agreed && s.checkboxActive]}>
-                    {agreed && <Ionicons name="checkmark" size={14} color={Colors.white} />}
+                <View style={[s.checkbox, data.agreed && s.checkboxActive]}>
+                    {data.agreed && <Ionicons name="checkmark" size={14} color={Colors.white} />}
                 </View>
                 <Text style={s.checkText}>
                     I have read and agree to all terms and conditions. I confirm that all
                     information provided is accurate and truthful.
                 </Text>
             </TouchableOpacity>
-
             <View style={s.navRow}>
                 <TouchableOpacity style={s.prevBtn} onPress={onPrev} activeOpacity={0.8}>
                     <Ionicons name="chevron-back" size={15} color={Colors.primary} />
                     <Text style={s.prevText}>Previous</Text>
                 </TouchableOpacity>
-
                 <TouchableOpacity
-                    style={[s.submitBtn, !agreed && s.submitBtnDisabled]}
+                    style={[s.submitBtn, !data.agreed && s.submitBtnDisabled]}
                     onPress={handleSubmit}
-                    disabled={!agreed || submitting}
+                    disabled={!data.agreed || submitting}
                     activeOpacity={0.85}
                 >
                     {submitting ? (
@@ -144,9 +141,9 @@ export default function Step7Terms({ onPrev, onSubmit }: Props) {
                             <Ionicons
                                 name="checkmark-circle-outline"
                                 size={17}
-                                color={agreed ? Colors.charcoal : Colors.charcoalLight}
+                                color={data.agreed ? Colors.charcoal : Colors.charcoalLight}
                             />
-                            <Text style={[s.submitText, !agreed && s.submitTextDisabled]}>
+                            <Text style={[s.submitText, !data.agreed && s.submitTextDisabled]}>
                                 Submit Venue
                             </Text>
                         </>
