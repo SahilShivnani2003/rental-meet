@@ -1,448 +1,501 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, Dimensions, Image, Platform, StyleSheet, Text, View } from 'react-native';
+import Video from 'react-native-video';
+import { Colors, Typography, Spacing, Radii } from '../theme/theme';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Dimensions, Easing, StatusBar } from 'react-native';
-import Svg, { Path, Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
 import { RootStackParamList } from '../navigations/RootNavigation';
+import { useAuthStore } from '../store/auth-store';
 
-// ── Theme tokens (from your theme file) ──────────────────────────────────────
-const Colors = {
-    primary: '#F5A623',
-    primaryDark: '#D98E0E',
-    primaryLight: '#FEF3DC',
-    primaryBorder: '#F5D48A',
-    primaryGlow: 'rgba(245,166,35,0.30)',
-    primaryDim: 'rgba(245,166,35,0.14)',
-    charcoal: '#2C2C2C',
-    charcoalMid: '#555555',
-    charcoalLight: '#8A8A8A',
-    background: '#F7F6F2',
-    tabBar: '#1E1B14',
-    white: '#FFFFFF',
-};
+const { width: W, height: H } = Dimensions.get('window');
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+type splashProps = NativeStackScreenProps<RootStackParamList, 'splash'>;
 
-// ── Simplified India SVG path (scaled to ~280×320 viewport) ──────────────────
-// viewBox="0 0 280 320"
-const INDIA_PATH =
-    'M138,8 L145,10 L155,8 L165,14 L172,12 L178,20 L185,22 ' +
-    'L188,30 L195,35 L198,45 L205,48 L208,58 L212,62 L215,72 ' +
-    'L220,78 L222,88 L218,96 L222,104 L225,114 L222,124 L218,132 ' +
-    'L215,140 L210,148 L205,155 L200,162 L192,168 L188,176 ' +
-    'L182,182 L178,190 L175,198 L170,205 L166,212 L162,218 ' +
-    'L158,225 L155,232 L152,240 L148,248 L145,256 L142,262 ' +
-    'L140,268 L138,274 L136,268 L134,262 L131,255 L128,248 ' +
-    'L124,240 L120,232 L116,225 L112,218 L108,212 L104,206 ' +
-    'L100,200 L96,194 L92,188 L88,182 L84,176 L80,170 ' +
-    'L76,164 L72,158 L68,152 L65,144 L62,136 L60,126 ' +
-    'L62,116 L60,106 L62,96 L66,88 L70,80 L75,72 ' +
-    'L80,65 L86,58 L90,50 L95,44 L100,38 L106,32 ' +
-    'L112,26 L118,20 L124,15 L130,10 Z';
+const MAIN_LOGO = require('../assets/MainLogo.png');
+Image.prefetch(Image.resolveAssetSource(MAIN_LOGO).uri).catch(() => null);
 
-// ── AnimatedPath wrapper ──────────────────────────────────────────────────────
-const AnimatedPath = Animated.createAnimatedComponent(Path);
+export default function SplashScreen({ navigation }: splashProps) {
+    const { loadUser } = useAuthStore();
+    const [videoFailed, setVideoFailed] = useState(false);
+    const [videoEnded, setVideoEnded] = useState(false);
 
-// ── Particle dot positions scattered around India silhouette ─────────────────
-const PARTICLES = [
-    { x: 140, y: 80 }, // Delhi area
-    { x: 165, y: 110 }, // Kolkata area
-    { x: 105, y: 130 }, // Rajasthan area
-    { x: 178, y: 150 }, // Assam area
-    { x: 92, y: 175 }, // Gujarat area
-    { x: 148, y: 200 }, // Hyderabad area
-    { x: 118, y: 220 }, // Goa area
-    { x: 145, y: 250 }, // Kerala/TN area
-];
+    // ── Animated values ──────────────────────────────────────────────────────
+    // Dark overlay fades in as video ends
+    const overlayOpacity = useRef(new Animated.Value(0)).current;
 
-type splashProps = NativeStackScreenProps<RootStackParamList, 'splash'>
+    // Decorative rings expand outward
+    const ring1Scale = useRef(new Animated.Value(0.4)).current;
+    const ring1Opacity = useRef(new Animated.Value(0)).current;
+    const ring2Scale = useRef(new Animated.Value(0.4)).current;
+    const ring2Opacity = useRef(new Animated.Value(0)).current;
+    const ring3Scale = useRef(new Animated.Value(0.4)).current;
+    const ring3Opacity = useRef(new Animated.Value(0)).current;
 
-// ── SplashScreen Component ────────────────────────────────────────────────────
-const SplashScreen= ({navigation}:splashProps) => {
-    // Map draw animation (stroke-dashoffset trick via opacity cascade)
-    const mapProgress = useRef(new Animated.Value(0)).current;
-    const glowPulse = useRef(new Animated.Value(0)).current;
-    const logoScale = useRef(new Animated.Value(0)).current;
+    // Logo
     const logoOpacity = useRef(new Animated.Value(0)).current;
-    const nameTranslate = useRef(new Animated.Value(20)).current;
-    const nameOpacity = useRef(new Animated.Value(0)).current;
-    const taglineOpacity = useRef(new Animated.Value(0)).current;
-    const screenFade = useRef(new Animated.Value(1)).current;
+    const logoScale = useRef(new Animated.Value(0.78)).current;
+    const logoY = useRef(new Animated.Value(24)).current;
 
-    // Individual particle anims
-    const particleAnims = PARTICLES.map(() => ({
-        scale: useRef(new Animated.Value(0)).current,
-        opacity: useRef(new Animated.Value(0)).current,
-    }));
+    // Brand sub-label
+    const brandOpacity = useRef(new Animated.Value(0)).current;
+    const brandY = useRef(new Animated.Value(10)).current;
 
+    // Header badge
+    const headerOpacity = useRef(new Animated.Value(0)).current;
+    const headerY = useRef(new Animated.Value(-18)).current;
+
+    // Footer
+    const footerOpacity = useRef(new Animated.Value(0)).current;
+    const footerY = useRef(new Animated.Value(22)).current;
+
+    // Amber horizontal rule widths (animate from 0 to full)
+    const rulerWidth = useRef(new Animated.Value(0)).current;
+
+    const handleNavigation = async () => {
+        await loadUser();
+
+        const { user, isAuthenticated } = useAuthStore.getState();
+
+        console.log(`User:${user} \n Authenticated: ${isAuthenticated}`);
+        if (isAuthenticated) {
+            navigation.replace(user?.role === 'owner' ? 'owner' : 'client');
+        } else {
+            navigation.replace('onBoarding');
+        }
+    };
+    // ── Animation sequence ───────────────────────────────────────────────────
     useEffect(() => {
-        // 1. Draw the map (0→1 over 2s)
-        Animated.timing(mapProgress, {
-            toValue: 1,
-            duration: 2200,
-            easing: Easing.out(Easing.cubic),
-            useNativeDriver: true,
-        }).start(() => {
-            // 2. Glow pulse after draw
-            Animated.loop(
-                Animated.sequence([
-                    Animated.timing(glowPulse, {
-                        toValue: 1,
-                        duration: 900,
-                        useNativeDriver: true,
-                    }),
-                    Animated.timing(glowPulse, {
-                        toValue: 0,
-                        duration: 900,
-                        useNativeDriver: true,
-                    }),
-                ]),
-                { iterations: 3 },
-            ).start();
+        if (!videoEnded) return;
 
-            // 3. Scatter particles
-            particleAnims.forEach((p, i) => {
-                Animated.sequence([
-                    Animated.delay(i * 80),
-                    Animated.parallel([
-                        Animated.spring(p.scale, {
-                            toValue: 1,
-                            friction: 5,
-                            useNativeDriver: true,
-                        }),
-                        Animated.timing(p.opacity, {
-                            toValue: 1,
-                            duration: 300,
-                            useNativeDriver: true,
-                        }),
-                    ]),
-                ]).start();
-            });
+        Animated.sequence([
+            // 0. Dark overlay fades over video
+            Animated.timing(overlayOpacity, {
+                toValue: 1,
+                duration: 420,
+                useNativeDriver: true,
+            }),
 
-            // 4. After 600ms show logo
-            setTimeout(() => {
+            // 1. Rings bloom out from centre
+            Animated.stagger(100, [
                 Animated.parallel([
-                    Animated.spring(logoScale, {
+                    Animated.timing(ring1Scale, {
                         toValue: 1,
-                        friction: 6,
-                        tension: 80,
+                        duration: 550,
                         useNativeDriver: true,
                     }),
-                    Animated.timing(logoOpacity, {
+                    Animated.timing(ring1Opacity, {
                         toValue: 1,
                         duration: 400,
                         useNativeDriver: true,
                     }),
-                ]).start(() => {
-                    // 5. App name slides up
-                    Animated.parallel([
-                        Animated.timing(nameTranslate, {
-                            toValue: 0,
-                            duration: 500,
-                            easing: Easing.out(Easing.cubic),
-                            useNativeDriver: true,
-                        }),
-                        Animated.timing(nameOpacity, {
-                            toValue: 1,
-                            duration: 500,
-                            useNativeDriver: true,
-                        }),
-                    ]).start(() => {
-                        // 6. Tagline fades in
-                        Animated.timing(taglineOpacity, {
-                            toValue: 1,
-                            duration: 400,
-                            useNativeDriver: true,
-                        }).start(() => {
-                            // 7. Hold then fade out whole screen
-                            setTimeout(() => {
-                                Animated.timing(screenFade, {
-                                    toValue: 0,
-                                    duration: 600,
-                                    useNativeDriver: true,
-                                }).start(() => navigation.replace('login'));
-                            }, 1200);
-                        });
-                    });
-                });
-            }, 600);
+                ]),
+                Animated.parallel([
+                    Animated.timing(ring2Scale, {
+                        toValue: 1,
+                        duration: 580,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(ring2Opacity, {
+                        toValue: 1,
+                        duration: 400,
+                        useNativeDriver: true,
+                    }),
+                ]),
+                Animated.parallel([
+                    Animated.timing(ring3Scale, {
+                        toValue: 1,
+                        duration: 610,
+                        useNativeDriver: true,
+                    }),
+                    Animated.timing(ring3Opacity, {
+                        toValue: 1,
+                        duration: 400,
+                        useNativeDriver: true,
+                    }),
+                ]),
+            ]),
+
+            // 2. Logo rises in
+            Animated.parallel([
+                Animated.timing(logoOpacity, { toValue: 1, duration: 560, useNativeDriver: true }),
+                Animated.timing(logoScale, { toValue: 1, duration: 560, useNativeDriver: true }),
+                Animated.timing(logoY, { toValue: 0, duration: 560, useNativeDriver: true }),
+            ]),
+
+            // 3. Brand sub-label fades up
+            Animated.parallel([
+                Animated.timing(brandOpacity, { toValue: 1, duration: 380, useNativeDriver: true }),
+                Animated.timing(brandY, { toValue: 0, duration: 380, useNativeDriver: true }),
+            ]),
+
+            // 4. Header drops down
+            Animated.parallel([
+                Animated.timing(headerOpacity, {
+                    toValue: 1,
+                    duration: 400,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(headerY, { toValue: 0, duration: 400, useNativeDriver: true }),
+            ]),
+
+            // 5. Footer rises up
+            Animated.parallel([
+                Animated.timing(footerOpacity, {
+                    toValue: 1,
+                    duration: 400,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(footerY, { toValue: 0, duration: 400, useNativeDriver: true }),
+            ]),
+        ]).start(() => {
+            setTimeout(() => handleNavigation(), 900);
         });
-    }, []);
+    }, [videoEnded]);
 
-    // Map opacity: segments fade in as progress advances
-    // We simulate "draw" by fading in path opacity with a slight scale from center
-    const mapOpacity = mapProgress.interpolate({
-        inputRange: [0, 0.15, 1],
-        outputRange: [0, 1, 1],
-    });
-    const mapScale = mapProgress.interpolate({ inputRange: [0, 1], outputRange: [0.88, 1] });
-    const borderOpacity = mapProgress.interpolate({
-        inputRange: [0, 0.4, 1],
-        outputRange: [0, 0, 1],
-    });
+    // Ruler animates separately via JS driver (width not supported by native)
+    useEffect(() => {
+        if (!videoEnded) return;
+        setTimeout(() => {
+            Animated.timing(rulerWidth, {
+                toValue: 1,
+                duration: 700,
+                useNativeDriver: false,
+            }).start();
+        }, 1600); // kicks in after logo appears
+    }, [videoEnded]);
 
-    const glowOpacity = glowPulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.75] });
-    const glowScale = glowPulse.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1.08] });
+    const handleVideoEnd = () => setVideoEnded(true);
+    const handleVideoError = (e: any) => {
+        console.warn('Video error:', e);
+        setVideoFailed(true);
+        setVideoEnded(true);
+    };
+
+    // Interpolated ruler width
+    const leftRulerW = rulerWidth.interpolate({ inputRange: [0, 1], outputRange: [0, 40] });
+    const rightRulerW = rulerWidth.interpolate({ inputRange: [0, 1], outputRange: [0, 40] });
 
     return (
-        <Animated.View style={[styles.container, { opacity: screenFade }]}>
-            <StatusBar backgroundColor={Colors.tabBar} barStyle="light-content" />
+        <View style={s.root}>
+            {/* ── Video plays full-screen ── */}
+            {!videoFailed && (
+                <Video
+                    source={require('../assets/MapBackground_enhanced.mp4')}
+                    style={StyleSheet.absoluteFill}
+                    resizeMode="cover"
+                    muted
+                    paused={false}
+                    repeat={false}
+                    onEnd={handleVideoEnd}
+                    onError={handleVideoError}
+                />
+            )}
 
-            {/* Background radial glow */}
+            {/* ── Dark overlay fades in as video finishes ── */}
             <Animated.View
-                style={[styles.bgGlow, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]}
+                style={[StyleSheet.absoluteFill, s.darkOverlay, { opacity: overlayOpacity }]}
             />
 
-            {/* Grid dots background texture */}
-            <View style={styles.gridContainer} pointerEvents="none">
-                {Array.from({ length: 12 }).map((_, row) =>
-                    Array.from({ length: 8 }).map((_, col) => (
-                        <View
-                            key={`${row}-${col}`}
-                            style={[
-                                styles.gridDot,
-                                {
-                                    top: row * 52 + 20,
-                                    left: col * 46 + 20,
-                                },
-                            ]}
-                        />
-                    )),
-                )}
-            </View>
-
-            {/* India Map SVG */}
+            {/* ── Decorative concentric rings — centre bloom ── */}
             <Animated.View
                 style={[
-                    styles.mapWrapper,
-                    {
-                        opacity: mapOpacity,
-                        transform: [{ scale: mapScale }],
-                    },
+                    s.ring,
+                    s.ring3,
+                    { opacity: ring3Opacity, transform: [{ scale: ring3Scale }] },
                 ]}
+            />
+            <Animated.View
+                style={[
+                    s.ring,
+                    s.ring2,
+                    { opacity: ring2Opacity, transform: [{ scale: ring2Scale }] },
+                ]}
+            />
+            <Animated.View
+                style={[
+                    s.ring,
+                    s.ring1,
+                    { opacity: ring1Opacity, transform: [{ scale: ring1Scale }] },
+                ]}
+            />
+
+            {/* Amber corner glow — top right */}
+            {videoEnded && <View style={s.cornerGlowTR} />}
+            {/* Amber corner glow — bottom left */}
+            {videoEnded && <View style={s.cornerGlowBL} />}
+
+            {/* ── HEADER ── */}
+            <Animated.View
+                style={[s.header, { opacity: headerOpacity, transform: [{ translateY: headerY }] }]}
             >
-                <Svg width={280} height={320} viewBox="0 0 280 320">
-                    <Defs>
-                        <LinearGradient id="mapFill" x1="0" y1="0" x2="1" y2="1">
-                            <Stop offset="0" stopColor={Colors.primaryLight} stopOpacity="0.9" />
-                            <Stop offset="1" stopColor="#FEE6A0" stopOpacity="0.7" />
-                        </LinearGradient>
-                        <LinearGradient id="strokeGrad" x1="0" y1="0" x2="0" y2="1">
-                            <Stop offset="0" stopColor={Colors.primary} stopOpacity="1" />
-                            <Stop offset="1" stopColor={Colors.primaryDark} stopOpacity="1" />
-                        </LinearGradient>
-                    </Defs>
-
-                    {/* Glow shadow layer */}
-                    <Path
-                        d={INDIA_PATH}
-                        fill="rgba(245,166,35,0.12)"
-                        scale={1.04}
-                        translateX={-5}
-                        translateY={-5}
-                    />
-
-                    {/* Fill layer */}
-                    <Path d={INDIA_PATH} fill="url(#mapFill)" />
-
-                    {/* Animated border stroke — drawn via strokeDasharray trick */}
-                    <AnimatedPath
-                        d={INDIA_PATH}
-                        fill="none"
-                        stroke="url(#strokeGrad)"
-                        strokeWidth={2.2}
-                        strokeLinejoin="round"
-                        strokeLinecap="round"
-                        opacity={borderOpacity}
-                    />
-
-                    {/* State division subtle lines */}
-                    <Path
-                        d="M138,80 L138,270 M100,140 L178,140 M90,180 L180,180 M105,220 L165,220"
-                        stroke={Colors.primaryBorder}
-                        strokeWidth={0.5}
-                        opacity={0.4}
-                        fill="none"
-                    />
-
-                    {/* City dots */}
-                    {PARTICLES.map((p, i) => (
-                        <AnimatedPath
-                            key={i}
-                            d={`M${p.x - 3},${p.y} a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0`}
-                            fill={Colors.primary}
-                            opacity={particleAnims[i].opacity}
-                        />
-                    ))}
-                </Svg>
+                <View style={s.badgeOuter}>
+                    <View style={s.badgeDot} />
+                    <Text style={s.badgeText}>INDIA'S NO. 1</Text>
+                    <View style={s.badgeDot} />
+                </View>
+                <Text style={s.tagline}>Meeting Venues Booking Platform</Text>
             </Animated.View>
 
-            {/* Logo + Name centered overlay */}
-            <View style={styles.brandOverlay} pointerEvents="none">
-                {/* Logo Icon */}
+            {/* ── CENTER ── */}
+            <View style={s.center}>
+                {/* Amber ruler lines flanking logo */}
+                <View style={s.rulerRow}>
+                    <Animated.View style={[s.ruler, { width: leftRulerW }]} />
+                    <View style={s.rulerGap} />
+                    <Animated.View style={[s.ruler, { width: rightRulerW }]} />
+                </View>
+
                 <Animated.View
                     style={[
-                        styles.logoCircle,
+                        s.logoWrap,
                         {
                             opacity: logoOpacity,
-                            transform: [{ scale: logoScale }],
+                            transform: [{ scale: logoScale }, { translateY: logoY }],
                         },
                     ]}
                 >
-                    {/* Custom "M" logo mark */}
-                    <Svg width={52} height={52} viewBox="0 0 52 52">
-                        <Defs>
-                            <LinearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
-                                <Stop offset="0" stopColor={Colors.primary} />
-                                <Stop offset="1" stopColor={Colors.primaryDark} />
-                            </LinearGradient>
-                        </Defs>
-                        {/* Outer ring */}
-                        <Circle
-                            cx="26"
-                            cy="26"
-                            r="25"
-                            fill="none"
-                            stroke="url(#logoGrad)"
-                            strokeWidth="1.5"
-                        />
-                        {/* M letterform */}
-                        <Path
-                            d="M10,36 L10,16 L20,28 L26,20 L32,28 L42,16 L42,36"
-                            fill="none"
-                            stroke="url(#logoGrad)"
-                            strokeWidth="3"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        />
-                    </Svg>
+                    <Image
+                        source={MAIN_LOGO}
+                        defaultSource={MAIN_LOGO}
+                        style={s.mainLogo}
+                        resizeMode="contain"
+                    />
                 </Animated.View>
 
-                {/* App name */}
-                <Animated.Text
+                <Animated.View
                     style={[
-                        styles.appName,
-                        {
-                            opacity: nameOpacity,
-                            transform: [{ translateY: nameTranslate }],
-                        },
+                        s.brandRow,
+                        { opacity: brandOpacity, transform: [{ translateY: brandY }] },
                     ]}
                 >
-                    Meet
-                </Animated.Text>
-
-                {/* Tagline */}
-                <Animated.Text style={[styles.tagline, { opacity: taglineOpacity }]}>
-                    Connecting India
-                </Animated.Text>
+                    <View style={s.brandLine} />
+                    <Text style={s.brandBy}>BY YUWAKA EDUTECH</Text>
+                    <View style={s.brandLine} />
+                </Animated.View>
             </View>
 
-            {/* Bottom amber bar */}
-            <Animated.View style={[styles.bottomBar, { opacity: nameOpacity }]}>
-                <View style={styles.bottomBarInner} />
+            {/* ── FOOTER ── */}
+            <Animated.View
+                style={[s.footer, { opacity: footerOpacity, transform: [{ translateY: footerY }] }]}
+            >
+                {/* Amber divider pip */}
+                <View style={s.footerPip} />
+                <Text style={s.footerPowered}>Powered by Yuwaka EduTech Pvt. Ltd.</Text>
+                <Text style={s.footerCin}>CIN No. : U86801MP2028PTC088010</Text>
+                <View style={s.footerMeta}>
+                    <View style={s.footerMetaDot} />
+                    <Text style={s.footerVersion}>Version 1.0.0</Text>
+                </View>
             </Animated.View>
-        </Animated.View>
+        </View>
     );
-};
+}
 
-// ── Styles ────────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-    container: {
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+    root: {
         flex: 1,
-        backgroundColor: Colors.tabBar,
+        width: W,
+        height: H,
+        backgroundColor: Colors.charcoal, // dark base
         alignItems: 'center',
-        justifyContent: 'center',
-        overflow: 'hidden',
+        justifyContent: 'space-between',
+        paddingTop: Platform.OS === 'ios' ? 68 : 52,
+        paddingBottom: Platform.OS === 'ios' ? 48 : 36,
+        paddingHorizontal: Spacing.xxl,
     },
-    bgGlow: {
-        position: 'absolute',
-        width: SCREEN_W * 1.2,
-        height: SCREEN_H * 0.75,
-        borderRadius: SCREEN_W,
-        backgroundColor: 'transparent',
-        top: SCREEN_H * 0.05,
-        // radial glow via shadow
-        shadowColor: Colors.primary,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 1,
-        shadowRadius: 120,
-        elevation: 0,
+
+    // Dark warm overlay — covers video, reveals dark UI
+    darkOverlay: {
+        backgroundColor: 'rgba(28,25,20,0.91)', // very dark warm black
     },
-    gridContainer: {
+
+    // ── Decorative rings ──
+    ring: {
         position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-    },
-    gridDot: {
-        position: 'absolute',
-        width: 2,
-        height: 2,
-        borderRadius: 1,
-        backgroundColor: 'rgba(245,166,35,0.12)',
-    },
-    mapWrapper: {
-        position: 'absolute',
-        top: SCREEN_H * 0.08,
         alignSelf: 'center',
+        top: '50%' as any,
+        left: '50%' as any,
+        borderRadius: 999,
+        borderWidth: 1,
     },
-    brandOverlay: {
+    ring1: {
+        width: 160,
+        height: 160,
+        marginTop: -80,
+        marginLeft: -80,
+        borderColor: Colors.primary + '55',
+        backgroundColor: Colors.primaryGlow,
+    },
+    ring2: {
+        width: 260,
+        height: 260,
+        marginTop: -130,
+        marginLeft: -130,
+        borderColor: Colors.primary + '30',
+        backgroundColor: Colors.primaryGlow.replace('0.30', '0.06'),
+    },
+    ring3: {
+        width: 370,
+        height: 370,
+        marginTop: -185,
+        marginLeft: -185,
+        borderColor: Colors.primary + '18',
+        backgroundColor: 'transparent',
+    },
+
+    // Corner glows
+    cornerGlowTR: {
         position: 'absolute',
-        top: SCREEN_H * 0.08,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        alignItems: 'center',
-        justifyContent: 'center',
+        top: -30,
+        right: -30,
+        width: 160,
+        height: 160,
+        borderRadius: 80,
+        backgroundColor: Colors.primaryGlow,
     },
-    logoCircle: {
-        width: 76,
-        height: 76,
-        borderRadius: 38,
-        backgroundColor: Colors.tabBar,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderWidth: 1.5,
-        borderColor: Colors.primary,
-        // glow
-        shadowColor: Colors.primary,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.6,
-        shadowRadius: 18,
-        elevation: 12,
-        marginBottom: 14,
-    },
-    appName: {
-        fontFamily: 'Georgia', // distinctive serif — swap for custom font if available
-        fontSize: 42,
-        fontWeight: '700',
-        color: Colors.white,
-        letterSpacing: 3,
-        textShadowColor: Colors.primary,
-        textShadowOffset: { width: 0, height: 0 },
-        textShadowRadius: 16,
-    },
-    tagline: {
-        marginTop: 6,
-        fontSize: 12,
-        fontWeight: '500',
-        color: Colors.primary,
-        letterSpacing: 4,
-        textTransform: 'uppercase',
-        opacity: 0.9,
-    },
-    bottomBar: {
+    cornerGlowBL: {
         position: 'absolute',
-        bottom: 48,
-        alignItems: 'center',
+        bottom: 60,
+        left: -40,
+        width: 120,
+        height: 120,
+        borderRadius: 60,
+        backgroundColor: Colors.primaryDim,
     },
-    bottomBarInner: {
-        width: 48,
-        height: 3,
+
+    // ── Header ──
+    header: {
+        alignItems: 'center',
+        zIndex: 10,
+    },
+    badgeOuter: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.xs,
+        backgroundColor: 'rgba(245,166,35,0.12)',
+        borderWidth: 1,
+        borderColor: Colors.primaryBorder + '99',
+        borderRadius: Radii.full,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.xxs + 1,
+        marginBottom: Spacing.sm,
+    },
+    badgeDot: {
+        width: 4,
+        height: 4,
         borderRadius: 2,
         backgroundColor: Colors.primary,
+    },
+    badgeText: {
+        fontSize: Typography.xs,
+        letterSpacing: Typography.wider,
+        color: Colors.primary,
+        fontWeight: Typography.bold,
+    },
+    tagline: {
+        fontSize: Typography.sm,
+        color: Colors.charcoalLight,
+        letterSpacing: Typography.normal,
+        fontWeight: Typography.regular,
+    },
+
+    // ── Center ──
+    center: {
+        alignItems: 'center',
+        zIndex: 10,
+        gap: 0,
+    },
+    rulerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: Spacing.lg,
+        width: W * 0.68,
+        justifyContent: 'center',
+    },
+    ruler: {
+        height: 1,
+        backgroundColor: Colors.primary,
+        opacity: 0.6,
+    },
+    rulerGap: {
+        width: 12,
+    },
+    logoWrap: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        // Subtle amber glow halo behind logo
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.35,
+        shadowRadius: 28,
+        elevation: 12,
+    },
+    mainLogo: {
+        width: W * 0.68,
+        height: W * 0.52,
+    },
+    brandRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+        marginTop: Spacing.sm,
+    },
+    brandLine: {
+        width: 22,
+        height: 1,
+        backgroundColor: Colors.primary,
+        opacity: 0.55,
+    },
+    brandBy: {
+        fontSize: Typography.xs,
+        color: Colors.primary,
+        fontWeight: Typography.bold,
+        letterSpacing: Typography.wider,
+    },
+
+    // ── Footer ──
+    footer: {
+        alignItems: 'center',
+        zIndex: 10,
+        gap: Spacing.xxs,
+    },
+    footerPip: {
+        width: 28,
+        height: 2,
+        borderRadius: 1,
+        backgroundColor: Colors.primary,
         opacity: 0.7,
+        marginBottom: Spacing.sm,
+    },
+    footerPowered: {
+        fontSize: Typography.sm,
+        color: Colors.charcoalLight,
+        fontWeight: Typography.medium,
+        textAlign: 'center',
+    },
+    footerCin: {
+        fontSize: Typography.xs,
+        color: Colors.charcoalWarm,
+        textAlign: 'center',
+        marginTop: Spacing.xxs,
+    },
+    footerMeta: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.xs,
+        marginTop: Spacing.xs,
+    },
+    footerMetaDot: {
+        width: 3,
+        height: 3,
+        borderRadius: 1.5,
+        backgroundColor: Colors.primary,
+        opacity: 0.6,
+    },
+    footerVersion: {
+        fontSize: Typography.xs,
+        color: Colors.charcoalWarm,
+        fontWeight: Typography.medium,
+        letterSpacing: Typography.normal,
     },
 });
-
-export default SplashScreen;

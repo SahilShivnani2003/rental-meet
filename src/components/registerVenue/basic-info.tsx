@@ -1,19 +1,26 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+    View,
+    Text,
+    StyleSheet,
+    ScrollView,
+    TouchableOpacity,
+    TextInput,
+    ActivityIndicator,
+} from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii } from '../../theme/theme';
 import { StepHeader, SectionCard, PickerRow, NavButtons, Textarea } from '../UI/shared-components';
 import Field from '../UI/input-field';
+import { venueAPI } from '../../service/apis/venues';
 
-const VENUE_TYPES = [
-    'Conference Hall',
-    'Banquet Hall',
-    'Marriage Garden',
-    'Function Hall',
-    'Meeting Hall',
-    'Party Hall',
-    'Training Room',
-];
+interface VenueType {
+    _id: string;
+    name: string;
+    icon: string;
+    isActive: boolean;
+}
+
 const CAPACITY_RANGES = [
     'Select capacity range',
     '1–50',
@@ -30,17 +37,52 @@ interface Props {
 
 export default function Step1BasicInfo({ onNext }: Props) {
     const [venueName, setVenueName] = useState('');
-    const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
+    const [selectedTypes, setSelectedTypes] = useState<string[]>([]); // stores _id values
     const [description, setDescription] = useState('');
     const [capacity, setCapacity] = useState(CAPACITY_RANGES[0]);
     const [capOpen, setCapOpen] = useState(false);
     const [totalArea, setTotalArea] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
 
+    const [venueTypes, setVenueTypes] = useState<VenueType[]>([]);
+    const [loadingTypes, setLoadingTypes] = useState(false);
+    const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
+    const [typeSearch, setTypeSearch] = useState('');
+
     const wordCount = description.trim() === '' ? 0 : description.trim().split(/\s+/).length;
 
-    const toggleType = (type: string) =>
-        setSelectedTypes(p => (p.includes(type) ? p.filter(t => t !== type) : [...p, type]));
+    useEffect(() => {
+        fetchVenueTypes();
+    }, []);
+
+    const fetchVenueTypes = async () => {
+        setLoadingTypes(true);
+        try {
+            const response = await venueAPI.venueTypes();
+            if (response?.success) {
+                setVenueTypes(response.venueTypes.filter((t: VenueType) => t.isActive));
+            }
+        } catch (error: any) {
+            console.error('FETCH VENUE TYPE ERROR:', error);
+        } finally {
+            setLoadingTypes(false);
+        }
+    };
+
+    const filteredTypes = venueTypes.filter(t =>
+        t.name.toLowerCase().includes(typeSearch.toLowerCase()),
+    );
+
+    const toggleType = (id: string) => {
+        setSelectedTypes(p => (p.includes(id) ? p.filter(x => x !== id) : [...p, id]));
+        setErrors(p => ({ ...p, venueType: '' }));
+    };
+
+    const removeType = (id: string) => setSelectedTypes(p => p.filter(x => x !== id));
+
+    const getTypeName = (id: string) => venueTypes.find(t => t._id === id)?.name ?? '';
+
+    const getTypeIcon = (id: string) => venueTypes.find(t => t._id === id)?.icon ?? '';
 
     const validate = () => {
         const e: Record<string, string> = {};
@@ -58,6 +100,7 @@ export default function Step1BasicInfo({ onNext }: Props) {
         <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 20 }}
+            keyboardShouldPersistTaps="handled"
         >
             <StepHeader title="Step 1: Basic Info" current={1} />
 
@@ -74,39 +117,140 @@ export default function Step1BasicInfo({ onNext }: Props) {
                     error={errors.venueName}
                 />
 
-                {/* Venue Type multi-select */}
+                {/* ── Searchable Venue Type Dropdown ── */}
                 <View style={s.typeSection}>
                     <Text style={s.typeLabel}>
                         VENUE TYPE <Text style={s.req}>*</Text>
                     </Text>
-                    <View style={s.typeGrid}>
-                        {VENUE_TYPES.map(type => {
-                            const active = selectedTypes.includes(type);
-                            return (
-                                <TouchableOpacity
-                                    key={type}
-                                    style={[s.typeChip, active && s.typeChipActive]}
-                                    onPress={() => {
-                                        toggleType(type);
-                                        setErrors(p => ({ ...p, venueType: '' }));
-                                    }}
-                                    activeOpacity={0.75}
-                                >
-                                    {active && (
+
+                    <TouchableOpacity
+                        style={[s.picker, !!errors.venueType && s.pickerError]}
+                        onPress={() => {
+                            if (!loadingTypes) {
+                                setTypeDropdownOpen(v => !v);
+                                setTypeSearch('');
+                            }
+                        }}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={[s.pickerText, selectedTypes.length === 0 && s.placeholder]}>
+                            {loadingTypes
+                                ? 'Loading types...'
+                                : selectedTypes.length > 0
+                                ? `${selectedTypes.length} type${
+                                      selectedTypes.length > 1 ? 's' : ''
+                                  } selected`
+                                : 'Select venue type(s)'}
+                        </Text>
+                        {loadingTypes ? (
+                            <ActivityIndicator size="small" color={Colors.charcoalLight} />
+                        ) : (
+                            <Ionicons
+                                name={typeDropdownOpen ? 'chevron-up' : 'chevron-down'}
+                                size={15}
+                                color={Colors.charcoalLight}
+                            />
+                        )}
+                    </TouchableOpacity>
+
+                    {typeDropdownOpen && (
+                        <View style={s.list}>
+                            {/* Search row */}
+                            <View style={s.searchRow}>
+                                <Ionicons
+                                    name="search-outline"
+                                    size={14}
+                                    color={Colors.charcoalLight}
+                                    style={{ marginRight: 8 }}
+                                />
+                                <TextInput
+                                    style={s.searchInput}
+                                    placeholder="Search venue types..."
+                                    placeholderTextColor={Colors.charcoalLight}
+                                    value={typeSearch}
+                                    onChangeText={setTypeSearch}
+                                    autoFocus
+                                    returnKeyType="done"
+                                />
+                                {typeSearch.length > 0 && (
+                                    <TouchableOpacity onPress={() => setTypeSearch('')} hitSlop={6}>
                                         <Ionicons
-                                            name="checkmark"
-                                            size={11}
-                                            color={Colors.primary}
-                                            style={{ marginRight: 3 }}
+                                            name="close-circle"
+                                            size={15}
+                                            color={Colors.charcoalLight}
                                         />
-                                    )}
-                                    <Text style={[s.typeText, active && s.typeTextActive]}>
-                                        {type}
-                                    </Text>
-                                </TouchableOpacity>
-                            );
-                        })}
-                    </View>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+
+                            {/* Options */}
+                            <ScrollView
+                                style={s.optionsList}
+                                nestedScrollEnabled
+                                keyboardShouldPersistTaps="handled"
+                                showsVerticalScrollIndicator={false}
+                            >
+                                {filteredTypes.length === 0 ? (
+                                    <Text style={s.noResults}>No matching types found</Text>
+                                ) : (
+                                    filteredTypes.map(type => {
+                                        const selected = selectedTypes.includes(type._id);
+                                        return (
+                                            <TouchableOpacity
+                                                key={type._id}
+                                                style={[s.item, selected && s.itemActive]}
+                                                onPress={() => toggleType(type._id)}
+                                                activeOpacity={0.7}
+                                            >
+                                                <View style={s.itemLeft}>
+                                                    <Text style={s.itemIcon}>{type.icon}</Text>
+                                                    <Text
+                                                        style={[
+                                                            s.itemText,
+                                                            selected && s.itemTextActive,
+                                                        ]}
+                                                    >
+                                                        {type.name}
+                                                    </Text>
+                                                </View>
+                                                {selected && (
+                                                    <Ionicons
+                                                        name="checkmark"
+                                                        size={14}
+                                                        color={Colors.primary}
+                                                    />
+                                                )}
+                                            </TouchableOpacity>
+                                        );
+                                    })
+                                )}
+                            </ScrollView>
+
+                            {/* Done */}
+                            <TouchableOpacity
+                                style={s.doneRow}
+                                onPress={() => setTypeDropdownOpen(false)}
+                            >
+                                <Text style={s.doneText}>Done</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    {/* Selected tag pills */}
+                    {selectedTypes.length > 0 && (
+                        <View style={s.tagRow}>
+                            {selectedTypes.map(id => (
+                                <View key={id} style={s.tag}>
+                                    <Text style={s.tagIcon}>{getTypeIcon(id)}</Text>
+                                    <Text style={s.tagText}>{getTypeName(id)}</Text>
+                                    <TouchableOpacity onPress={() => removeType(id)} hitSlop={6}>
+                                        <Ionicons name="close" size={12} color={Colors.primary} />
+                                    </TouchableOpacity>
+                                </View>
+                            ))}
+                        </View>
+                    )}
+
                     {!!errors.venueType && (
                         <View style={s.errorRow}>
                             <Ionicons name="alert-circle" size={12} color={Colors.danger} />
@@ -117,7 +261,7 @@ export default function Step1BasicInfo({ onNext }: Props) {
 
                 <Textarea
                     label={`Venue Description (Max 200 words) *  —  ${wordCount}/200`}
-                    placeholder="Modern conference space with premium amenities, perfect for corporate meetings and events..."
+                    placeholder="Description.."
                     value={description}
                     onChangeText={v => {
                         setDescription(v);
@@ -133,7 +277,6 @@ export default function Step1BasicInfo({ onNext }: Props) {
                     </View>
                 )}
 
-                {/* Capacity picker */}
                 <View style={s.pickerSection}>
                     <Text style={s.typeLabel}>
                         MAXIMUM CAPACITY <Text style={s.req}>*</Text>
@@ -192,24 +335,103 @@ const s = StyleSheet.create({
         marginBottom: 7,
     },
     req: { color: Colors.primary },
-    typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-    typeChip: {
+    picker: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: Spacing.md,
-        paddingVertical: 7,
-        borderRadius: Radii.full,
+        justifyContent: 'space-between',
         borderWidth: 1.5,
         borderColor: Colors.border,
+        borderRadius: Radii.sm,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: 12,
         backgroundColor: Colors.surface,
+        height: 54,
     },
-    typeChipActive: { borderColor: Colors.primaryBorder, backgroundColor: Colors.primaryLight },
-    typeText: {
-        fontSize: Typography.sm,
-        fontWeight: Typography.medium,
+    pickerError: { borderColor: Colors.danger },
+    pickerText: { fontSize: Typography.md, color: Colors.charcoal },
+    placeholder: { color: Colors.charcoalLight },
+    list: {
+        borderWidth: 1,
+        borderColor: Colors.border,
+        borderRadius: Radii.sm,
+        marginTop: 4,
+        backgroundColor: Colors.surface,
+        overflow: 'hidden',
+    },
+    searchRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: Spacing.lg,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.border,
+    },
+    searchInput: {
+        flex: 1,
+        fontSize: Typography.md,
+        color: Colors.charcoal,
+        padding: 0,
+    },
+    optionsList: { maxHeight: 192 },
+    itemLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+    },
+    itemIcon: { fontSize: 16 },
+    item: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: Spacing.lg,
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.border,
+    },
+    itemActive: { backgroundColor: Colors.primaryLight },
+    itemText: { fontSize: Typography.md, color: Colors.charcoal },
+    itemTextActive: { color: Colors.primary, fontWeight: Typography.semiBold },
+    noResults: {
+        textAlign: 'center',
+        fontSize: Typography.md,
         color: Colors.charcoalLight,
+        paddingVertical: 14,
     },
-    typeTextActive: { color: Colors.primary, fontWeight: Typography.bold },
+    doneRow: {
+        alignItems: 'center',
+        paddingVertical: 12,
+        borderTopWidth: 1,
+        borderTopColor: Colors.border,
+        backgroundColor: Colors.primaryLight,
+    },
+    doneText: {
+        fontSize: Typography.md,
+        fontWeight: Typography.semiBold,
+        color: Colors.primary,
+    },
+    tagRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.sm,
+        marginTop: Spacing.sm,
+    },
+    tag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: 5,
+        borderRadius: Radii.full,
+        borderWidth: 1.5,
+        borderColor: Colors.primaryBorder,
+        backgroundColor: Colors.primaryLight,
+    },
+    tagIcon: { fontSize: 12 },
+    tagText: {
+        fontSize: Typography.xs,
+        fontWeight: Typography.semiBold,
+        color: Colors.primary,
+    },
     textarea: { height: 120 },
     pickerSection: { marginBottom: Spacing.md },
     errorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 },

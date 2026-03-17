@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import {
+    View,
+    Text,
+    StyleSheet,
+    ScrollView,
+    TouchableOpacity,
+    ActivityIndicator,
+} from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii } from '../../theme/theme';
 import Field from '../UI/input-field';
 import { StepHeader, SectionCard, PickerRow, NavButtons, Textarea } from '../UI/shared-components';
 
-const PARKING_TYPES = [
-    'Select parking type',
-    'Free Parking',
-    'Paid Parking',
-    'Valet Parking',
-    'No Parking',
-];
+const PARKING_TYPES = ['Select parking type', 'Free', 'Paid', 'Limited', 'No'];
 
 interface Props {
     onPrev: () => void;
@@ -30,8 +31,44 @@ export default function Step2Location({ onPrev, onNext }: Props) {
     const [busStand, setBusStand] = useState('');
     const [metroStation, setMetroStation] = useState('');
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [locating, setLocating] = useState(false);
 
     const clearErr = (key: string) => setErrors(p => ({ ...p, [key]: '' }));
+
+    // ── Dummy current-location handler ──────────────────────────────────────
+    const handleUseCurrentLocation = async () => {
+        setLocating(true);
+        try {
+            // TODO: Replace with real geolocation + reverse-geocode logic
+            setTimeout(() => {
+                console.log('Current location');
+            }, 500);
+
+            // Dummy data — swap with actual API response fields
+            setAddress('Floor 3, Skyline Tower, MP Nagar Zone II');
+            setLandmark('Near DB City Mall');
+            setCity('Bhopal');
+            setArea('MP Nagar');
+            setPincode('462011');
+            setMapsLink('https://maps.google.com/?q=23.2332,77.4345');
+
+            // Clear any existing errors for auto-filled fields
+            setErrors(p => ({
+                ...p,
+                address: '',
+                landmark: '',
+                city: '',
+                area: '',
+                pincode: '',
+                mapsLink: '',
+            }));
+        } catch (error: any) {
+            console.error('LOCATION ERROR:', error);
+        } finally {
+            setLocating(false);
+        }
+    };
+    // ────────────────────────────────────────────────────────────────────────
 
     const validate = () => {
         const e: Record<string, string> = {};
@@ -55,6 +92,33 @@ export default function Step2Location({ onPrev, onNext }: Props) {
             <StepHeader title="Step 2: Location" current={2} />
 
             <SectionCard>
+                {/* ── Use Current Location button ── */}
+                <TouchableOpacity
+                    style={[s.locationBtn, locating && s.locationBtnDisabled]}
+                    onPress={handleUseCurrentLocation}
+                    disabled={locating}
+                    activeOpacity={0.8}
+                >
+                    {locating ? (
+                        <>
+                            <ActivityIndicator size="small" color={Colors.primary} />
+                            <Text style={s.locationBtnText}>Detecting location...</Text>
+                        </>
+                    ) : (
+                        <>
+                            <Ionicons name="navigate" size={15} color={Colors.primary} />
+                            <Text style={s.locationBtnText}>Use Current Location</Text>
+                        </>
+                    )}
+                </TouchableOpacity>
+
+                {/* ── Divider ── */}
+                <View style={s.divider}>
+                    <View style={s.dividerLine} />
+                    <Text style={s.dividerText}>or fill manually</Text>
+                    <View style={s.dividerLine} />
+                </View>
+
                 <Textarea
                     label="Complete Address *"
                     placeholder="Floor 3, Skyline Tower, MP Nagar"
@@ -64,7 +128,7 @@ export default function Step2Location({ onPrev, onNext }: Props) {
                         clearErr('address');
                     }}
                     numberOfLines={3}
-                    style={{ height: 80 }}
+                    style={{ height: 80, marginBottom: 20 }}
                 />
                 {!!errors.address && <ErrorRow msg={errors.address} />}
 
@@ -138,7 +202,6 @@ export default function Step2Location({ onPrev, onNext }: Props) {
                 />
                 <Text style={s.hint}>Open Google Maps → Share → Copy link</Text>
 
-                {/* Parking picker */}
                 <View style={s.pickerSection}>
                     <Text style={s.pickerLabel}>
                         PARKING AVAILABILITY <Text style={s.req}>*</Text>
@@ -209,6 +272,44 @@ function ErrorRow({ msg }: { msg: string }) {
 }
 
 const s = StyleSheet.create({
+    // ── Location button ──
+    locationBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: Spacing.sm,
+        borderWidth: 1.5,
+        borderColor: Colors.primaryBorder,
+        borderRadius: Radii.sm,
+        paddingVertical: 12,
+        backgroundColor: Colors.primaryLight,
+        marginBottom: Spacing.md,
+    },
+    locationBtnDisabled: { opacity: 0.6 },
+    locationBtnText: {
+        fontSize: Typography.md,
+        fontWeight: Typography.semiBold,
+        color: Colors.primary,
+    },
+
+    // ── Divider ──
+    divider: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+        marginBottom: Spacing.md,
+    },
+    dividerLine: {
+        flex: 1,
+        height: 1,
+        backgroundColor: Colors.border,
+    },
+    dividerText: {
+        fontSize: Typography.xs,
+        color: Colors.charcoalLight,
+        fontWeight: Typography.medium,
+    },
+
     row: { flexDirection: 'row', gap: Spacing.sm },
     hint: {
         fontSize: Typography.xs,

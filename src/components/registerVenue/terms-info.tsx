@@ -66,11 +66,9 @@ export default function Step7Terms({ onPrev, onSubmit }: Props) {
     const handleSubmit = async () => {
         if (!agreed) return;
         setSubmitting(true);
-        await new Promise(r =>
-            setTimeout(() => {
-                console.log('Dummy Api delay');
-            }, 1200),
-        );
+        await new Promise(r => setTimeout(() => {
+            console.log('testing')
+        }, 500));
         setSubmitting(false);
         onSubmit();
     };
@@ -94,17 +92,23 @@ export default function Step7Terms({ onPrev, onSubmit }: Props) {
 
             <View style={s.termsBox}>
                 <Text style={s.agreementTitle}>RentalMeet Venue Owner Agreement</Text>
-                {TERMS.map((t, i) => (
-                    <View key={i} style={s.termSection}>
-                        <Text style={s.termSectionTitle}>{t.section}</Text>
-                        {t.points.map((pt, j) => (
-                            <View key={j} style={s.termPoint}>
-                                <Text style={s.bullet}>•</Text>
-                                <Text style={s.termText}>{pt}</Text>
-                            </View>
-                        ))}
-                    </View>
-                ))}
+                <ScrollView
+                    showsVerticalScrollIndicator={true}
+                    nestedScrollEnabled={true}
+                    contentContainerStyle={{ paddingBottom: 4 }}
+                >
+                    {TERMS.map((t, i) => (
+                        <View key={i} style={s.termSection}>
+                            <Text style={s.termSectionTitle}>{t.section}</Text>
+                            {t.points.map((pt, j) => (
+                                <View key={j} style={s.termPoint}>
+                                    <Text style={s.bullet}>•</Text>
+                                    <Text style={s.termText}>{pt}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    ))}
+                </ScrollView>
             </View>
 
             <TouchableOpacity
@@ -178,7 +182,7 @@ const s = StyleSheet.create({
         borderRadius: Radii.md,
         borderWidth: 1,
         borderColor: Colors.border,
-        maxHeight: 320,
+        height: 320,
         ...Shadows.card,
     },
     agreementTitle: {
