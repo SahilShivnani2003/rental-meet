@@ -362,41 +362,36 @@ export default function LandingScreen({ navigation }: landingProps) {
 
     return (
         <View style={s.root}>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
-                {/* ── HEADER ── */}
-                <View style={s.header}>
-                    <View style={s.brand}>
-                        <Image
-                            source={require('../../assets/NameLogo.png')}
-                            style={s.brandLogo}
-                            resizeMode="contain"
-                        />
-                    </View>
-                    <View style={s.navIcons}>
-                        <TouchableOpacity style={s.navIconBtn}>
-                            <Ionicons
-                                name="notifications-outline"
-                                size={24}
-                                color={Colors.charcoal}
-                            />
-                            <View style={s.notifDot} />
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={s.profilePill}
-                            onPress={goToProfile}
-                            activeOpacity={0.85}
-                        >
-                            <View style={s.profileAvatar}>
-                                <Text style={s.profileInitials}>
-                                    {user?.name?.slice(0, 2).toUpperCase() || 'G'}
-                                </Text>
-                            </View>
-                            <Text style={s.profileName}>{user?.name || 'Guest'}</Text>
-                            <Ionicons name="chevron-down" size={11} color={Colors.charcoalLight} />
-                        </TouchableOpacity>
-                    </View>
+            {/* ── HEADER ── */}
+            <View style={s.header}>
+                <View style={s.brand}>
+                    <Image
+                        source={require('../../assets/NameLogo.png')}
+                        style={s.brandLogo}
+                        resizeMode="contain"
+                    />
                 </View>
-
+                <View style={s.navIcons}>
+                    <TouchableOpacity style={s.navIconBtn}>
+                        <Ionicons name="notifications-outline" size={24} color={Colors.charcoal} />
+                        <View style={s.notifDot} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={s.profilePill}
+                        onPress={goToProfile}
+                        activeOpacity={0.85}
+                    >
+                        <View style={s.profileAvatar}>
+                            <Text style={s.profileInitials}>
+                                {user?.name?.slice(0, 2).toUpperCase() || 'G'}
+                            </Text>
+                        </View>
+                        <Text style={s.profileName}>{user?.name || 'Guest'}</Text>
+                        <Ionicons name="chevron-down" size={11} color={Colors.charcoalLight} />
+                    </TouchableOpacity>
+                </View>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
                 {/* ── BROWSE VENUES BUTTON ── */}
                 <View style={s.browseRow}>
                     <TouchableOpacity style={s.browseBtn} onPress={goToVenues} activeOpacity={0.88}>
@@ -599,15 +594,12 @@ export default function LandingScreen({ navigation }: landingProps) {
                         </TouchableOpacity>
                     </View>
                     <Text style={s.sectionSub}>Handpicked premium spaces for your events</Text>
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={s.hScroll}
-                    >
+                   
+                    <View style={s.hScroll}>
                         {venues.map((v, i) => (
                             <FeaturedCard key={v._id} v={v} index={i} onPress={goToVenueDetail} />
                         ))}
-                    </ScrollView>
+                    </View>
                     <TouchableOpacity
                         style={s.viewAllBtn}
                         onPress={goToVenues}
@@ -616,104 +608,6 @@ export default function LandingScreen({ navigation }: landingProps) {
                         <Text style={s.viewAllBtnText}>View All Venues</Text>
                         <Ionicons name="arrow-forward" size={14} color={Colors.white} />
                     </TouchableOpacity>
-                </View>
-
-                {/* PRICING PACKAGES */}
-                <View style={[s.section, s.surfaceSection]}>
-                    <View style={s.centeredHead}>
-                        <Text style={s.eyebrow}>PRICING</Text>
-                        <Text style={s.centeredTitle}>Flexible Packages</Text>
-                        <Text style={s.centeredSub}>
-                            Choose a duration that fits your schedule.
-                        </Text>
-                    </View>
-                    <View style={s.pkgList}>
-                        {PACKAGES.map((p, i) => (
-                            <TouchableOpacity
-                                key={i}
-                                style={[s.pkgRow, p.featured && s.pkgRowFeatured]}
-                                onPress={goToVenues}
-                                activeOpacity={0.88}
-                            >
-                                <View style={[s.pkgIconWrap, p.featured && s.pkgIconFeatured]}>
-                                    <Ionicons
-                                        name={p.icon as any}
-                                        size={18}
-                                        color={p.featured ? Colors.white : Colors.primary}
-                                    />
-                                </View>
-                                <View style={s.pkgMid}>
-                                    <View style={s.pkgLabelRow}>
-                                        <Text style={[s.pkgLabel, p.featured && s.textWhite]}>
-                                            {p.label}
-                                        </Text>
-                                        {p.featured && (
-                                            <View style={s.popularBadge}>
-                                                <Text style={s.popularBadgeText}>Popular</Text>
-                                            </View>
-                                        )}
-                                    </View>
-                                    <Text
-                                        style={[s.pkgSubtext, p.featured && s.pkgSubtextFeatured]}
-                                    >
-                                        {p.subtext}
-                                    </Text>
-                                </View>
-                                <View style={s.pkgRight}>
-                                    <Text style={[s.pkgPrice, p.featured && s.textWhite]}>
-                                        {p.price}
-                                    </Text>
-                                    <Text
-                                        style={[
-                                            s.pkgPriceUnit,
-                                            p.featured && { color: 'rgba(255,255,255,0.65)' },
-                                        ]}
-                                    >
-                                        /hr
-                                    </Text>
-                                </View>
-                                <Ionicons
-                                    name="chevron-forward"
-                                    size={15}
-                                    color={p.featured ? 'rgba(255,255,255,0.5)' : Colors.border}
-                                />
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </View>
-
-                {/* BOTTOM CTA BANNER */}
-                <View style={s.ctaBannerWrap}>
-                    <View style={s.ctaBanner}>
-                        <View style={s.orb1} />
-                        <View style={s.orb2} />
-                        <View style={s.ctaInner}>
-                            <View style={s.ctaIconCircle}>
-                                <Ionicons name="business" size={28} color={Colors.primary} />
-                            </View>
-                            <Text style={s.ctaTitle}>Ready to Book{'\n'}Your Venue?</Text>
-                            <Text style={s.ctaSub}>
-                                Browse our collection and find the perfect space for your next
-                                event.
-                            </Text>
-                            <View style={s.ctaBtnRow}>
-                                <TouchableOpacity
-                                    style={s.ctaMainBtn}
-                                    onPress={goToVenues}
-                                    activeOpacity={0.85}
-                                >
-                                    <Text style={s.ctaMainBtnText}>Browse All Venues</Text>
-                                    <View style={s.ctaBtnArrow}>
-                                        <Ionicons
-                                            name="arrow-forward"
-                                            size={14}
-                                            color={Colors.primary}
-                                        />
-                                    </View>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </View>
                 </View>
             </ScrollView>
 
@@ -895,6 +789,7 @@ const s = StyleSheet.create({
         paddingTop: 24,
         paddingBottom: Spacing.md,
         backgroundColor: Colors.background,
+        position: 'static',
     },
     brand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     brandDot: {
@@ -1065,7 +960,11 @@ const s = StyleSheet.create({
         marginLeft: 14,
     },
     seeAll: { fontSize: 13, fontWeight: Typography.bold, color: Colors.primary },
-    hScroll: { paddingBottom: 4 },
+    hScroll: { 
+        paddingBottom: 4,
+        gap: Spacing.lg ,
+        width: '100%',
+    },
     centeredHead: { alignItems: 'center', marginBottom: 20 },
     eyebrow: {
         fontSize: 9.5,

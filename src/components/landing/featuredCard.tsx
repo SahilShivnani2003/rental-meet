@@ -51,7 +51,8 @@ export default function FeaturedCard({ v, index, onPress }: Props) {
             style={{
                 opacity: fade,
                 transform: [{ translateY: slide }],
-                marginRight: Spacing.md,
+                marginRight: Spacing.sm,
+                width: 'auto'
             }}
         >
             <TouchableOpacity
@@ -137,7 +138,7 @@ export default function FeaturedCard({ v, index, onPress }: Props) {
 
 const fc = StyleSheet.create({
     card: {
-        width: W * 0.62,
+        width: 'auto',
         backgroundColor: Colors.surface,
         borderRadius: Radii.xl,
         overflow: 'hidden',

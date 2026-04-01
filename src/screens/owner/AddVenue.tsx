@@ -27,6 +27,8 @@ import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstab
 import { OwnerTabParamList } from '../../navigations/tabNavigations/OwnerTabNavigation';
 import { useAlert } from '../../context/AlertContext';
 import { venueAPI } from '../../service/apis/venues';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../navigations/RootNavigation';
 
 const TOTAL_STEPS = 7;
 const STEP_LABELS = [
@@ -39,7 +41,7 @@ const STEP_LABELS = [
     'Terms',
 ];
 
-type registerVenueProps = NativeBottomTabScreenProps<OwnerTabParamList, 'addVenue'>;
+type registerVenueProps = NativeStackScreenProps<RootStackParamList, 'addVenue'>;
 
 export default function RegisterVenueScreen({ navigation }: registerVenueProps) {
     const alert = useAlert();
@@ -169,6 +171,14 @@ export default function RegisterVenueScreen({ navigation }: registerVenueProps) 
                         <Text style={s.stepPillSep}>/</Text>
                         <Text style={s.stepPillTotal}>{TOTAL_STEPS}</Text>
                     </View>
+                    <TouchableOpacity
+                        style={s.backBtn}
+                        onPress={() => navigation.goBack()}
+                        activeOpacity={0.75}
+                    >
+                        <Text style={s.backBtnText}>Back</Text>
+                        <Ionicons name="arrow-forward" size={16} color={Colors.charcoal} />
+                    </TouchableOpacity>
                 </View>
                 <View style={s.progressWrap}>
                     <View style={s.progressTrack}>
@@ -308,13 +318,28 @@ const s = StyleSheet.create({
     headerAccentBar: { height: 4, backgroundColor: Colors.primary },
     headerContent: {
         flexDirection: 'row',
-        alignItems: 'flex-start',
+        alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: Spacing.xl,
         paddingTop: Platform.OS === 'ios' ? Spacing.xl : Spacing.lg,
         marginBottom: Spacing.lg,
     },
-    headerLeft: { flex: 1, marginRight: Spacing.md },
+    backBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.xs,
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: Spacing.xxs,
+        borderRadius: Radii.sm,
+        backgroundColor: Colors.background,
+        marginLeft: Spacing.sm,
+    },
+    backBtnText: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.medium,
+        color: Colors.charcoal,
+    },
+    headerLeft: { flex: 1 },
     headerEyebrow: {
         fontSize: Typography.sm,
         fontWeight: Typography.bold,
@@ -344,7 +369,6 @@ const s = StyleSheet.create({
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: Radii.full,
-        marginTop: 4,
     },
     stepPillNum: {
         fontSize: 16,
@@ -436,7 +460,7 @@ const s = StyleSheet.create({
     stepLabel: { fontSize: 12, fontWeight: Typography.bold, color: Colors.charcoalLight },
     stepLabelActive: { color: Colors.primaryDark },
     stepLabelDone: { color: Colors.success, fontWeight: Typography.semiBold },
-    content: { flex: 1, backgroundColor: Colors.background, paddingBottom: TAB_BAR_HEIGHT },
+    content: { flex: 1, backgroundColor: Colors.background },
     overlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.55)',

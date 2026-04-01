@@ -18,6 +18,7 @@ import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-naviga
 import { RootStackParamList } from '../navigations/RootNavigation';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../theme/theme';
 import { useNavigation } from '@react-navigation/native';
+import { useAuthStore } from '../store/auth-store';
 
 const { width, height } = Dimensions.get('window');
 const HERO_HEIGHT = height * 0.38;
@@ -580,10 +581,12 @@ const badge = StyleSheet.create({
 
 export default function VenueDetailScreen({ route, navigation }: Props) {
     const { venue } = route.params as { venue: Venue };
+    const { user } = useAuthStore();
     const scrollY = useRef(new Animated.Value(0)).current;
     const [activeImageIndex, setActiveImageIndex] = useState(0);
     const [bookingVisible, setBookingVisible] = useState(false);
     const { pricing, availability, amenities, location } = venue;
+    const isOwner = user?.role === 'owner';
 
     const [paidChecked, setPaidChecked] = useState<Set<string>>(new Set());
     const [paidQty, setPaidQty] = useState<Record<string, number>>({});
@@ -1379,26 +1382,28 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
 
             {/* CTA bar */}
             <View style={s.ctaBar}>
-                <View>
-                    <Text style={s.ctaFromLabel}>Starting from</Text>
-                    <View style={s.ctaPriceRow}>
-                        <Text style={s.ctaPrice}>₹{pricing.perHour.weekday.toLocaleString()}</Text>
-                        <Text style={s.ctaPerHour}>/hr</Text>
+                {!isOwner && (
+                    <View>
+                        <Text style={s.ctaFromLabel}>Starting from</Text>
+                        <View style={s.ctaPriceRow}>
+                            <Text style={s.ctaPrice}>₹{pricing.perHour.weekday.toLocaleString()}</Text>
+                            <Text style={s.ctaPerHour}>/hr</Text>
+                        </View>
+                        <AmenitiesSummaryBadge count={paidAmenities.length} total={amenitiesTotal} />
                     </View>
-                    <AmenitiesSummaryBadge count={paidAmenities.length} total={amenitiesTotal} />
-                </View>
+                )}
                 <TouchableOpacity
                     style={s.ctaButton}
-                    onPress={() => setBookingVisible(true)}
+                    onPress={() => isOwner ? navigation.navigate('addVenue') : setBookingVisible(true)}
                     activeOpacity={0.85}
                 >
                     <Ionicons
-                        name="calendar"
+                        name={isOwner ? 'pencil' : 'calendar'}
                         size={18}
                         color={Colors.white}
                         style={{ marginRight: 8 }}
                     />
-                    <Text style={s.ctaButtonText}>Book Now</Text>
+                    <Text style={s.ctaButtonText}>{isOwner ? 'Update Venue' : 'Book Now'}</Text>
                 </TouchableOpacity>
             </View>
 

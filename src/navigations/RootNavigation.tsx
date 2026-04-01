@@ -14,6 +14,7 @@ import BookingScreen from '../screens/BookingScreen';
 import BookingDetailScreen from '../screens/BookingDetailScreen';
 import OnboardingScreen from '../screens/OnBoarding';
 import SplashScreen from '../screens/splashScreen';
+import RegisterVenueScreen from '../screens/owner/AddVenue';
 
 export type RootStackParamList = {
     splash: undefined;
@@ -40,6 +41,7 @@ export type RootStackParamList = {
         booking: any;
     };
     onBoarding: undefined;
+    addVenue: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -76,6 +78,7 @@ export default function RootNavigator() {
                     <Stack.Screen name="booking" component={BookingScreen} />
                     <Stack.Screen name="bookingDetail" component={BookingDetailScreen} />
                     <Stack.Screen name="onBoarding" component={OnboardingScreen} />
+                    <Stack.Screen name="addVenue" component={RegisterVenueScreen} />
                 </Stack.Navigator>
             </NavigationContainer>
         </AlertProvider>

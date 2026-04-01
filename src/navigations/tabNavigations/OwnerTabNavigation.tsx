@@ -9,29 +9,21 @@ import RegisterVenueScreen from '../../screens/owner/AddVenue';
 
 export type OwnerTabParamList = {
     dashboard: undefined;
+    venues: undefined;
     bookings: undefined;
-    venues: undefined; 
-    addVenue: undefined;
     profile: undefined;
 };
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
 const ownerTabs = [
     { name: 'dashboard', label: 'Dashboard', icon: 'grid', iconOff: 'grid-outline' },
-    { name: 'bookings', label: 'My Bookings', icon: 'calendar', iconOff: 'calendar-outline' },
-    {
-        name: 'addVenue',
-        label: 'Add Venue',
-        icon: 'add-circle',
-        iconOff: 'add-circle-outline',
-        center: true,
-    },
     {
         name: 'venues',
         label: 'My Venues',
         icon: 'search',
         iconOff: 'search-outline',
     },
+    { name: 'bookings', label: 'My Bookings', icon: 'calendar', iconOff: 'calendar-outline' },
     { name: 'profile', label: 'Profile', icon: 'person', iconOff: 'person-outline' },
 ];
 
@@ -45,9 +37,8 @@ export function OwnerTabNavigation() {
             screenOptions={{ headerShown: false }}
         >
             <Tabs.Screen name="dashboard" component={OwnerDashboardScreen} />
-            <Tabs.Screen name="venues" component={VenuesScreen} />
-            <Tabs.Screen name='addVenue' component={RegisterVenueScreen} />
             <Tabs.Screen name="bookings" component={BookingsScreen} />
+            <Tabs.Screen name="venues" component={VenuesScreen} />
             <Tabs.Screen name="profile" component={ProfileScreen} />
         </Tabs.Navigator>
     );

@@ -18,9 +18,10 @@ import { useAuthStore } from '../../store/auth-store';
 import { OwnerTabParamList } from '../../navigations/tabNavigations/OwnerTabNavigation';
 import { ClientTabParamList } from '../../navigations/tabNavigations/ClientTabNavigation';
 import { tabParamList } from '../../navigations/tabNavigations/TabNavigation';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import FilterModal, { FilterState, DEFAULT_FILTERS } from '../models/FilterModal';
 import { ownerAPI } from '../../service/apis/owner';
+import { RootStackParamList } from '../../navigations/RootNavigation';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type VenueType = {
@@ -166,9 +167,11 @@ export default function VenuesScreen({ navigation }: venueProps) {
                 if (activeFilters.maxPrice) params.maxPrice = activeFilters.maxPrice;
             }
 
-            debugger
-            const response = isOwner ? await ownerAPI.getVenues() :  await venueAPI.getVenues(params);
-            debugger
+            debugger;
+            const response = isOwner
+                ? await ownerAPI.getVenues()
+                : await venueAPI.getVenues(params);
+            debugger;
             setVenues(response?.venues ?? []);
 
             Animated.timing(fadeAnim, {
@@ -255,7 +258,9 @@ export default function VenuesScreen({ navigation }: venueProps) {
         })();
     };
 
-    const handleAddVenue = () => navigation.navigate('addVenue');
+    const handleAddVenue = () => {
+        navigation.getParent<NativeStackNavigationProp<RootStackParamList>>()?.navigate('addVenue');
+    };
 
     return (
         <View style={styles.container}>

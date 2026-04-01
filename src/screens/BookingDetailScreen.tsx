@@ -365,25 +365,19 @@ export default function BookingDetailScreen({ route, navigation }: BookingDetail
 
     // ── Actions ─────────────────────────────────────────────────────────────
     const handleStatusUpdate = useCallback(
-        (status: string) => {
-            Alert.alert(
-                status === 'confirmed' ? 'Confirm Booking' : 'Cancel Booking',
-                `Are you sure you want to ${
-                    status === 'confirmed' ? 'confirm' : 'cancel'
-                } this booking?`,
-                [
-                    { text: 'No', style: 'cancel' },
-                    {
-                        text: 'Yes',
-                        style: status === 'cancelled' ? 'destructive' : 'default',
-                        onPress: () => {
-                            // call your API here, e.g. bookingAPI.updateStatus(bookingId, status)
-                            Alert.alert('Updated', `Booking marked as ${status}.`);
-                            navigation.goBack();
-                        },
+        (status: string, title: string) => {
+            Alert.alert(title, `Are you sure you want to ${title.toLowerCase()} this booking?`, [
+                { text: 'No', style: 'cancel' },
+                {
+                    text: 'Yes',
+                    style: status === 'cancelled' ? 'destructive' : 'default',
+                    onPress: () => {
+                        // call your API here, e.g. bookingAPI.updateStatus(bookingId, status)
+                        Alert.alert('Updated', `Booking marked as ${status}.`);
+                        navigation.goBack();
                     },
-                ],
-            );
+                },
+            ]);
         },
         [bookingId, navigation],
     );
@@ -724,49 +718,59 @@ export default function BookingDetailScreen({ route, navigation }: BookingDetail
                 )}
 
                 {/* ── Action Buttons (owner) ── */}
-                {user?.userType === 'owner' && booking.status === 'pending' && (
-                    <View style={styles.actionsRow}>
+                {user?.role === 'owner' && booking.status === 'pending' && (
+                    <View style={styles.actionsContainer}>
+                        <View style={styles.actionsRow}>
+                            <TouchableOpacity
+                                style={[styles.actionBtn, styles.actionBtnConfirm]}
+                                onPress={() => handleStatusUpdate('confirmed', 'Confirm')}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons
+                                    name="checkmark-circle-outline"
+                                    size={18}
+                                    color={Colors.white}
+                                />
+                                <Text style={styles.actionBtnText}>Confirm</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.actionBtn, styles.actionBtnPending]}
+                                onPress={() => handleStatusUpdate('confirmed', 'Confirm Soon')}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="time-outline" size={18} color={Colors.warning} />
+                                <Text style={[styles.actionBtnText, { color: Colors.warning }]}>
+                                    Confirm Soon
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
                         <TouchableOpacity
-                            style={[styles.actionBtn, styles.actionBtnConfirm]}
-                            onPress={() => handleStatusUpdate('confirmed')}
-                            activeOpacity={0.8}
-                        >
-                            <Ionicons
-                                name="checkmark-circle-outline"
-                                size={18}
-                                color={Colors.white}
-                            />
-                            <Text style={styles.actionBtnText}>Confirm Booking</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.actionBtn, styles.actionBtnReject]}
-                            onPress={() => handleStatusUpdate('cancelled')}
+                            style={[styles.actionBtn, styles.actionBtnReject, styles.actionBtnFull]}
+                            onPress={() => handleStatusUpdate('cancelled', 'Cancel Booking')}
                             activeOpacity={0.8}
                         >
                             <Ionicons name="close-circle-outline" size={18} color={Colors.danger} />
                             <Text style={[styles.actionBtnText, { color: Colors.danger }]}>
-                                Reject
+                                Cancel Booking
                             </Text>
                         </TouchableOpacity>
                     </View>
                 )}
 
                 {/* ── Action Buttons (client) ── */}
-                {user?.userType === 'client' && booking.status === 'pending' && (
-                    <TouchableOpacity
-                        style={[
-                            styles.actionBtn,
-                            styles.actionBtnReject,
-                            { marginHorizontal: Spacing.lg },
-                        ]}
-                        onPress={() => handleStatusUpdate('cancelled')}
-                        activeOpacity={0.8}
-                    >
-                        <Ionicons name="close-circle-outline" size={18} color={Colors.danger} />
-                        <Text style={[styles.actionBtnText, { color: Colors.danger }]}>
-                            Cancel Booking
-                        </Text>
-                    </TouchableOpacity>
+                {user?.role === 'customer' && booking.status === 'pending' && (
+                    <View style={styles.actionsContainer}>
+                        <TouchableOpacity
+                            style={[styles.actionBtn, styles.actionBtnReject, styles.actionBtnFull]}
+                            onPress={() => handleStatusUpdate('cancelled', 'Cancel Booking')}
+                            activeOpacity={0.8}
+                        >
+                            <Ionicons name="close-circle-outline" size={18} color={Colors.danger} />
+                            <Text style={[styles.actionBtnText, { color: Colors.danger }]}>
+                                Cancel Booking
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
                 )}
 
                 <View style={{ height: 48 }} />
@@ -946,7 +950,15 @@ const styles = StyleSheet.create({
     thaliRate: { fontSize: Typography.xs, color: Colors.charcoalLight },
 
     // Action buttons
-    actionsRow: { flexDirection: 'row', gap: Spacing.md, marginBottom: Spacing.md },
+    actionsContainer: {
+        paddingHorizontal: Spacing.lg,
+        marginBottom: Spacing.md,
+        gap: Spacing.sm,
+    },
+    actionsRow: {
+        flexDirection: 'row',
+        gap: Spacing.sm,
+    },
     actionBtn: {
         flex: 1,
         flexDirection: 'row',
@@ -955,9 +967,16 @@ const styles = StyleSheet.create({
         paddingVertical: 14,
         borderRadius: Radii.lg,
         gap: 7,
-        marginBottom: Spacing.md,
+    },
+    actionBtnFull: {
+        flex: 0, // override flex:1 so it spans full width naturally
     },
     actionBtnConfirm: { backgroundColor: Colors.success, ...Shadows.card },
+    actionBtnPending: {
+        backgroundColor: Colors.warningLight, // use your theme's warning tint
+        borderWidth: 1.5,
+        borderColor: Colors.warning,
+    },
     actionBtnReject: {
         backgroundColor: Colors.dangerLight,
         borderWidth: 1.5,

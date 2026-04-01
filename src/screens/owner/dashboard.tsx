@@ -18,6 +18,8 @@ import { OwnerTabParamList } from '../../navigations/tabNavigations/OwnerTabNavi
 import { useAuthStore } from '../../store/auth-store';
 import { ownerAPI } from '../../service/apis/owner';
 import { useAlert } from '../../context/AlertContext';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../navigations/RootNavigation';
 
 const { width: W } = Dimensions.get('window');
 const STAT_W = (W - Spacing.lg * 2 - Spacing.md) / 2;
@@ -157,74 +159,6 @@ function CardHeader({
     );
 }
 
-// ─── Venue row ────────────────────────────────────────────────────────────────
-function VenueRow({ venue, last }: { venue: RecentVenue; last: boolean }) {
-    const st = STATUS_MAP[venue.status] ?? STATUS_MAP.pending;
-    return (
-        <>
-            <TouchableOpacity style={s.row} activeOpacity={0.7}>
-                <View style={[s.rowIconWrap, { backgroundColor: Colors.primaryLight }]}>
-                    <Text style={s.rowEmoji}>🏢</Text>
-                </View>
-                <View style={s.rowContent}>
-                    <Text style={s.rowTitle} numberOfLines={1}>
-                        {venue.businessName}
-                    </Text>
-                    <View style={s.rowMeta}>
-                        {venue.location?.city ? (
-                            <Text style={s.rowMetaText}>
-                                <Ionicons
-                                    name="location-outline"
-                                    size={10}
-                                    color={Colors.charcoalLight}
-                                />{' '}
-                                {venue.location.city}
-                            </Text>
-                        ) : null}
-                        {venue.venueType?.[0] ? <Text style={s.rowMetaSep}>·</Text> : null}
-                        {venue.venueType?.[0] ? (
-                            <Text style={s.rowMetaText}>{venue.venueType[0]}</Text>
-                        ) : null}
-                    </View>
-                </View>
-                <View style={[s.statusTag, { backgroundColor: st.bg }]}>
-                    <Text style={[s.statusTagText, { color: st.color }]}>{st.label}</Text>
-                </View>
-            </TouchableOpacity>
-            {!last && <View style={s.separator} />}
-        </>
-    );
-}
-
-// ─── Booking row ──────────────────────────────────────────────────────────────
-function BookingRow({ booking, last }: { booking: RecentBooking; last: boolean }) {
-    const st = STATUS_MAP[booking.status] ?? STATUS_MAP.pending;
-    const name = booking.venue?.businessName ?? booking.customerDetails?.name ?? '—';
-
-    return (
-        <>
-            <TouchableOpacity style={s.row} activeOpacity={0.7}>
-                <View style={[s.rowIconWrap, { backgroundColor: Colors.infoLight }]}>
-                    <Ionicons name="calendar-outline" size={18} color={Colors.info} />
-                </View>
-                <View style={s.rowContent}>
-                    <Text style={s.rowTitle} numberOfLines={1}>
-                        {name}
-                    </Text>
-                    <Text style={s.rowMetaText}>{fmtDate(booking.bookingDate)}</Text>
-                </View>
-                <View style={s.rowRight}>
-                    <Text style={s.rowAmount}>{fmtCurrency(booking.amount)}</Text>
-                    <View style={[s.statusTag, { backgroundColor: st.bg }]}>
-                        <Text style={[s.statusTagText, { color: st.color }]}>{st.label}</Text>
-                    </View>
-                </View>
-            </TouchableOpacity>
-            {!last && <View style={s.separator} />}
-        </>
-    );
-}
-
 // ─── Empty state ──────────────────────────────────────────────────────────────
 function EmptyState({
     icon,
@@ -285,9 +219,9 @@ export default function OwnerDashboardScreen({ navigation }: Props) {
 
     const fetchStats = async () => {
         try {
-            debugger
+            debugger;
             const res = await ownerAPI.getDashboard();
-            debugger
+            debugger;
             if (res?.success) {
                 setStats(res.stats);
                 setRecentBookings(res.recentBookings ?? []);
@@ -340,6 +274,81 @@ export default function OwnerDashboardScreen({ navigation }: Props) {
 
     const totalVenues = stats?.totalVenues ?? 0;
 
+    function BookingRow({ booking, last }: { booking: RecentBooking; last: boolean }) {
+        const st = STATUS_MAP[booking.status] ?? STATUS_MAP.pending;
+        const name = booking.venue?.businessName ?? booking.customerDetails?.name ?? '—';
+
+        const handlePress = () => {
+            navigation
+                .getParent<NativeStackNavigationProp<RootStackParamList>>()
+                .navigate('bookingDetail', { booking });
+        };
+        return (
+            <>
+                <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={handlePress}>
+                    <View style={[s.rowIconWrap, { backgroundColor: Colors.infoLight }]}>
+                        <Ionicons name="calendar-outline" size={18} color={Colors.info} />
+                    </View>
+                    <View style={s.rowContent}>
+                        <Text style={s.rowTitle} numberOfLines={1}>
+                            {name}
+                        </Text>
+                        <Text style={s.rowMetaText}>{fmtDate(booking.bookingDate)}</Text>
+                    </View>
+                    <View style={s.rowRight}>
+                        <Text style={s.rowAmount}>{fmtCurrency(booking.amount)}</Text>
+                        <View style={[s.statusTag, { backgroundColor: st.bg }]}>
+                            <Text style={[s.statusTagText, { color: st.color }]}>{st.label}</Text>
+                        </View>
+                    </View>
+                </TouchableOpacity>
+                {!last && <View style={s.separator} />}
+            </>
+        );
+    }
+
+    function VenueRow({ venue, last }: { venue: RecentVenue; last: boolean }) {
+        const st = STATUS_MAP[venue.status] ?? STATUS_MAP.pending;
+
+        const handlePress = () =>{
+            navigation.getParent<NativeStackNavigationProp<RootStackParamList>>().navigate('venueDetail', { venue });
+        }
+
+        return (
+            <>
+                <TouchableOpacity style={s.row} activeOpacity={0.7} onPress={handlePress}>
+                    <View style={[s.rowIconWrap, { backgroundColor: Colors.primaryLight }]}>
+                        <Text style={s.rowEmoji}>🏢</Text>
+                    </View>
+                    <View style={s.rowContent}>
+                        <Text style={s.rowTitle} numberOfLines={1}>
+                            {venue.businessName}
+                        </Text>
+                        <View style={s.rowMeta}>
+                            {venue.location?.city ? (
+                                <Text style={s.rowMetaText}>
+                                    <Ionicons
+                                        name="location-outline"
+                                        size={10}
+                                        color={Colors.charcoalLight}
+                                    />{' '}
+                                    {venue.location.city}
+                                </Text>
+                            ) : null}
+                            {venue.venueType?.[0] ? <Text style={s.rowMetaSep}>·</Text> : null}
+                            {venue.venueType?.[0] ? (
+                                <Text style={s.rowMetaText}>{venue.venueType[0]}</Text>
+                            ) : null}
+                        </View>
+                    </View>
+                    <View style={[s.statusTag, { backgroundColor: st.bg }]}>
+                        <Text style={[s.statusTagText, { color: st.color }]}>{st.label}</Text>
+                    </View>
+                </TouchableOpacity>
+                {!last && <View style={s.separator} />}
+            </>
+        );
+    }
     return (
         <View style={s.root}>
             {/* ── Header ── */}
@@ -480,7 +489,11 @@ export default function OwnerDashboardScreen({ navigation }: Props) {
                             title="No venues listed yet"
                             sub="Add your first venue to start receiving bookings from clients."
                             ctaLabel="Add Venue"
-                            onCta={() => navigation.navigate('addVenue')}
+                            onCta={() => {
+                                navigation
+                                    .getParent<NativeStackNavigationProp<RootStackParamList>>()
+                                    .navigate('addVenue');
+                            }}
                         />
                     ) : (
                         recentVenues.map((v, i) => (
