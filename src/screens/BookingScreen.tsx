@@ -36,14 +36,14 @@ type DurationOption = {
 };
 
 type PlatformSettings = {
-    gstRate: number; // e.g. 18  (percent, not decimal)
+    gstRate: number;
     platformFee: { feeType: 'percentage' | 'flat'; feeValue: number };
     commissionRate: number;
 };
 
 type BookingScreenProps = NativeStackScreenProps<RootStackParamList, 'booking'>;
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Other Helpers ────────────────────────────────────────────────────────────
 
 function generateTimeSlots(openingTime: string, closingTime: string): string[] {
     const slots: string[] = [];
@@ -65,11 +65,10 @@ function generateTimeSlots(openingTime: string, closingTime: string): string[] {
     return slots;
 }
 
-// "2:30 PM" → "14:30"   (API expects 24-hr HH:mm)
 function to24Hr(display: string): string {
     if (!display || display === '—' || display === 'Closing') return display;
     const parts = display.split(' ');
-    if (parts.length < 2) return display; // already "HH:mm" or unknown
+    if (parts.length < 2) return display;
     const [time, period] = parts;
     let [h, m] = time.split(':').map(Number);
     if (period === 'PM' && h !== 12) h += 12;
@@ -100,7 +99,6 @@ function parseTermsList(raw: any): string[] {
     return [];
 }
 
-// DurationOption.type → API bookingType string  (sample: "fullday")
 function toBookingType(type: DurationOption['type']): string {
     switch (type) {
         case 'perHour':
@@ -111,10 +109,6 @@ function toBookingType(type: DurationOption['type']): string {
             return 'fullday';
     }
 }
-
-// ─── Build selectedAmenities payload ──────────────────────────────────────────
-// Produces the exact nested shape expected by the API:
-// { basic[], beverages[], refreshmentFood[], lunchThalis[], additional[] }
 
 function buildSelectedAmenitiesPayload(items: SelectedAmenityItem[]) {
     const basic: object[] = [];
@@ -184,27 +178,384 @@ function buildSelectedAmenitiesPayload(items: SelectedAmenityItem[]) {
                 break;
         }
     }
-
     return { basic, beverages, refreshmentFood, lunchThalis, additional };
 }
 
+// ─── CalendarModal ────────────────────────────────────────────────────────────
+interface CalendarModalProps {
+    visible: boolean;
+    selectedDate: string; // YYYY-MM-DD
+    onSelect: (date: string) => void;
+    onClose: () => void;
+}
+
+const MONTH_NAMES = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+];
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** Returns YYYY-MM-DD string for a Date object (local timezone, no UTC shift). */
+function toDateStr(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+// Add this helper function near the top with other helpers (around line 90)
+function parseMaxCapacity(capacityStr: string | number | undefined): number | null {
+    if (!capacityStr) return null;
+
+    // If it's already a number, return it
+    if (typeof capacityStr === 'number') return capacityStr;
+
+    // If it's a string like "50-100", extract the maximum
+    const str = String(capacityStr).trim();
+    if (str.includes('-')) {
+        const parts = str.split('-');
+        const max = Number(parts[1]?.trim());
+        return isNaN(max) ? null : max;
+    }
+
+    // If it's a simple number string like "100"
+    const num = Number(str);
+    return isNaN(num) ? null : num;
+}
+
+/** Build the 6×7 grid of Date|null cells for a given month. */
+function buildMonthGrid(year: number, month: number): (Date | null)[] {
+    const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const grid: (Date | null)[] = Array(firstDay).fill(null);
+    for (let d = 1; d <= daysInMonth; d++) {
+        grid.push(new Date(year, month, d));
+    }
+    // Fill trailing nulls to complete the last row
+    while (grid.length % 7 !== 0) grid.push(null);
+    return grid;
+}
+function CalendarModal({ visible, selectedDate, onSelect, onClose }: CalendarModalProps) {
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+
+    // First bookable date = tomorrow
+    const minDate = new Date(todayDate);
+    minDate.setDate(minDate.getDate() + 1);
+
+    const parsedSelected = selectedDate ? new Date(selectedDate + 'T00:00:00') : null;
+
+    // Initialise calendar view to the month of the selected date, or next month if today/past
+    const initialViewDate = parsedSelected && parsedSelected >= minDate ? parsedSelected : minDate;
+
+    const [viewYear, setViewYear] = useState(initialViewDate.getFullYear());
+    const [viewMonth, setViewMonth] = useState(initialViewDate.getMonth());
+
+    // Re-sync when modal opens
+    useEffect(() => {
+        if (visible) {
+            const d = parsedSelected && parsedSelected >= minDate ? parsedSelected : minDate;
+            setViewYear(d.getFullYear());
+            setViewMonth(d.getMonth());
+        }
+    }, [visible]);
+
+    const grid = useMemo(() => buildMonthGrid(viewYear, viewMonth), [viewYear, viewMonth]);
+
+    const prevMonth = () => {
+        if (viewMonth === 0) {
+            setViewYear(y => y - 1);
+            setViewMonth(11);
+        } else setViewMonth(m => m - 1);
+    };
+    const nextMonth = () => {
+        if (viewMonth === 11) {
+            setViewYear(y => y + 1);
+            setViewMonth(0);
+        } else setViewMonth(m => m + 1);
+    };
+
+    // Disable "previous" arrow if already showing the month that contains minDate
+    const canGoPrev =
+        viewYear > minDate.getFullYear() ||
+        (viewYear === minDate.getFullYear() && viewMonth > minDate.getMonth());
+
+    return (
+        <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+            <TouchableOpacity style={cal.backdrop} activeOpacity={1} onPress={onClose} />
+
+            <View style={cal.sheet}>
+                <View style={cal.handle} />
+
+                {/* ── Month navigation ── */}
+                <View style={cal.monthNav}>
+                    <TouchableOpacity
+                        style={[cal.navBtn, !canGoPrev && cal.navBtnDisabled]}
+                        onPress={canGoPrev ? prevMonth : undefined}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons
+                            name="chevron-back"
+                            size={18}
+                            color={canGoPrev ? Colors.charcoal : Colors.border}
+                        />
+                    </TouchableOpacity>
+
+                    <Text style={cal.monthLabel}>
+                        {MONTH_NAMES[viewMonth]} {viewYear}
+                    </Text>
+
+                    <TouchableOpacity style={cal.navBtn} onPress={nextMonth} activeOpacity={0.7}>
+                        <Ionicons name="chevron-forward" size={18} color={Colors.charcoal} />
+                    </TouchableOpacity>
+                </View>
+
+                {/* ── Day-of-week header ── */}
+                <View style={cal.dayHeader}>
+                    {DAY_NAMES.map(d => (
+                        <Text
+                            key={d}
+                            style={[
+                                cal.dayName,
+                                (d === 'Sun' || d === 'Sat') && cal.dayNameWeekend,
+                            ]}
+                        >
+                            {d}
+                        </Text>
+                    ))}
+                </View>
+
+                {/* ── Date grid ── */}
+                <View style={cal.grid}>
+                    {grid.map((date, idx) => {
+                        if (!date) {
+                            return <View key={`empty-${idx}`} style={cal.cell} />;
+                        }
+
+                        const dateStr = toDateStr(date);
+                        const isPast = date < minDate; // today AND earlier are disabled
+                        const isSelected = dateStr === selectedDate;
+                        const isToday = toDateStr(date) === toDateStr(todayDate);
+                        const isWknd = date.getDay() === 0 || date.getDay() === 6;
+
+                        return (
+                            <TouchableOpacity
+                                key={dateStr}
+                                style={[
+                                    cal.cell,
+                                    isSelected && cal.cellSelected,
+                                    !isPast && !isSelected && isWknd && cal.cellWeekend,
+                                    isPast && cal.cellDisabled,
+                                ]}
+                                onPress={() => {
+                                    if (!isPast) {
+                                        onSelect(dateStr);
+                                        onClose();
+                                    }
+                                }}
+                                activeOpacity={isPast ? 1 : 0.75}
+                                disabled={isPast}
+                            >
+                                <Text
+                                    style={[
+                                        cal.cellText,
+                                        isSelected && cal.cellTextSelected,
+                                        isPast && cal.cellTextDisabled,
+                                        !isPast && !isSelected && isWknd && cal.cellTextWeekend,
+                                    ]}
+                                >
+                                    {date.getDate()}
+                                </Text>
+                                {/* "Today" indicator dot */}
+                                {isToday && !isSelected && <View style={cal.todayDot} />}
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+
+                {/* ── Legend ── */}
+                <View style={cal.legend}>
+                    <View style={cal.legendItem}>
+                        <View style={[cal.legendDot, { backgroundColor: Colors.primary }]} />
+                        <Text style={cal.legendText}>Selected</Text>
+                    </View>
+                    <View style={cal.legendItem}>
+                        <View
+                            style={[
+                                cal.legendDot,
+                                {
+                                    backgroundColor: Colors.primaryLight,
+                                    borderWidth: 1,
+                                    borderColor: Colors.primaryBorder,
+                                },
+                            ]}
+                        />
+                        <Text style={cal.legendText}>Weekend</Text>
+                    </View>
+                    <View style={cal.legendItem}>
+                        <View style={[cal.legendDot, { backgroundColor: Colors.background }]} />
+                        <Text style={cal.legendText}>Unavailable</Text>
+                    </View>
+                </View>
+            </View>
+        </Modal>
+    );
+}
+
+// ─── Calendar Styles ──────────────────────────────────────────────────────────
+
+const CELL_SIZE = Math.floor((W - Spacing.xl * 2 - 28) / 7); // 28 = sheet padding * 2
+
+const cal = StyleSheet.create({
+    backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
+    sheet: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: Colors.surface,
+        borderTopLeftRadius: Radii.xxl,
+        borderTopRightRadius: Radii.xxl,
+        paddingHorizontal: 14,
+        paddingBottom: Platform.OS === 'ios' ? 36 : 24,
+        ...Shadows.floating,
+    },
+    handle: {
+        width: 40,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: Colors.border,
+        alignSelf: 'center',
+        marginTop: 12,
+        marginBottom: 16,
+    },
+    monthNav: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 4,
+        marginBottom: 16,
+    },
+    navBtn: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: Colors.background,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    navBtnDisabled: { opacity: 0.35 },
+    monthLabel: {
+        fontSize: Typography.lg,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+        letterSpacing: -0.3,
+    },
+    dayHeader: {
+        flexDirection: 'row',
+        marginBottom: 6,
+    },
+    dayName: {
+        width: CELL_SIZE,
+        textAlign: 'center',
+        fontSize: Typography.xs,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalLight,
+        letterSpacing: 0.4,
+        textTransform: 'uppercase',
+    },
+    dayNameWeekend: { color: Colors.primary },
+    grid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+    },
+    cell: {
+        width: CELL_SIZE,
+        height: CELL_SIZE,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: CELL_SIZE / 2,
+        marginVertical: 2,
+        position: 'relative',
+    },
+    cellSelected: {
+        backgroundColor: Colors.primary,
+        ...Shadows.primary,
+    },
+    cellWeekend: {
+        backgroundColor: Colors.primaryLight,
+    },
+    cellDisabled: {
+        opacity: 0.3,
+    },
+    cellText: {
+        fontSize: Typography.base,
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoal,
+    },
+    cellTextSelected: {
+        color: Colors.white,
+        fontWeight: Typography.extraBold,
+    },
+    cellTextDisabled: {
+        color: Colors.charcoalLight,
+        fontWeight: Typography.regular,
+    },
+    cellTextWeekend: {
+        color: Colors.primaryDark,
+        fontWeight: Typography.bold,
+    },
+    todayDot: {
+        position: 'absolute',
+        bottom: 4,
+        width: 4,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: Colors.primary,
+    },
+    legend: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 20,
+        marginTop: 14,
+        paddingTop: 12,
+        borderTopWidth: 1,
+        borderTopColor: Colors.divider,
+    },
+    legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    legendDot: { width: 10, height: 10, borderRadius: 5 },
+    legendText: {
+        fontSize: Typography.xs,
+        color: Colors.charcoalLight,
+        fontWeight: Typography.medium,
+    },
+});
 // ─── Screen ────────────────────────────────────────────────────────────────────
 
 export default function BookingScreen({ navigation, route }: BookingScreenProps) {
     const params = route.params as {
         venue: Venue;
-        selectedAmenities?: SelectedAmenityItem[]; // ALL items (incl. free)
-        amenitiesTotal?: number; // sum of PAID items only
+        selectedAmenities?: SelectedAmenityItem[];
+        amenitiesTotal?: number;
         preselectedDurationHours?: number;
         preselectedDurationType?: 'perHour' | 'halfDay' | 'fullDay';
     };
 
     const venue = params?.venue;
-    // allAmenities = includes free included items, needed for the API payload
     const allAmenities: SelectedAmenityItem[] = params?.selectedAmenities ?? [];
-    // amenitiesTotal = only paid items total (free items = ₹0)
     const incomingAmenitiesTotal: number = params?.amenitiesTotal ?? 0;
-    // paidAmenities = subset shown in the UI card and counted in badge
     const paidAmenities = allAmenities.filter(i => i.category !== 'basic_included');
 
     const { user } = useAuthStore();
@@ -214,17 +565,14 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
     // ── Modal visibility ──────────────────────────────────────────────────────
     const [timePickerVisible, setTimePickerVisible] = useState(false);
     const [eventPickerVisible, setEventPickerVisible] = useState(false);
+    const [calendarVisible, setCalendarVisible] = useState(false);
 
-    // ── Platform settings from API ────────────────────────────────────────────
-    // Default matches API response shape:
-    // { success, settings: { gstRate: 18, platformFee: { feeType: "percentage", feeValue: 5 }, commissionRate: 0 } }
+    // ── Platform settings ─────────────────────────────────────────────────────
     const [platformSettings, setPlatformSettings] = useState<PlatformSettings>({
         gstRate: 18,
         platformFee: { feeType: 'percentage', feeValue: 5 },
         commissionRate: 0,
     });
-
-    // ── Terms from API ────────────────────────────────────────────────────────
     const [termsList, setTermsList] = useState<string[]>([]);
     const [termsLoading, setTermsLoading] = useState(true);
 
@@ -236,7 +584,6 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
     const fetchPlatformSettings = async () => {
         try {
             const res = await venueAPI.platformSetting();
-            // API: { success: true, settings: { gstRate, platformFee: { feeType, feeValue }, commissionRate } }
             if (res?.success && res?.settings) {
                 setPlatformSettings({
                     gstRate: res.settings.gstRate ?? 18,
@@ -265,7 +612,6 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
         }
     };
 
-    // ── Guard ─────────────────────────────────────────────────────────────────
     if (!venue) {
         return (
             <View style={s.centered}>
@@ -279,20 +625,23 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
     }
 
     const { pricing, availability, venueType, capacity } = venue;
-    const today = new Date().toISOString().split('T')[0];
-    const wknd = isWeekend(today);
 
-    // ── Duration options — from venue.pricing, no hardcoded values ───────────
+    // ── "today" string & earliest bookable date ───────────────────────────────
+    const todayStr = toDateStr(new Date());
+    const tomorrowDate = new Date();
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const tomorrowStr = toDateStr(tomorrowDate);
+
+    const wknd = isWeekend(tomorrowStr); // default to tomorrow for initial price display
+
+    // ── Duration options ──────────────────────────────────────────────────────
     const durationOptions: DurationOption[] = useMemo(() => {
         const opts: DurationOption[] = [];
-
-        // Use enabledOptions if present; otherwise fall through to show all available rates
         const useEnabled = !!(
             pricing?.enabledOptions?.perHour ||
             pricing?.enabledOptions?.halfDay ||
             pricing?.enabledOptions?.fullDay
         );
-
         if (!useEnabled || pricing?.enabledOptions?.perHour) {
             const rate = wknd ? pricing.perHour?.weekend : pricing.perHour?.weekday;
             if (rate) {
@@ -330,7 +679,6 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                     type: 'fullDay',
                 });
         }
-
         return opts;
     }, [pricing, wknd]);
 
@@ -343,17 +691,16 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
         [availability],
     );
 
-    // ── Match pre-selected duration from BookingSheet ─────────────────────────
     const defaultDuration = useMemo(() => {
         const preType = params?.preselectedDurationType;
         const preHours = params?.preselectedDurationHours;
         if (preType) {
-            const match = durationOptions.find(o => o.type === preType);
-            if (match) return match;
+            const m = durationOptions.find(o => o.type === preType);
+            if (m) return m;
         }
         if (preHours) {
-            const match = durationOptions.find(o => o.hours === preHours);
-            if (match) return match;
+            const m = durationOptions.find(o => o.hours === preHours);
+            if (m) return m;
         }
         return durationOptions[0] ?? null;
     }, [durationOptions, params?.preselectedDurationType, params?.preselectedDurationHours]);
@@ -362,7 +709,7 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
     const [selectedDuration, setSelectedDuration] = useState<DurationOption | null>(
         defaultDuration,
     );
-    const [bookingDate, setBookingDate] = useState(today);
+    const [bookingDate, setBookingDate] = useState(tomorrowStr); // default = tomorrow
     const [startTime, setStartTime] = useState(timeSlots[0] ?? '10:00 AM');
     const [fullName, setFullName] = useState(user?.name ?? '');
     const [email, setEmail] = useState(user?.email ?? '');
@@ -372,100 +719,129 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
     const [specialRequirements, setSpecialRequirements] = useState('');
     const [agreedToTerms, setAgreedToTerms] = useState(false);
 
-    // ── Computed end time (display string for the UI, converted on submit) ────
+    // ── Inline field errors ───────────────────────────────────────────────────
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+    const clearError = (field: string) =>
+        setFieldErrors(prev => {
+            const n = { ...prev };
+            delete n[field];
+            return n;
+        });
+
+    // ── Computed end time ─────────────────────────────────────────────────────
     const endTime = useMemo(() => {
         if (!selectedDuration || selectedDuration.hours === null) return '—';
         const idx = timeSlots.indexOf(startTime);
         if (idx === -1) return '—';
-        const endIdx = idx + selectedDuration.hours * 2; // each slot = 30 min
+        const endIdx = idx + selectedDuration.hours * 2;
         return timeSlots[endIdx] ?? 'Closing';
     }, [selectedDuration, startTime, timeSlots]);
 
-    // ── Price calculation — all values come from API/venue, nothing hardcoded ─
-    const basePrice = selectedDuration?.price ?? 0; // venue rental for selected duration
-    const subtotal = basePrice + incomingAmenitiesTotal; // base + amenities
+    // ── Price ─────────────────────────────────────────────────────────────────
+    const selectedDateWknd = bookingDate ? isWeekend(bookingDate) : wknd;
+    const basePrice = selectedDuration?.price ?? 0;
+    const subtotal = basePrice + incomingAmenitiesTotal;
 
-    // Platform fee: venue-level custom override takes priority over platform settings
     const platformFeeRate = useMemo(() => {
         if (venue.customPlatformFee?.enabled)
             return (venue.customPlatformFee.percentage ?? 5) / 100;
         if (platformSettings.platformFee.feeType === 'percentage')
-            return platformSettings.platformFee.feeValue / 100; // API: feeValue=5 → 0.05
+            return platformSettings.platformFee.feeValue / 100;
         return 0;
     }, [venue.customPlatformFee, platformSettings]);
 
     const platformFlatFee = useMemo(() => {
-        if (venue.customPlatformFee?.enabled) return 0; // custom % overrides flat
+        if (venue.customPlatformFee?.enabled) return 0;
         if (platformSettings.platformFee.feeType === 'flat')
             return platformSettings.platformFee.feeValue;
         return 0;
     }, [venue.customPlatformFee, platformSettings]);
 
-    // GST: venue-level override takes priority over platform gstRate
     const gstRate = useMemo(() => {
         if (venue.customGST?.enabled) return (venue.customGST.rate ?? 0) / 100;
-        return platformSettings.gstRate / 100; // API: gstRate=18 → 0.18
+        return platformSettings.gstRate / 100;
     }, [venue.customGST, platformSettings]);
 
     const platformFee = Math.round(subtotal * platformFeeRate) + platformFlatFee;
-    const gstAmount = Math.round(subtotal * gstRate); // GST applied to subtotal
+    const gstAmount = Math.round(subtotal * gstRate);
     const total = subtotal + platformFee + gstAmount;
+
+    // ── Guest count validation helper ─────────────────────────────────────────
+    const guestNum = Number(guestCount);
+    const guestOverCapacity = !!capacity && guestNum > capacity;
+    const guestBelowMin = guestCount.trim() !== '' && (isNaN(guestNum) || guestNum <= 0);
 
     // ── Validation ────────────────────────────────────────────────────────────
     const validate = useCallback((): string | null => {
-        if (!selectedDuration) return 'Please select a duration.';
-        if (!bookingDate) return 'Please enter a booking date.';
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(bookingDate)) return 'Date must be YYYY-MM-DD format.';
-        if (new Date(bookingDate) < new Date(today)) return 'Booking date cannot be in the past.';
-        if (!fullName.trim()) return 'Full name is required.';
+        const maxCapacity = parseMaxCapacity(capacity);
+        const errors: Record<string, string> = {};
+        debugger;
+        if (!selectedDuration) errors.duration = 'Please select a duration.';
+
+        if (!bookingDate) {
+            errors.date = 'Please select a booking date.';
+        } else {
+            const selected = new Date(bookingDate + 'T00:00:00');
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            if (selected <= today)
+                errors.date = 'Please select a future date (from tomorrow onwards).';
+        }
+
+        if (!fullName.trim()) errors.fullName = 'Full name is required.';
         if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
-            return 'Please enter a valid email.';
+            errors.email = 'Enter a valid email address.';
         if (!phone.trim() || !/^[0-9]{10}$/.test(phone.replace(/\s/g, '')))
-            return 'Please enter a valid 10-digit phone number.';
-        if (!eventType) return 'Please select an event type.';
-        if (!guestCount || isNaN(Number(guestCount)) || Number(guestCount) <= 0)
-            return 'Please enter a valid guest count.';
-        if (capacity && Number(guestCount) > capacity)
-            return `Guest count cannot exceed venue capacity of ${capacity}.`;
-        return null;
+            errors.phone = 'Enter a valid 10-digit phone number.';
+        if (!eventType) errors.eventType = 'Please select an event type.';
+
+        if (!guestCount || isNaN(guestNum) || guestNum <= 0) {
+            errors.guestCount = 'Enter a valid guest count (minimum 1).';
+        } else if (maxCapacity && guestNum > maxCapacity) {
+            errors.guestCount = `Maximum capacity is ${capacity} guests. Booking not allowed.`;
+        }
+
+        setFieldErrors(errors);
+        const firstError = Object.values(errors)[0];
+        return firstError ?? null;
     }, [
         selectedDuration,
         bookingDate,
-        today,
         fullName,
         email,
         phone,
         eventType,
         guestCount,
+        guestNum,
         capacity,
     ]);
 
-    // ── Confirm booking ───────────────────────────────────────────────────────
+    // ── Submit ────────────────────────────────────────────────────────────────
     const handleConfirmBooking = async () => {
         const err = validate();
         if (err) {
             (alert.error ?? alert.show)?.('Validation Error', err);
             return;
         }
+
         setSubmitting(true);
         try {
-            // Payload matches the API sample exactly:
-            // startTime/endTime in 24-hr format, bookingType lowercase, amount at top level, etc.
             const bookingData = {
                 venue: venue._id ?? venue.id,
                 bookingDate,
-                startTime: to24Hr(startTime), // "14:30"
-                endTime: to24Hr(endTime), // "22:30" or null
-                bookingType: toBookingType(selectedDuration!.type), // "fullday" | "halfday" | "perhour"
-                amount: total, // top-level total amount
-                amenitiesTotal: incomingAmenitiesTotal, // top-level amenities sum
+                startTime: to24Hr(startTime),
+                endTime: to24Hr(endTime),
+                bookingType: toBookingType(selectedDuration!.type),
+                amount: total,
+                amenitiesTotal: incomingAmenitiesTotal,
                 selectedAmenities: buildSelectedAmenitiesPayload(allAmenities),
                 priceBreakdown: {
-                    basePrice, // venue rental only
+                    basePrice,
                     amenitiesTotal: incomingAmenitiesTotal,
-                    subtotal, // basePrice + amenitiesTotal
+                    subtotal,
                     gst: gstAmount,
-                    gstRate: Math.round(gstRate * 100), // stored as percent
+                    gstRate: Math.round(gstRate * 100),
                     platformFee,
                     total,
                 },
@@ -474,13 +850,12 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                     email: email.trim().toLowerCase(),
                     phone: phone.trim().replace(/\s/g, ''),
                     eventType,
-                    guestCount: Number(guestCount),
+                    guestCount: guestNum,
                     specialRequirements: specialRequirements.trim(),
                 },
             };
 
             const response = await bookingAPI.create(bookingData);
-
             if (response?.success) {
                 (alert.success ?? alert.show)?.(
                     'Booking Requested! 🎉',
@@ -488,8 +863,10 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                 );
                 navigation.popToTop?.() ?? navigation.goBack();
             } else {
-                const msg = response?.message ?? 'Something went wrong. Please try again.';
-                (alert.error ?? alert.show)?.('Booking Failed', msg);
+                (alert.error ?? alert.show)?.(
+                    'Booking Failed',
+                    response?.message ?? 'Something went wrong. Please try again.',
+                );
             }
         } catch (error: any) {
             console.error('CREATE BOOKING ERROR:', error);
@@ -503,7 +880,6 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
         }
     };
 
-    // ── Generate quotation ────────────────────────────────────────────────────
     const handleGenerateQuote = async () => {
         const err = validate();
         if (err) {
@@ -513,11 +889,23 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
         (alert.info ?? alert.show)?.('Coming Soon', 'Quotation generation will be available soon.');
     };
 
+    // ── Formatted date for display ────────────────────────────────────────────
+    const displayDate = useMemo(() => {
+        if (!bookingDate) return 'Select date';
+        const d = new Date(bookingDate + 'T00:00:00');
+        return d.toLocaleDateString('en-IN', {
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+        });
+    }, [bookingDate]);
+
     const footerDisabled = !agreedToTerms || submitting;
 
     return (
         <View style={s.root}>
-            {/* ── Header ───────────────────────────────────────────────────── */}
+            {/* ── Header ── */}
             <View style={s.header}>
                 <View style={s.headerText}>
                     <Text style={s.headerTitle}>Book Venue</Text>
@@ -536,11 +924,14 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                 contentContainerStyle={s.scroll}
                 keyboardShouldPersistTaps="handled"
             >
-                {/* ── Duration ─────────────────────────────────────────────── */}
+                {/* ── Duration ── */}
                 <View style={s.section}>
                     <Text style={s.sectionLabel}>
                         Select Duration <Text style={s.req}>*</Text>
                     </Text>
+                    {fieldErrors.duration ? (
+                        <Text style={s.inlineError}>{fieldErrors.duration}</Text>
+                    ) : null}
                     {durationOptions.length === 0 ? (
                         <Text style={s.noOptions}>No pricing options configured.</Text>
                     ) : (
@@ -551,7 +942,10 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                                     <TouchableOpacity
                                         key={opt.key}
                                         style={[s.durationCard, active && s.durationCardActive]}
-                                        onPress={() => setSelectedDuration(opt)}
+                                        onPress={() => {
+                                            setSelectedDuration(opt);
+                                            clearError('duration');
+                                        }}
                                         activeOpacity={0.8}
                                     >
                                         <Ionicons
@@ -582,29 +976,51 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                     )}
                 </View>
 
-                {/* ── Date / Time ──────────────────────────────────────────── */}
+                {/* ── Date / Time ── */}
                 <View style={s.section}>
                     <View style={s.dateTimeRow}>
-                        {/* Booking Date */}
-                        <View style={[s.dateTimeCol, { flex: 1.2 }]}>
+                        {/* ── Calendar date picker ── */}
+                        <View style={[s.dateTimeCol, { flex: 1.4 }]}>
                             <Text style={s.fieldLabel}>
                                 Booking Date <Text style={s.req}>*</Text>
                             </Text>
-                            <View style={s.inputWrap}>
+                            <TouchableOpacity
+                                style={[
+                                    s.inputWrap,
+                                    s.datePickerBtn,
+                                    !!fieldErrors.date && s.inputError,
+                                ]}
+                                onPress={() => setCalendarVisible(true)}
+                                activeOpacity={0.8}
+                            >
                                 <Ionicons
                                     name="calendar-outline"
                                     size={16}
+                                    color={Colors.primary}
+                                />
+                                <View style={s.datePickerContent}>
+                                    <Text
+                                        style={[
+                                            s.datePickerText,
+                                            !bookingDate && { color: Colors.charcoalLight },
+                                        ]}
+                                        numberOfLines={1}
+                                    >
+                                        {displayDate}
+                                    </Text>
+                                    {bookingDate && isWeekend(bookingDate) && (
+                                        <Text style={s.weekendPill}>Weekend</Text>
+                                    )}
+                                </View>
+                                <Ionicons
+                                    name="chevron-down"
+                                    size={14}
                                     color={Colors.charcoalLight}
                                 />
-                                <TextInput
-                                    style={s.input}
-                                    value={bookingDate}
-                                    onChangeText={setBookingDate}
-                                    placeholder="YYYY-MM-DD"
-                                    placeholderTextColor={Colors.charcoalLight}
-                                    keyboardType="numeric"
-                                />
-                            </View>
+                            </TouchableOpacity>
+                            {fieldErrors.date ? (
+                                <Text style={s.inlineError}>{fieldErrors.date}</Text>
+                            ) : null}
                         </View>
 
                         {/* Start Time */}
@@ -631,7 +1047,7 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                             </TouchableOpacity>
                         </View>
 
-                        {/* End Time — read only, computed from duration */}
+                        {/* End Time — read-only */}
                         <View style={s.dateTimeCol}>
                             <Text style={s.fieldLabel}>End Time</Text>
                             <View style={[s.inputWrap, s.inputDisabled]}>
@@ -650,67 +1066,83 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                     </View>
                 </View>
 
-                {/* ── Your Details ─────────────────────────────────────────── */}
+                {/* ── Your Details ── */}
                 <View style={s.section}>
                     <Text style={s.sectionTitle}>Your Details</Text>
 
-                    {/* Full Name + Email */}
                     <View style={s.twoCol}>
                         <View style={s.col}>
                             <Text style={s.fieldLabel}>
                                 Full Name <Text style={s.req}>*</Text>
                             </Text>
-                            <View style={s.inputWrap}>
+                            <View style={[s.inputWrap, !!fieldErrors.fullName && s.inputError]}>
                                 <TextInput
                                     style={s.input}
                                     value={fullName}
-                                    onChangeText={setFullName}
+                                    onChangeText={v => {
+                                        setFullName(v);
+                                        clearError('fullName');
+                                    }}
                                     placeholder="Your name"
                                     placeholderTextColor={Colors.charcoalLight}
                                 />
                             </View>
+                            {fieldErrors.fullName ? (
+                                <Text style={s.inlineError}>{fieldErrors.fullName}</Text>
+                            ) : null}
                         </View>
                         <View style={s.col}>
                             <Text style={s.fieldLabel}>
                                 Email <Text style={s.req}>*</Text>
                             </Text>
-                            <View style={s.inputWrap}>
+                            <View style={[s.inputWrap, !!fieldErrors.email && s.inputError]}>
                                 <TextInput
                                     style={s.input}
                                     value={email}
-                                    onChangeText={setEmail}
+                                    onChangeText={v => {
+                                        setEmail(v);
+                                        clearError('email');
+                                    }}
                                     placeholder="you@email.com"
                                     placeholderTextColor={Colors.charcoalLight}
                                     keyboardType="email-address"
                                     autoCapitalize="none"
                                 />
                             </View>
+                            {fieldErrors.email ? (
+                                <Text style={s.inlineError}>{fieldErrors.email}</Text>
+                            ) : null}
                         </View>
                     </View>
 
-                    {/* Phone + Event Type */}
                     <View style={s.twoCol}>
                         <View style={s.col}>
                             <Text style={s.fieldLabel}>
                                 Phone <Text style={s.req}>*</Text>
                             </Text>
-                            <View style={s.inputWrap}>
+                            <View style={[s.inputWrap, !!fieldErrors.phone && s.inputError]}>
                                 <TextInput
                                     style={s.input}
                                     value={phone}
-                                    onChangeText={setPhone}
+                                    onChangeText={v => {
+                                        setPhone(v);
+                                        clearError('phone');
+                                    }}
                                     placeholder="10-digit mobile"
                                     placeholderTextColor={Colors.charcoalLight}
                                     keyboardType="phone-pad"
                                 />
                             </View>
+                            {fieldErrors.phone ? (
+                                <Text style={s.inlineError}>{fieldErrors.phone}</Text>
+                            ) : null}
                         </View>
                         <View style={s.col}>
                             <Text style={s.fieldLabel}>
                                 Event Type <Text style={s.req}>*</Text>
                             </Text>
                             <TouchableOpacity
-                                style={s.inputWrap}
+                                style={[s.inputWrap, !!fieldErrors.eventType && s.inputError]}
                                 onPress={() => setEventPickerVisible(true)}
                                 activeOpacity={0.8}
                             >
@@ -730,26 +1162,74 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                                     color={Colors.charcoalLight}
                                 />
                             </TouchableOpacity>
+                            {fieldErrors.eventType ? (
+                                <Text style={s.inlineError}>{fieldErrors.eventType}</Text>
+                            ) : null}
                         </View>
                     </View>
 
-                    {/* Guest Count + Special Requirements */}
                     <View style={s.twoCol}>
                         <View style={s.col}>
                             <Text style={s.fieldLabel}>
                                 Guest Count <Text style={s.req}>*</Text>
                             </Text>
-                            <View style={s.inputWrap}>
+                            <View
+                                style={[
+                                    s.inputWrap,
+                                    (!!fieldErrors.guestCount || guestOverCapacity) && s.inputError,
+                                ]}
+                            >
                                 <TextInput
                                     style={s.input}
                                     value={guestCount}
-                                    onChangeText={setGuestCount}
+                                    onChangeText={v => {
+                                        setGuestCount(v);
+                                        clearError('guestCount');
+                                    }}
                                     placeholder="No. of guests"
                                     placeholderTextColor={Colors.charcoalLight}
                                     keyboardType="numeric"
                                 />
                             </View>
-                            {!!capacity && <Text style={s.hintText}>Max capacity: {capacity}</Text>}
+
+                            {/* Capacity bar — shows once user starts typing */}
+                            {!!capacity &&
+                                guestCount.trim() !== '' &&
+                                !isNaN(guestNum) &&
+                                guestNum > 0 && (
+                                    <View style={s.capacityBar}>
+                                        <View style={s.capacityTrack}>
+                                            <View
+                                                style={[
+                                                    s.capacityFill,
+                                                    {
+                                                        width: `${Math.min(
+                                                            (guestNum / capacity) * 100,
+                                                            100,
+                                                        )}%`,
+                                                        backgroundColor: guestOverCapacity
+                                                            ? Colors.danger
+                                                            : Colors.primary,
+                                                    },
+                                                ]}
+                                            />
+                                        </View>
+                                        <Text
+                                            style={[
+                                                s.capacityText,
+                                                guestOverCapacity && { color: Colors.danger },
+                                            ]}
+                                        >
+                                            {guestNum} / {capacity}
+                                        </Text>
+                                    </View>
+                                )}
+
+                            {fieldErrors.guestCount ? (
+                                <Text style={s.inlineError}>{fieldErrors.guestCount}</Text>
+                            ) : capacity ? (
+                                <Text style={s.hintText}>Max capacity: {capacity} guests</Text>
+                            ) : null}
                         </View>
                         <View style={s.col}>
                             <Text style={s.fieldLabel}>Special Requirements</Text>
@@ -769,9 +1249,7 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                     </View>
                 </View>
 
-                {/* ── Selected Amenities ───────────────────────────────────────
-                     Only shows paid items (basic_included are free & hidden here).
-                     The full allAmenities list (incl. free) is sent in the API payload. */}
+                {/* ── Selected Amenities ── */}
                 {paidAmenities.length > 0 && (
                     <View style={s.amenitiesCard}>
                         <View style={s.amenitiesHeader}>
@@ -799,18 +1277,16 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                     </View>
                 )}
 
-                {/* ── Price Summary ─────────────────────────────────────────── */}
+                {/* ── Price Summary ── */}
                 <View style={s.priceSummaryCard}>
                     <View style={s.priceSummaryHeader}>
                         <Ionicons name="receipt-outline" size={17} color={Colors.charcoal} />
                         <Text style={s.priceSummaryTitle}>Price Summary</Text>
                     </View>
-
                     <View style={s.priceRow}>
                         <Text style={s.priceRowLabel}>Base Price</Text>
                         <Text style={s.priceRowValue}>{fmt(basePrice)}</Text>
                     </View>
-
                     {incomingAmenitiesTotal > 0 && (
                         <>
                             <View style={s.priceRow}>
@@ -823,8 +1299,6 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                             </View>
                         </>
                     )}
-
-                    {/* Platform fee — from API platformSettings or venue override */}
                     <View style={s.priceRow}>
                         <Text style={s.priceRowLabel}>
                             Platform Fee
@@ -832,30 +1306,25 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                         </Text>
                         <Text style={[s.priceRowValue, s.priceRowFee]}>{fmt(platformFee)}</Text>
                     </View>
-
-                    {/* GST — only shown when rate > 0 (from API platformSettings or venue override) */}
                     {gstRate > 0 && (
                         <View style={s.priceRow}>
                             <Text style={s.priceRowLabel}>GST ({Math.round(gstRate * 100)}%)</Text>
                             <Text style={s.priceRowValue}>{fmt(gstAmount)}</Text>
                         </View>
                     )}
-
                     <View style={s.priceDivider} />
-
                     <View style={s.priceTotalRow}>
                         <Text style={s.priceTotalLabel}>Total Amount</Text>
                         <View style={s.priceTotalRight}>
                             <Text style={s.priceTotalValue}>{fmt(total)}</Text>
                             <Text style={s.priceRateType}>
-                                {wknd ? 'Weekend rate' : 'Weekday rate'}
+                                {selectedDateWknd ? 'Weekend rate' : 'Weekday rate'}
                             </Text>
                         </View>
                     </View>
                 </View>
 
-                {/* ── Terms & Conditions — from bookingAPI.terms() ────────────
-                     Shows nothing while loading, renders list once API responds. */}
+                {/* ── Terms ── */}
                 {!termsLoading && termsList.length > 0 && (
                     <View style={s.termsCard}>
                         <Text style={s.termsTitle}>Terms & Conditions</Text>
@@ -868,7 +1337,7 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                     </View>
                 )}
 
-                {/* ── Agree checkbox ───────────────────────────────────────── */}
+                {/* ── Agree checkbox ── */}
                 <TouchableOpacity
                     style={s.agreeRow}
                     onPress={() => setAgreedToTerms(v => !v)}
@@ -888,7 +1357,7 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                 <View style={{ height: 120 }} />
             </ScrollView>
 
-            {/* ── Footer ───────────────────────────────────────────────────── */}
+            {/* ── Footer ── */}
             <View style={s.footer}>
                 <TouchableOpacity
                     style={s.footerCancel}
@@ -927,7 +1396,18 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                 </TouchableOpacity>
             </View>
 
-            {/* ── Time picker modal ─────────────────────────────────────────── */}
+            {/* ── Calendar modal ── */}
+            <CalendarModal
+                visible={calendarVisible}
+                selectedDate={bookingDate}
+                onSelect={date => {
+                    setBookingDate(date);
+                    clearError('date');
+                }}
+                onClose={() => setCalendarVisible(false)}
+            />
+
+            {/* ── Time picker modal ── */}
             <Modal
                 visible={timePickerVisible}
                 transparent
@@ -979,7 +1459,7 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                 </View>
             </Modal>
 
-            {/* ── Event type picker modal ───────────────────────────────────── */}
+            {/* ── Event type picker modal ── */}
             <Modal
                 visible={eventPickerVisible}
                 transparent
@@ -1007,6 +1487,7 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
                                     onPress={() => {
                                         setEventType(item);
                                         setEventPickerVisible(false);
+                                        clearError('eventType');
                                     }}
                                 >
                                     <Text
@@ -1036,7 +1517,6 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-    // Root & error
     root: { flex: 1, backgroundColor: Colors.background },
     centered: {
         flex: 1,
@@ -1060,7 +1540,6 @@ const s = StyleSheet.create({
     },
     backBtnText: { fontSize: Typography.base, fontWeight: Typography.bold, color: Colors.white },
 
-    // Header
     header: {
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -1090,11 +1569,7 @@ const s = StyleSheet.create({
         marginTop: 2,
     },
     headerDivider: { height: 1, backgroundColor: Colors.divider },
-
-    // Scroll
     scroll: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.xl },
-
-    // Sections
     section: { marginBottom: Spacing.xl },
     sectionLabel: {
         fontSize: Typography.md,
@@ -1113,7 +1588,15 @@ const s = StyleSheet.create({
     req: { color: Colors.danger },
     noOptions: { fontSize: Typography.base, color: Colors.charcoalLight },
 
-    // Duration grid
+    // Inline error
+    inlineError: {
+        fontSize: Typography.xs,
+        color: Colors.danger,
+        marginTop: 4,
+        fontWeight: Typography.medium,
+    },
+
+    // Duration
     durationGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
     durationCard: {
         width: (W - Spacing.xl * 2 - Spacing.sm * 3) / 4,
@@ -1145,7 +1628,49 @@ const s = StyleSheet.create({
     dateTimeRow: { flexDirection: 'row', gap: Spacing.sm },
     dateTimeCol: { flex: 1 },
 
-    // Form inputs
+    // ── Calendar date picker button ──
+    datePickerBtn: {
+        height: 48,
+        borderColor: Colors.border,
+    },
+    datePickerContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    datePickerText: {
+        fontSize: Typography.sm,
+        color: Colors.charcoal,
+        fontWeight: Typography.semiBold,
+    },
+    weekendPill: {
+        fontSize: 9,
+        fontWeight: Typography.bold,
+        color: Colors.primaryDark,
+        backgroundColor: Colors.primaryLight,
+        borderWidth: 1,
+        borderColor: Colors.primaryBorder,
+        borderRadius: Radii.full,
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        overflow: 'hidden',
+    },
+
+    // Capacity bar
+    capacityBar: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
+    capacityTrack: {
+        flex: 1,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: Colors.border,
+        overflow: 'hidden',
+    },
+    capacityFill: { height: '100%', borderRadius: 2 },
+    capacityText: {
+        fontSize: Typography.xs,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalMid,
+        minWidth: 48,
+        textAlign: 'right',
+    },
+
+    // Form
     twoCol: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.md },
     col: { flex: 1 },
     fieldLabel: {
@@ -1165,6 +1690,7 @@ const s = StyleSheet.create({
         borderWidth: 1.5,
         borderColor: Colors.border,
     },
+    inputError: { borderColor: Colors.danger },
     inputDisabled: { backgroundColor: Colors.background },
     input: { flex: 1, fontSize: Typography.base, color: Colors.charcoal, padding: 0 },
     inputText: { paddingVertical: 0, lineHeight: 20 },
@@ -1172,7 +1698,7 @@ const s = StyleSheet.create({
     textarea: { height: 60, textAlignVertical: 'top' },
     hintText: { fontSize: Typography.xs, color: Colors.charcoalLight, marginTop: 4 },
 
-    // Selected amenities (paid only)
+    // Amenities
     amenitiesCard: {
         backgroundColor: Colors.surface,
         borderRadius: Radii.xl,
@@ -1421,7 +1947,7 @@ const s = StyleSheet.create({
     },
     footerDim: { opacity: 0.45 },
 
-    // Picker modals (shared by time + event type)
+    // Pickers
     modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
     pickerSheet: {
         position: 'absolute',

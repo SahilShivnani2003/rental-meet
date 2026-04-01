@@ -9,6 +9,8 @@ import {
     ActivityIndicator,
     RefreshControl,
     Animated,
+    Modal,
+    FlatList,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
@@ -19,7 +21,6 @@ import { OwnerTabParamList } from '../../navigations/tabNavigations/OwnerTabNavi
 import { ClientTabParamList } from '../../navigations/tabNavigations/ClientTabNavigation';
 import { tabParamList } from '../../navigations/tabNavigations/TabNavigation';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
-import FilterModal, { FilterState, DEFAULT_FILTERS } from '../models/FilterModal';
 import { ownerAPI } from '../../service/apis/owner';
 import { RootStackParamList } from '../../navigations/RootNavigation';
 
@@ -79,6 +80,104 @@ function OwnerStatCard({
     );
 }
 
+// ── Dropdown Modal Component ──────────────────────────────────────────────────
+interface DropdownModalProps {
+    visible: boolean;
+    title: string;
+    options: { label: string; value: string }[];
+    selectedValue: string;
+    onSelect: (value: string) => void;
+    onClose: () => void;
+    searchable?: boolean;
+}
+
+function DropdownModal({
+    visible,
+    title,
+    options,
+    selectedValue,
+    onSelect,
+    onClose,
+    searchable = false,
+}: DropdownModalProps) {
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const filteredOptions = searchable
+        ? options.filter(opt => opt.label.toLowerCase().includes(searchQuery.toLowerCase()))
+        : options;
+
+    return (
+        <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+            <TouchableOpacity style={styles.dropdownBackdrop} activeOpacity={1} onPress={onClose} />
+            <View style={styles.dropdownSheet}>
+                <View style={styles.dropdownHandle} />
+                <Text style={styles.dropdownTitle}>{title}</Text>
+
+                {searchable && (
+                    <View style={styles.dropdownSearchWrap}>
+                        <Ionicons
+                            name="search"
+                            size={16}
+                            color={Colors.charcoalLight}
+                            style={{ marginRight: 8 }}
+                        />
+                        <TextInput
+                            style={styles.dropdownSearchInput}
+                            placeholder="Search..."
+                            placeholderTextColor={Colors.charcoalLight}
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                        />
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                <Ionicons
+                                    name="close-circle"
+                                    size={16}
+                                    color={Colors.charcoalLight}
+                                />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                )}
+
+                <FlatList
+                    data={filteredOptions}
+                    keyExtractor={item => item.value}
+                    showsVerticalScrollIndicator={false}
+                    style={{ maxHeight: 400 }}
+                    renderItem={({ item }) => {
+                        const isActive = item.value === selectedValue;
+                        return (
+                            <TouchableOpacity
+                                style={[
+                                    styles.dropdownOption,
+                                    isActive && styles.dropdownOptionActive,
+                                ]}
+                                onPress={() => {
+                                    onSelect(item.value);
+                                    onClose();
+                                }}
+                            >
+                                <Text
+                                    style={[
+                                        styles.dropdownOptionText,
+                                        isActive && styles.dropdownOptionTextActive,
+                                    ]}
+                                >
+                                    {item.label}
+                                </Text>
+                                {isActive && (
+                                    <Ionicons name="checkmark" size={18} color={Colors.primary} />
+                                )}
+                            </TouchableOpacity>
+                        );
+                    }}
+                />
+            </View>
+        </Modal>
+    );
+}
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 export default function VenuesScreen({ navigation }: venueProps) {
     const { user } = useAuthStore();
@@ -91,8 +190,19 @@ export default function VenuesScreen({ navigation }: venueProps) {
 
     const [searchQuery, setSearch] = useState('');
     const [selectedCategory, setCategory] = useState('all');
-    const [filterVisible, setFilterVisible] = useState(false);
-    const [activeFilters, setActiveFilters] = useState<FilterState>(DEFAULT_FILTERS);
+
+    // Inline filter states
+    const [selectedVenueType, setSelectedVenueType] = useState('');
+    const [selectedCity, setSelectedCity] = useState('');
+    const [selectedCapacity, setSelectedCapacity] = useState('');
+    const [minPrice, setMinPrice] = useState('');
+    const [maxPrice, setMaxPrice] = useState('');
+    const [filtersExpanded, setFiltersExpanded] = useState(false);
+
+    // Dropdown modals
+    const [venueTypeModalVisible, setVenueTypeModalVisible] = useState(false);
+    const [cityModalVisible, setCityModalVisible] = useState(false);
+    const [capacityModalVisible, setCapacityModalVisible] = useState(false);
 
     // Owner filter: 'all' | 'approved' | 'pending' | 'rejected'
     const [ownerFilter, setOwnerFilter] = useState<string>('all');
@@ -100,7 +210,38 @@ export default function VenuesScreen({ navigation }: venueProps) {
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const activeFilterCount = Object.entries(activeFilters).filter(([, v]) => v !== '').length;
+    // Dropdown options
+    const venueTypeOptions = categories
+        .filter(c => c._id !== 'all')
+        .map(c => ({ label: c.name, value: c.name }));
+
+    const cityOptions = [
+        { label: 'Mumbai', value: 'Mumbai' },
+        { label: 'Delhi', value: 'Delhi' },
+        { label: 'Bangalore', value: 'Bangalore' },
+        { label: 'Hyderabad', value: 'Hyderabad' },
+        { label: 'Chennai', value: 'Chennai' },
+        { label: 'Pune', value: 'Pune' },
+        { label: 'Kolkata', value: 'Kolkata' },
+        { label: 'Ahmedabad', value: 'Ahmedabad' },
+    ];
+
+    const capacityOptions = [
+        { label: '1-10', value: '1-10' },
+        { label: '10-25', value: '10-25' },
+        { label: '25-50', value: '25-50' },
+        { label: '50-100', value: '50-100' },
+        { label: '100-200', value: '100-200' },
+        { label: '200+', value: '200+' },
+    ];
+
+    const activeFilterCount = [
+        selectedVenueType,
+        selectedCity,
+        selectedCapacity,
+        minPrice,
+        maxPrice,
+    ].filter(Boolean).length;
 
     // ── Counts derived from current venues list ────────────────────────────
     const ownerStats: OwnerStatConfig[] = [
@@ -160,18 +301,17 @@ export default function VenuesScreen({ navigation }: venueProps) {
             if (sq.trim()) params.search = sq.trim();
             if (!isOwner) {
                 if (selectedCategory !== 'all') params.venueType = selectedCategory;
-                if (activeFilters.city) params.city = activeFilters.city;
-                if (activeFilters.venueType) params.venueType = activeFilters.venueType;
-                if (activeFilters.capacity) params.capacity = activeFilters.capacity;
-                if (activeFilters.minPrice) params.minPrice = activeFilters.minPrice;
-                if (activeFilters.maxPrice) params.maxPrice = activeFilters.maxPrice;
+                if (selectedCity) params.city = selectedCity;
+                if (selectedVenueType) params.venueType = selectedVenueType;
+                if (selectedCapacity) params.capacity = selectedCapacity;
+                if (minPrice) params.minPrice = minPrice;
+                if (maxPrice) params.maxPrice = maxPrice;
             }
 
-            debugger;
             const response = isOwner
                 ? await ownerAPI.getVenues()
                 : await venueAPI.getVenues(params);
-            debugger;
+
             setVenues(response?.venues ?? []);
 
             Animated.timing(fadeAnim, {
@@ -209,35 +349,12 @@ export default function VenuesScreen({ navigation }: venueProps) {
         fetchVenues(searchQuery);
     };
 
-    const handleApplyFilters = (filters: FilterState) => {
-        setActiveFilters(filters);
-        const params: Record<string, string> = {};
-        if (searchQuery.trim()) params.search = searchQuery.trim();
-        if (selectedCategory !== 'all') params.venueType = selectedCategory;
-        if (filters.city) params.city = filters.city;
-        if (filters.venueType) params.venueType = filters.venueType;
-        if (filters.capacity) params.capacity = filters.capacity;
-        if (filters.minPrice) params.minPrice = filters.minPrice;
-        if (filters.maxPrice) params.maxPrice = filters.maxPrice;
-        (async () => {
-            try {
-                setLoading(true);
-                fadeAnim.setValue(0);
-                const response = await venueAPI.getVenues(params);
-                setVenues(response?.venues ?? []);
-                Animated.timing(fadeAnim, {
-                    toValue: 1,
-                    duration: 400,
-                    useNativeDriver: true,
-                }).start();
-            } finally {
-                setLoading(false);
-            }
-        })();
-    };
-
     const handleClearFilters = () => {
-        setActiveFilters(DEFAULT_FILTERS);
+        setSelectedVenueType('');
+        setSelectedCity('');
+        setSelectedCapacity('');
+        setMinPrice('');
+        setMaxPrice('');
         setSearch('');
         setCategory('all');
         setOwnerFilter('all');
@@ -425,11 +542,11 @@ export default function VenuesScreen({ navigation }: venueProps) {
                     </>
                 ) : (
                     /* ══════════════════════════════════════════════════════
-                       CLIENT VIEW — search + filter + categories + venues
+                       CLIENT VIEW — search + inline filters + categories + venues
                     ══════════════════════════════════════════════════════ */
                     <>
-                        {/* Search + Filter */}
-                        <View style={styles.searchWrapper}>
+                        {/* Search */}
+                        <View style={styles.clientSearchWrap}>
                             <View style={styles.searchContainer}>
                                 <Ionicons
                                     name="search"
@@ -461,31 +578,214 @@ export default function VenuesScreen({ navigation }: venueProps) {
                                     </TouchableOpacity>
                                 )}
                             </View>
+                        </View>
+
+                        {/* Filters Toggle Button */}
+                        <View style={styles.filtersToggleWrap}>
                             <TouchableOpacity
                                 style={[
-                                    styles.filterButton,
-                                    activeFilterCount > 0 && styles.filterButtonActive,
+                                    styles.filtersToggleBtn,
+                                    filtersExpanded && styles.filtersToggleBtnActive,
                                 ]}
-                                onPress={() => setFilterVisible(true)}
-                                activeOpacity={0.85}
+                                onPress={() => setFiltersExpanded(!filtersExpanded)}
+                                activeOpacity={0.8}
                             >
                                 <Ionicons
-                                    name="options"
-                                    size={18}
-                                    color={activeFilterCount > 0 ? Colors.charcoal : Colors.white}
+                                    name="options-outline"
+                                    size={16}
+                                    color={
+                                        filtersExpanded || activeFilterCount > 0
+                                            ? Colors.primary
+                                            : Colors.charcoalMid
+                                    }
                                 />
+                                <Text
+                                    style={[
+                                        styles.filtersToggleText,
+                                        (filtersExpanded || activeFilterCount > 0) &&
+                                            styles.filtersToggleTextActive,
+                                    ]}
+                                >
+                                    Filters
+                                </Text>
                                 {activeFilterCount > 0 && (
-                                    <View style={styles.filterBadge}>
-                                        <Text style={styles.filterBadgeText}>
+                                    <View style={styles.filterCountBadge}>
+                                        <Text style={styles.filterCountText}>
                                             {activeFilterCount}
                                         </Text>
                                     </View>
                                 )}
+                                <Ionicons
+                                    name={filtersExpanded ? 'chevron-up' : 'chevron-down'}
+                                    size={14}
+                                    color={Colors.charcoalLight}
+                                />
                             </TouchableOpacity>
+
+                            {activeFilterCount > 0 && (
+                                <TouchableOpacity
+                                    style={styles.clearAllBtn}
+                                    onPress={handleClearFilters}
+                                    activeOpacity={0.8}
+                                >
+                                    <Text style={styles.clearAllText}>Clear All</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
 
+                        {/* Expandable Filter Section */}
+                        {filtersExpanded && (
+                            <View style={styles.filtersSection}>
+                                {/* Row 1: Venue Type + City */}
+                                <View style={styles.filterRow}>
+                                    <View style={styles.filterCol}>
+                                        <Text style={styles.filterLabel}>Venue Type</Text>
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.filterInput,
+                                                selectedVenueType && styles.filterInputActive,
+                                            ]}
+                                            onPress={() => setVenueTypeModalVisible(true)}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.filterInputText,
+                                                    !selectedVenueType &&
+                                                        styles.filterInputPlaceholder,
+                                                ]}
+                                                numberOfLines={1}
+                                            >
+                                                {selectedVenueType || 'Select type'}
+                                            </Text>
+                                            <Ionicons
+                                                name="chevron-down"
+                                                size={14}
+                                                color={Colors.charcoalLight}
+                                            />
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    <View style={styles.filterCol}>
+                                        <Text style={styles.filterLabel}>City</Text>
+                                        <TouchableOpacity
+                                            style={[
+                                                styles.filterInput,
+                                                selectedCity && styles.filterInputActive,
+                                            ]}
+                                            onPress={() => setCityModalVisible(true)}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Text
+                                                style={[
+                                                    styles.filterInputText,
+                                                    !selectedCity && styles.filterInputPlaceholder,
+                                                ]}
+                                                numberOfLines={1}
+                                            >
+                                                {selectedCity || 'Select city'}
+                                            </Text>
+                                            <Ionicons
+                                                name="chevron-down"
+                                                size={14}
+                                                color={Colors.charcoalLight}
+                                            />
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+
+                                {/* Row 2: Capacity */}
+                                <View style={styles.filterRowSingle}>
+                                    <Text style={styles.filterLabel}>Capacity</Text>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.filterInput,
+                                            selectedCapacity && styles.filterInputActive,
+                                        ]}
+                                        onPress={() => setCapacityModalVisible(true)}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.filterInputText,
+                                                !selectedCapacity && styles.filterInputPlaceholder,
+                                            ]}
+                                            numberOfLines={1}
+                                        >
+                                            {selectedCapacity || 'Select capacity'}
+                                        </Text>
+                                        <Ionicons
+                                            name="chevron-down"
+                                            size={14}
+                                            color={Colors.charcoalLight}
+                                        />
+                                    </TouchableOpacity>
+                                </View>
+
+                                {/* Row 3: Price Range */}
+                                <View style={styles.filterRow}>
+                                    <View style={styles.filterCol}>
+                                        <Text style={styles.filterLabel}>Min Price (₹)</Text>
+                                        <View
+                                            style={[
+                                                styles.filterInput,
+                                                minPrice && styles.filterInputActive,
+                                            ]}
+                                        >
+                                            <TextInput
+                                                style={styles.filterTextInput}
+                                                placeholder="0"
+                                                placeholderTextColor={Colors.charcoalLight}
+                                                value={minPrice}
+                                                onChangeText={setMinPrice}
+                                                keyboardType="numeric"
+                                                onEndEditing={() => fetchVenues()}
+                                            />
+                                        </View>
+                                    </View>
+
+                                    <View style={styles.filterCol}>
+                                        <Text style={styles.filterLabel}>Max Price (₹)</Text>
+                                        <View
+                                            style={[
+                                                styles.filterInput,
+                                                maxPrice && styles.filterInputActive,
+                                            ]}
+                                        >
+                                            <TextInput
+                                                style={styles.filterTextInput}
+                                                placeholder="∞"
+                                                placeholderTextColor={Colors.charcoalLight}
+                                                value={maxPrice}
+                                                onChangeText={setMaxPrice}
+                                                keyboardType="numeric"
+                                                onEndEditing={() => fetchVenues()}
+                                            />
+                                        </View>
+                                    </View>
+                                </View>
+
+                                {/* Apply Filters Button */}
+                                <TouchableOpacity
+                                    style={styles.applyFiltersBtn}
+                                    onPress={() => {
+                                        fetchVenues();
+                                        setFiltersExpanded(false);
+                                    }}
+                                    activeOpacity={0.85}
+                                >
+                                    <Ionicons
+                                        name="checkmark-circle"
+                                        size={16}
+                                        color={Colors.charcoal}
+                                    />
+                                    <Text style={styles.applyFiltersBtnText}>Apply Filters</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
                         {/* Category chips */}
-                        <ScrollView
+                        {/* <ScrollView
                             horizontal
                             showsHorizontalScrollIndicator={false}
                             contentContainerStyle={styles.categoriesContainer}
@@ -526,7 +826,7 @@ export default function VenuesScreen({ navigation }: venueProps) {
                                     </TouchableOpacity>
                                 );
                             })}
-                        </ScrollView>
+                        </ScrollView> */}
 
                         {/* Active filter strip */}
                         {(activeFilterCount > 0 || searchQuery) && (
@@ -535,13 +835,11 @@ export default function VenuesScreen({ navigation }: venueProps) {
                                 <Text style={styles.activeFilterText} numberOfLines={1}>
                                     {[
                                         searchQuery && `"${searchQuery}"`,
-                                        activeFilters.city,
-                                        activeFilters.venueType,
-                                        activeFilters.capacity && `Cap: ${activeFilters.capacity}`,
-                                        (activeFilters.minPrice || activeFilters.maxPrice) &&
-                                            `₹${activeFilters.minPrice || '0'} – ₹${
-                                                activeFilters.maxPrice || '∞'
-                                            }`,
+                                        selectedCity,
+                                        selectedVenueType,
+                                        selectedCapacity && `Cap: ${selectedCapacity}`,
+                                        (minPrice || maxPrice) &&
+                                            `₹${minPrice || '0'} – ₹${maxPrice || '∞'}`,
                                     ]
                                         .filter(Boolean)
                                         .join(' · ')}
@@ -595,15 +893,44 @@ export default function VenuesScreen({ navigation }: venueProps) {
                 )}
             </ScrollView>
 
-            {/* ── Filter modal (client only) ── */}
-            {!isOwner && (
-                <FilterModal
-                    visible={filterVisible}
-                    onClose={() => setFilterVisible(false)}
-                    onApply={handleApplyFilters}
-                    initialFilters={activeFilters}
-                />
-            )}
+            {/* ── Dropdown Modals ── */}
+            <DropdownModal
+                visible={venueTypeModalVisible}
+                title="Select Venue Type"
+                options={venueTypeOptions}
+                selectedValue={selectedVenueType}
+                onSelect={value => {
+                    setSelectedVenueType(value);
+                    fetchVenues();
+                }}
+                onClose={() => setVenueTypeModalVisible(false)}
+                searchable
+            />
+
+            <DropdownModal
+                visible={cityModalVisible}
+                title="Select City"
+                options={cityOptions}
+                selectedValue={selectedCity}
+                onSelect={value => {
+                    setSelectedCity(value);
+                    fetchVenues();
+                }}
+                onClose={() => setCityModalVisible(false)}
+                searchable
+            />
+
+            <DropdownModal
+                visible={capacityModalVisible}
+                title="Select Capacity"
+                options={capacityOptions}
+                selectedValue={selectedCapacity}
+                onSelect={value => {
+                    setSelectedCapacity(value);
+                    fetchVenues();
+                }}
+                onClose={() => setCapacityModalVisible(false)}
+            />
         </View>
     );
 }
@@ -705,13 +1032,10 @@ const styles = StyleSheet.create({
         marginBottom: Spacing.lg,
     },
 
-    // ── Client: search + filter ──
-    searchWrapper: {
-        flexDirection: 'row',
+    // ── Client: search ──
+    clientSearchWrap: {
         paddingHorizontal: Spacing.xl,
-        paddingVertical: Spacing.lg,
-        gap: Spacing.md,
-        alignItems: 'center',
+        paddingTop: Spacing.lg,
     },
 
     // Shared search container
@@ -727,38 +1051,150 @@ const styles = StyleSheet.create({
     },
     searchInput: { flex: 1, fontSize: 15, color: Colors.charcoal },
 
-    // Filter button (client)
-    filterButton: {
-        width: 50,
-        height: 50,
+    // ── Filters Toggle ──
+    filtersToggleWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: Spacing.xl,
+        paddingTop: Spacing.md,
+        gap: Spacing.sm,
+    },
+    filtersToggleBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: Colors.surface,
         borderRadius: Radii.md,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: 12,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        ...Shadows.card,
+    },
+    filtersToggleBtnActive: {
+        borderColor: Colors.primary,
+        backgroundColor: Colors.primaryLight,
+    },
+    filtersToggleText: {
+        flex: 1,
+        fontSize: Typography.base,
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoalMid,
+    },
+    filtersToggleTextActive: {
+        color: Colors.primary,
+    },
+    filterCountBadge: {
         backgroundColor: Colors.primary,
+        borderRadius: Radii.full,
+        minWidth: 20,
+        height: 20,
         alignItems: 'center',
         justifyContent: 'center',
+        paddingHorizontal: 6,
+    },
+    filterCountText: {
+        fontSize: 10,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+    },
+    clearAllBtn: {
+        paddingHorizontal: Spacing.md,
+        paddingVertical: 12,
+        backgroundColor: Colors.surface,
+        borderRadius: Radii.md,
+        borderWidth: 1.5,
+        borderColor: Colors.danger,
+        ...Shadows.card,
+    },
+    clearAllText: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.danger,
+    },
+
+    // ── Filters Section ──
+    filtersSection: {
+        backgroundColor: Colors.surface,
+        marginHorizontal: Spacing.xl,
+        marginTop: Spacing.md,
+        padding: Spacing.lg,
+        borderRadius: Radii.lg,
+        borderWidth: 1.5,
+        borderColor: Colors.primaryBorder,
+        gap: Spacing.md,
+        ...Shadows.card,
+    },
+    filterRow: {
+        flexDirection: 'row',
+        gap: Spacing.sm,
+    },
+    filterRowSingle: {
+        gap: 6,
+    },
+    filterCol: {
+        flex: 1,
+        gap: 6,
+    },
+    filterLabel: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoalMid,
+    },
+    filterInput: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: Colors.background,
+        borderRadius: Radii.md,
+        paddingHorizontal: 12,
+        height: 44,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+    },
+    filterInputActive: {
+        borderColor: Colors.primary,
+        backgroundColor: Colors.primaryLight,
+    },
+    filterInputText: {
+        flex: 1,
+        fontSize: Typography.base,
+        color: Colors.charcoal,
+        fontWeight: Typography.medium,
+    },
+    filterInputPlaceholder: {
+        color: Colors.charcoalLight,
+    },
+    filterTextInput: {
+        flex: 1,
+        fontSize: Typography.base,
+        color: Colors.charcoal,
+        fontWeight: Typography.medium,
+        padding: 0,
+    },
+    applyFiltersBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: Colors.primary,
+        borderRadius: Radii.md,
+        paddingVertical: 13,
+        marginTop: Spacing.xs,
         ...Shadows.primary,
     },
-    filterButtonActive: { backgroundColor: Colors.charcoal },
-    filterBadge: {
-        position: 'absolute',
-        top: -5,
-        right: -5,
-        minWidth: 18,
-        height: 18,
-        borderRadius: 9,
-        backgroundColor: Colors.primary,
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingHorizontal: 4,
-        borderWidth: 1.5,
-        borderColor: Colors.background,
+    applyFiltersBtnText: {
+        fontSize: Typography.base,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
     },
-    filterBadgeText: { fontSize: 9, fontWeight: Typography.extraBold, color: Colors.charcoal },
 
     // Category chips
     categoriesContainer: {
         paddingHorizontal: Spacing.xl,
         gap: 10,
-        paddingVertical: Spacing.xxs,
+        paddingVertical: Spacing.md,
     },
     categoryButton: {
         flexDirection: 'row',
@@ -897,5 +1333,74 @@ const styles = StyleSheet.create({
         color: Colors.primary,
         fontWeight: Typography.bold,
         textDecorationLine: 'underline',
+    },
+
+    // ── Dropdown Modal ──
+    dropdownBackdrop: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.45)',
+    },
+    dropdownSheet: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: Colors.surface,
+        borderTopLeftRadius: Radii.xxl,
+        borderTopRightRadius: Radii.xxl,
+        paddingHorizontal: Spacing.xl,
+        paddingBottom: 32,
+        ...Shadows.floating,
+    },
+    dropdownHandle: {
+        width: 40,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: Colors.border,
+        alignSelf: 'center',
+        marginTop: 12,
+        marginBottom: 8,
+    },
+    dropdownTitle: {
+        fontSize: Typography.lg,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+        letterSpacing: -0.3,
+        marginBottom: Spacing.md,
+    },
+    dropdownSearchWrap: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.background,
+        borderRadius: Radii.md,
+        paddingHorizontal: 12,
+        height: 44,
+        marginBottom: Spacing.md,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+    },
+    dropdownSearchInput: {
+        flex: 1,
+        fontSize: Typography.base,
+        color: Colors.charcoal,
+    },
+    dropdownOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: 13,
+        paddingHorizontal: 10,
+        borderRadius: Radii.md,
+        marginBottom: 2,
+    },
+    dropdownOptionActive: { backgroundColor: Colors.primaryLight },
+    dropdownOptionText: {
+        fontSize: Typography.md,
+        color: Colors.charcoalMid,
+        fontWeight: Typography.medium,
+    },
+    dropdownOptionTextActive: {
+        color: Colors.primary,
+        fontWeight: Typography.bold,
     },
 });

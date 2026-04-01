@@ -384,7 +384,7 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                             .getParent<NativeStackNavigationProp<RootStackParamList>>()
                             .reset({ index: 0, routes: [{ name: 'login' }] });
                         await logOut();
-                        alert.dismiss;
+                        alert.dismiss();
                     },
                 },
             ],
@@ -392,24 +392,6 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
     };
 
     const accountItems = [
-        user.userType === 'owner' && {
-            id: 'my-venues',
-            icon: 'business-outline',
-            iconColor: Colors.primary,
-            iconBg: Colors.primaryLight,
-            title: 'My Venues',
-            subtitle: 'Manage your listed spaces',
-            onPress: () => console.log('navigating to venue'),
-        },
-        user.userType === 'vendor' && {
-            id: 'my-services',
-            icon: 'construct-outline',
-            iconColor: Colors.success,
-            iconBg: Colors.successLight,
-            title: 'My Services',
-            subtitle: 'Manage your offered services',
-            onPress: () => console.log('navigating to service'),
-        },
         {
             id: 'edit-profile',
             icon: 'person-circle-outline',
@@ -430,6 +412,26 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
         },
     ].filter(Boolean) as any[];
 
+    const quickActions = [
+        {
+            id: 'bookings',
+            icon: 'calendar',
+            iconColor: Colors.primary,
+            iconBg: Colors.primaryLight,
+            title: 'My Bookings',
+            subtitle: 'View & manage',
+            onPress: () => navigation.navigate('bookings'),
+        },
+        {
+            id: 'browse-venues',
+            icon: 'search',
+            iconColor: Colors.primary,
+            iconBg: Colors.primaryLight,
+            title: 'Browse Venues',
+            subtitle: 'Find your perfect space',
+            onPress: () => navigation.navigate('venues'),
+        },
+    ];
     const preferenceItems = [
         {
             id: 'notifications',
@@ -476,7 +478,7 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                         <Text style={styles.headerEyebrow}>ACCOUNT</Text>
                         <Text style={styles.headerTitle}>Profile</Text>
                     </View>
-                    <View style={styles.headerActions}>
+                    {/* <View style={styles.headerActions}>
                         <TouchableOpacity
                             style={styles.iconBtn}
                             onPress={() => console.log('navigating to message')}
@@ -498,7 +500,7 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                         <TouchableOpacity style={styles.settingsBtn}>
                             <Ionicons name="settings-outline" size={19} color={Colors.charcoal} />
                         </TouchableOpacity>
-                    </View>
+                    </View> */}
                 </View>
             </Animated.View>
 
@@ -514,7 +516,9 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                         <View style={styles.avatarWrapper}>
                             <View style={styles.avatarRing}>
                                 <View style={styles.avatar}>
-                                    <Text style={styles.avatarInitials}>{user.name.slice(0,2).toUpperCase()}</Text>
+                                    <Text style={styles.avatarInitials}>
+                                        {user.name.slice(0, 2).toUpperCase()}
+                                    </Text>
                                 </View>
                             </View>
                             <TouchableOpacity style={styles.cameraBtn}>
@@ -543,97 +547,8 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                     ))}
                 </View>
 
-                {/* ── Quick actions ── */}
-                <Animated.View style={[{ opacity: headerFade }, styles.quickSection]}>
-                    <Text style={styles.sectionHeading}>Quick Actions</Text>
-                    <View style={styles.quickRow}>
-                        <TouchableOpacity
-                            style={[styles.quickTile, { backgroundColor: Colors.charcoal }]}
-                            onPress={() => navigation.navigate('bookings')}
-                            activeOpacity={0.85}
-                        >
-                            <View
-                                style={[
-                                    styles.quickTileIcon,
-                                    { backgroundColor: 'rgba(255,255,255,0.12)' },
-                                ]}
-                            >
-                                <Ionicons name="calendar" size={20} color={Colors.white} />
-                            </View>
-                            <Text style={styles.quickTileLabel}>My Bookings</Text>
-                            <Text style={styles.quickTileSub}>View & manage</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.quickTile, { backgroundColor: Colors.primary }]}
-                            onPress={() => navigation.navigate('home')}
-                            activeOpacity={0.85}
-                        >
-                            <View
-                                style={[
-                                    styles.quickTileIcon,
-                                    { backgroundColor: 'rgba(255,255,255,0.2)' },
-                                ]}
-                            >
-                                <Ionicons name="search" size={20} color={Colors.white} />
-                            </View>
-                            <Text style={styles.quickTileLabel}>Browse Venues</Text>
-                            <Text style={styles.quickTileSub}>Find a space</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            style={[styles.quickTile, { backgroundColor: '#E11D48' }]}
-                            onPress={() => console.log('navigating to favourite')}
-                            activeOpacity={0.85}
-                        >
-                            <View
-                                style={[
-                                    styles.quickTileIcon,
-                                    { backgroundColor: 'rgba(255,255,255,0.18)' },
-                                ]}
-                            >
-                                <Ionicons name="heart" size={20} color={Colors.white} />
-                            </View>
-                            <Text style={styles.quickTileLabel}>Saved</Text>
-                            <Text style={styles.quickTileSub}>Your favourites</Text>
-                        </TouchableOpacity>
-                    </View>
-                </Animated.View>
-
-                {/* ── Recent Bookings — from API ── */}
-                <Animated.View style={[styles.bookingsCard, { opacity: headerFade }]}>
-                    <View style={styles.bookingsCardHeader}>
-                        <View style={styles.sectionTitleRow}>
-                            <View style={styles.sectionAccent} />
-                            <Text style={styles.sectionHeading}>Recent Bookings</Text>
-                        </View>
-                        <TouchableOpacity
-                            style={styles.viewAllBtn}
-                            onPress={() => navigation.navigate('bookings')}
-                        >
-                            <Text style={styles.viewAllText}>View All</Text>
-                            <Ionicons name="arrow-forward" size={13} color={Colors.primary} />
-                        </TouchableOpacity>
-                    </View>
-
-                    {recentBookings.length === 0 ? (
-                        <View style={styles.emptyBookings}>
-                            <Ionicons name="calendar-outline" size={36} color={Colors.border} />
-                            <Text style={styles.emptyBookingsText}>No bookings yet</Text>
-                        </View>
-                    ) : (
-                        recentBookings.map((b, i) => (
-                            <View key={b._id}>
-                                <BookingRow item={b} index={i} />
-                                {i < recentBookings.length - 1 && (
-                                    <View style={styles.bookingDivider} />
-                                )}
-                            </View>
-                        ))
-                    )}
-                </Animated.View>
-
                 {/* ── Account menu ── */}
+                <MenuSection title="QUICK ACTIONS" items={quickActions} />
                 <MenuSection title="ACCOUNT" items={accountItems} />
                 <MenuSection title="PREFERENCES" items={preferenceItems} />
 
