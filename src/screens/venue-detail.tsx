@@ -1394,7 +1394,9 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                 )}
                 <TouchableOpacity
                     style={s.ctaButton}
-                    onPress={() => isOwner ? navigation.navigate('addVenue') : setBookingVisible(true)}
+                    onPress={() => isOwner ? navigation.navigate('updateVenue',{
+                        venueId:venue._id
+                    }) : setBookingVisible(true)}
                     activeOpacity={0.85}
                 >
                     <Ionicons

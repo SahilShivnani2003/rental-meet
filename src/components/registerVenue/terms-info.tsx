@@ -55,6 +55,8 @@ const TERMS = [
     },
 ];
 
+const CONFIRMATION_HOURS: Array<1 | 2 | 3> = [1, 2, 3];
+
 interface Props {
     data: VenueFormData['terms'];
     onChange: (data: VenueFormData['terms']) => void;
@@ -64,6 +66,7 @@ interface Props {
 
 export default function Step7Terms({ data, onChange, onPrev, onSubmit }: Props) {
     const [submitting, setSubmitting] = useState(false);
+    const set = (patch: Partial<VenueFormData['terms']>) => onChange({ ...data, ...patch });
 
     const handleSubmit = async () => {
         if (!data.agreed) return;
@@ -81,6 +84,8 @@ export default function Step7Terms({ data, onChange, onPrev, onSubmit }: Props) 
             contentContainerStyle={{ paddingBottom: 20 }}
         >
             <StepHeader title="Step 7: Terms" current={7} />
+
+            {/* ── Info banner ── */}
             <View style={s.infoBanner}>
                 <Ionicons name="information-circle-outline" size={22} color={Colors.primary} />
                 <View style={{ flex: 1 }}>
@@ -90,6 +95,68 @@ export default function Step7Terms({ data, onChange, onPrev, onSubmit }: Props) 
                     </Text>
                 </View>
             </View>
+
+            {/* ── Confirmation hours ── */}
+            <View style={s.confirmCard}>
+                <View style={s.confirmHeader}>
+                    <View style={s.confirmIconWrap}>
+                        <Ionicons name="timer-outline" size={18} color={Colors.info} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={s.confirmTitle}>Booking Confirmation Time</Text>
+                        <Text style={s.confirmSub}>
+                            How long will you take to confirm a booking request?
+                        </Text>
+                    </View>
+                </View>
+
+                <View style={s.hoursRow}>
+                    {CONFIRMATION_HOURS.map(hr => {
+                        const active = data.confirmationHours === hr;
+                        return (
+                            <TouchableOpacity
+                                key={hr}
+                                style={[s.hourChip, active && s.hourChipActive]}
+                                onPress={() => set({ confirmationHours: hr })}
+                                activeOpacity={0.75}
+                            >
+                                <View style={[s.hourCircle, active && s.hourCircleActive]}>
+                                    <Text style={[s.hourNum, active && s.hourNumActive]}>{hr}</Text>
+                                </View>
+                                <Text style={[s.hourLabel, active && s.hourLabelActive]}>
+                                    {hr === 1 ? '1 Hour' : `${hr} Hours`}
+                                </Text>
+                                {active && (
+                                    <Ionicons
+                                        name="checkmark-circle"
+                                        size={16}
+                                        color={Colors.info}
+                                        style={{ marginLeft: 4 }}
+                                    />
+                                )}
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+
+                <View style={s.confirmNote}>
+                    <Ionicons
+                        name="information-circle-outline"
+                        size={13}
+                        color={Colors.charcoalLight}
+                    />
+                    <Text style={s.confirmNoteText}>
+                        You must confirm or decline booking requests within{' '}
+                        <Text style={s.confirmNoteHighlight}>
+                            {data.confirmationHours}{' '}
+                            {data.confirmationHours === 1 ? 'hour' : 'hours'}
+                        </Text>{' '}
+                        of receiving them.
+                    </Text>
+                </View>
+            </View>
+
+            {/* ── Terms box ── */}
             <View style={s.termsBox}>
                 <Text style={s.agreementTitle}>RentalMeet Venue Owner Agreement</Text>
                 <ScrollView
@@ -110,9 +177,11 @@ export default function Step7Terms({ data, onChange, onPrev, onSubmit }: Props) 
                     ))}
                 </ScrollView>
             </View>
+
+            {/* ── Agree checkbox ── */}
             <TouchableOpacity
                 style={[s.checkRow, data.agreed && s.checkRowActive]}
-                onPress={() => onChange({ agreed: !data.agreed })}
+                onPress={() => set({ agreed: !data.agreed })}
                 activeOpacity={0.8}
             >
                 <View style={[s.checkbox, data.agreed && s.checkboxActive]}>
@@ -123,11 +192,14 @@ export default function Step7Terms({ data, onChange, onPrev, onSubmit }: Props) 
                     information provided is accurate and truthful.
                 </Text>
             </TouchableOpacity>
+
+            {/* ── Nav ── */}
             <View style={s.navRow}>
                 <TouchableOpacity style={s.prevBtn} onPress={onPrev} activeOpacity={0.8}>
                     <Ionicons name="chevron-back" size={15} color={Colors.primary} />
                     <Text style={s.prevText}>Previous</Text>
                 </TouchableOpacity>
+
                 <TouchableOpacity
                     style={[s.submitBtn, !data.agreed && s.submitBtnDisabled]}
                     onPress={handleSubmit}
@@ -171,6 +243,106 @@ const s = StyleSheet.create({
     },
     infoTitle: { fontSize: Typography.md, fontWeight: Typography.bold, color: Colors.charcoal },
     infoSub: { fontSize: Typography.sm, color: Colors.charcoalLight, marginTop: 2 },
+
+    // ── Confirmation hours card ──
+    confirmCard: {
+        marginHorizontal: Spacing.lg,
+        marginTop: Spacing.md,
+        padding: Spacing.md,
+        backgroundColor: Colors.surface,
+        borderRadius: Radii.md,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        ...Shadows.card,
+    },
+    confirmHeader: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: Spacing.sm,
+        marginBottom: Spacing.md,
+    },
+    confirmIconWrap: {
+        width: 34,
+        height: 34,
+        borderRadius: Radii.sm,
+        backgroundColor: Colors.infoLight,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    confirmTitle: {
+        fontSize: Typography.md,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal,
+    },
+    confirmSub: {
+        fontSize: Typography.sm,
+        color: Colors.charcoalLight,
+        marginTop: 2,
+    },
+    hoursRow: {
+        flexDirection: 'row',
+        gap: Spacing.sm,
+        marginBottom: Spacing.sm,
+    },
+    hourChip: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.xs,
+        borderRadius: Radii.md,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        backgroundColor: Colors.background,
+        gap: Spacing.xs,
+    },
+    hourChipActive: {
+        borderColor: Colors.info ?? Colors.primary,
+        backgroundColor: Colors.infoLight ?? Colors.primaryLight,
+    },
+    hourCircle: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.border,
+    },
+    hourCircleActive: { backgroundColor: Colors.info ?? Colors.primary },
+    hourNum: {
+        fontSize: Typography.base,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoalLight,
+    },
+    hourNumActive: { color: Colors.white },
+    hourLabel: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoalLight,
+    },
+    hourLabelActive: { color: Colors.info ?? Colors.primary },
+    confirmNote: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: Spacing.xs,
+        backgroundColor: Colors.background,
+        borderRadius: Radii.sm,
+        padding: Spacing.sm,
+        marginTop: Spacing.xs,
+    },
+    confirmNoteText: {
+        flex: 1,
+        fontSize: Typography.xs,
+        color: Colors.charcoalLight,
+        lineHeight: 16,
+    },
+    confirmNoteHighlight: {
+        fontWeight: Typography.bold,
+        color: Colors.charcoalMid,
+    },
+
+    // ── Terms box ──
     termsBox: {
         marginHorizontal: Spacing.lg,
         marginTop: Spacing.md,
@@ -179,7 +351,7 @@ const s = StyleSheet.create({
         borderRadius: Radii.md,
         borderWidth: 1,
         borderColor: Colors.border,
-        height: 320,
+        height: 300,
         ...Shadows.card,
     },
     agreementTitle: {
@@ -198,6 +370,8 @@ const s = StyleSheet.create({
     termPoint: { flexDirection: 'row', gap: Spacing.xs, marginBottom: 4 },
     bullet: { fontSize: Typography.base, color: Colors.charcoalLight },
     termText: { flex: 1, fontSize: Typography.sm, color: Colors.charcoalLight, lineHeight: 18 },
+
+    // ── Agree checkbox ──
     checkRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -224,7 +398,14 @@ const s = StyleSheet.create({
         marginTop: 1,
     },
     checkboxActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-    checkText: { flex: 1, fontSize: Typography.base, color: Colors.charcoalMid, lineHeight: 19 },
+    checkText: {
+        flex: 1,
+        fontSize: Typography.base,
+        color: Colors.charcoalMid,
+        lineHeight: 19,
+    },
+
+    // ── Nav ──
     navRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',

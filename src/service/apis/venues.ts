@@ -20,7 +20,7 @@ export const venueAPI = {
 
     getById: (id: string) => apiClient.get(`venues/${id}`),
 
-    updateVenue: (data: any, id: string) => apiClient.put(`venues/${id}`, data, {
+    updateVenue: (id: string, data: any) => apiClient.put(`venues/${id}`, data, {
         headers: getAuthHeader()
     }),
 

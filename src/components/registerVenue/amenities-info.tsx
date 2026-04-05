@@ -10,60 +10,35 @@ import {
     NavButtons,
     PickerRow,
 } from '../UI/shared-components';
-import { VenueFormData } from '../../types/venue.type';
+import {
+    VenueFormData,
+    BasicAmenityForm,
+    BeverageForm,
+    FoodPackForm,
+    ThaliForm,
+    AdditionalForm,
+    FacilityForm,
+} from '../../types/venue.type';
 
-const BASIC_AMENITIES = [
-    { id: 'firstAid', name: 'First Aid Box', isDefault: true },
-    { id: 'fireSafety', name: 'Fire & Safety', isDefault: true },
-    { id: 'wifi', name: 'High-Speed WiFi' },
-    { id: 'ac', name: 'Air Conditioning' },
-    { id: 'projector', name: 'Projector' },
-    { id: 'projScreen', name: 'Projection Screen' },
-    { id: 'whiteboard', name: 'Whiteboard' },
-    { id: 'soundSystem', name: 'Sound System' },
-    { id: 'mic', name: 'Microphone' },
-    { id: 'tv', name: 'LED / Smart TV' },
-    { id: 'videoConf', name: 'Video Conferencing' },
-    { id: 'confPhone', name: 'Conference Phone' },
-    { id: 'seating', name: 'Comfortable Seating' },
-    { id: 'printing', name: 'Printing / Photocopy' },
+const THALI_TYPES = [
+    'Select Thali Type',
+    'North Indian Thali',
+    'Punjabi Thali',
+    'Non-Veg Thali',
+    'South Indian Thali',
+    'Gujarati Thali',
+    'Rajasthani Thali',
+    'Bengali Thali',
+    'Maharashtrian Thali',
+    'Kashmiri Thali',
+    'Simple/Daily Thali',
+    'Protein-Packed Thali',
+    'Festive/Banquet Thali',
 ];
-const BEVERAGES = [
-    { id: 'tea', name: 'Tea', unit: 'Per Cup' },
-    { id: 'coffee', name: 'Coffee', unit: 'Per Cup' },
-    { id: 'water350', name: 'Water Bottle (350ml)', unit: 'Per Bottle' },
-    { id: 'water500', name: 'Water Bottle (500ml)', unit: 'Per Bottle' },
-    { id: 'water1l', name: 'Water Bottle (1 Ltr)', unit: 'Per Bottle' },
-    { id: 'water2l', name: 'Water Bottle (2 Ltr)', unit: 'Per Bottle' },
-    { id: 'dispenser', name: 'Water Dispenser (20 Ltr)', unit: 'Per Dispenser' },
-    { id: 'soft350', name: 'Soft Drink (350ml)', unit: 'Per Bottle' },
-    { id: 'soft750', name: 'Soft Drink (750ml)', unit: 'Per Bottle' },
-    { id: 'soft1125', name: 'Soft Drink (1/1.25 Ltr)', unit: 'Per Bottle' },
-    { id: 'soft2225', name: 'Soft Drink (2/2.25 Ltr)', unit: 'Per Bottle' },
-];
-const ADDITIONAL = [
-    'Separate Washrooms',
-    'Power Backup',
-    'Security Personnel',
-    'Daily Cleaning',
-    'Reception Service',
-    'Storage Space',
-    'Valet Parking',
-    'Wheelchair Access',
-    'Elevator',
-];
-const SNACK_PACKS = [{ id: 'snack3', name: 'Snacks Pack (3 Items)' }];
-const BREAKFAST_PACKS = [
-    { id: 'bp1', name: 'Breakfast Pack (1 Item)' },
-    { id: 'bp2', name: 'Breakfast Pack (2 Items)' },
-    { id: 'bp3', name: 'Breakfast Pack (3 Items)' },
-];
-const THALI_TYPES = ['Select Thali Type', 'Regular', 'Special', 'Maharaja'];
-const RATE_TYPES = ['Fixed', 'Per Use'];
-const PRICING_OPTIONS = ['Select', 'Included', 'Paid'];
 
-type AmenityData = VenueFormData['amenities']['amenityData'][string];
-type PricingType = 'included' | 'paid';
+const THALI_CATEGORIES = ['Select Category', 'Regular Thali', 'Special Thali', 'Maharaja Thali'];
+
+const RATE_TYPES: Array<'Fixed' | 'Per Use'> = ['Fixed', 'Per Use'];
 
 interface Props {
     data: VenueFormData['amenities'];
@@ -75,116 +50,48 @@ interface Props {
 export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props) {
     const set = (patch: Partial<VenueFormData['amenities']>) => onChange({ ...data, ...patch });
 
-    // ── Basic amenity helpers ─────────────────────────────────────────────────
-    const toggleBasic = (id: string, isDefault?: boolean) => {
-        if (isDefault) return;
-        const nowSelected = !data.basicSelected.includes(id);
-        const basicSelected = nowSelected
-            ? [...data.basicSelected, id]
-            : data.basicSelected.filter(x => x !== id);
-        const amenityData =
-            nowSelected && !data.amenityData[id]
-                ? {
-                      ...data.amenityData,
-                      [id]: {
-                          pricing: 'included' as PricingType,
-                          rate: '',
-                          rateType: 'Fixed',
-                          rateTypeOpen: false,
-                      },
-                  }
-                : data.amenityData;
-        set({ basicSelected, amenityData });
-    };
+    // ── Generic array updaters ────────────────────────────────────────────────
 
-    const setAmenityPricing = (id: string, pricing: PricingType) =>
+    const updateBasic = (idx: number, patch: Partial<BasicAmenityForm>) =>
+        set({ basic: data.basic.map((a, i) => (i === idx ? { ...a, ...patch } : a)) });
+
+    const updateBeverage = (idx: number, patch: Partial<BeverageForm>) =>
+        set({ beverages: data.beverages.map((b, i) => (i === idx ? { ...b, ...patch } : b)) });
+
+    const updateFood = (idx: number, patch: Partial<FoodPackForm>) =>
         set({
-            amenityData: {
-                ...data.amenityData,
-                [id]: { ...data.amenityData[id], pricing, rate: '' },
-            },
+            refreshmentFood: data.refreshmentFood.map((f, i) =>
+                i === idx ? { ...f, ...patch } : f,
+            ),
         });
 
-    const setAmenityRate = (id: string, rate: string) =>
-        set({ amenityData: { ...data.amenityData, [id]: { ...data.amenityData[id], rate } } });
+    const updateThali = (idx: number, patch: Partial<ThaliForm>) =>
+        set({ lunchThalis: data.lunchThalis.map((t, i) => (i === idx ? { ...t, ...patch } : t)) });
 
-    const toggleRateTypeOpen = (id: string) =>
+    const removeThali = (idx: number) =>
+        set({ lunchThalis: data.lunchThalis.filter((_, i) => i !== idx) });
+
+    const addThali = (thaliType: string) => {
+        if (thaliType === THALI_TYPES[0]) return;
         set({
-            amenityData: {
-                ...data.amenityData,
-                [id]: {
-                    ...data.amenityData[id],
-                    rateTypeOpen: !data.amenityData[id]?.rateTypeOpen,
-                },
-            },
-        });
-
-    const setAmenityRateType = (id: string, rateType: string) =>
-        set({
-            amenityData: {
-                ...data.amenityData,
-                [id]: { ...data.amenityData[id], rateType, rateTypeOpen: false },
-            },
-        });
-
-    // ── Beverage helpers ──────────────────────────────────────────────────────
-    const toggleBeverage = (id: string) =>
-        set({
-            beverageData: {
-                ...data.beverageData,
-                [id]: {
-                    checked: !data.beverageData[id]?.checked,
-                    rate: data.beverageData[id]?.rate || '',
-                    brand: data.beverageData[id]?.brand || '',
-                },
-            },
-        });
-
-    const updateBev = (id: string, field: 'rate' | 'brand', value: string) =>
-        set({
-            beverageData: {
-                ...data.beverageData,
-                [id]: { ...data.beverageData[id], [field]: value },
-            },
-        });
-
-    // ── Additional ────────────────────────────────────────────────────────────
-    const toggleAdditional = (name: string) =>
-        set({
-            additionalSelected: data.additionalSelected.includes(name)
-                ? data.additionalSelected.filter(x => x !== name)
-                : [...data.additionalSelected, name],
-        });
-
-    // ── Food pack helpers ─────────────────────────────────────────────────────
-    type PackKey = 'snackData' | 'breakfastData';
-
-    const togglePack = (id: string, packKey: PackKey) => {
-        const prev = data[packKey];
-        set({
-            [packKey]: {
-                ...prev,
-                [id]: {
-                    checked: !prev[id]?.checked,
-                    rate: prev[id]?.rate || '',
-                    items: prev[id]?.items || '',
-                },
-            },
+            lunchThalis: [
+                ...data.lunchThalis,
+                { thaliType, category: '', ratePerPlate: '', items: '' },
+            ],
         });
     };
 
-    const updatePack = (id: string, field: 'rate' | 'items', value: string, packKey: PackKey) => {
-        set({ [packKey]: { ...data[packKey], [id]: { ...data[packKey][id], [field]: value } } });
-    };
+    const updateAdditional = (idx: number, patch: Partial<AdditionalForm>) =>
+        set({ additional: data.additional.map((a, i) => (i === idx ? { ...a, ...patch } : a)) });
 
-    // ── Thali helpers ─────────────────────────────────────────────────────────
-    const addThali = (type: string) => {
-        if (type === THALI_TYPES[0]) return;
-        set({ thalis: [...data.thalis, { type, rate: '', items: '' }] });
-    };
-    const removeThali = (idx: number) => set({ thalis: data.thalis.filter((_, i) => i !== idx) });
-    const updateThali = (idx: number, field: 'type' | 'rate' | 'items', value: string) =>
-        set({ thalis: data.thalis.map((t, i) => (i === idx ? { ...t, [field]: value } : t)) });
+    const updateFacility = (key: 'kitchenAccess' | 'diningArea', patch: Partial<FacilityForm>) =>
+        set({ [key]: { ...data[key], ...patch } });
+
+    // ── Sections ──────────────────────────────────────────────────────────────
+
+    const snacks = data.refreshmentFood.filter(f => f.category === 'Snack');
+    const breakfast = data.refreshmentFood.filter(f => f.category === 'Breakfast');
+    const foodIdx = (item: FoodPackForm) => data.refreshmentFood.indexOf(item);
 
     return (
         <ScrollView
@@ -200,123 +107,97 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                     title="Basic Amenities"
                     subtitle="Select amenities and specify if they are included or paid"
                 />
-                {BASIC_AMENITIES.map(item => {
-                    const selected = data.basicSelected.includes(item.id);
-                    const d = data.amenityData[item.id];
-                    return (
-                        <View key={item.id} style={[s.amenCard, selected && s.amenCardActive]}>
-                            <TouchableOpacity
-                                style={s.amenRow}
-                                onPress={() => toggleBasic(item.id, item.isDefault)}
-                                activeOpacity={0.75}
+                {data.basic.map((item, idx) => (
+                    <View key={item.id} style={[s.amenCard, item.selected && s.amenCardActive]}>
+                        <TouchableOpacity
+                            style={s.amenRow}
+                            onPress={() =>
+                                !item.locked && updateBasic(idx, { selected: !item.selected })
+                            }
+                            activeOpacity={item.locked ? 1 : 0.75}
+                        >
+                            {/* Checkbox */}
+                            <View
+                                style={[
+                                    s.checkbox,
+                                    item.selected && s.checkboxActive,
+                                    item.locked && s.checkboxLocked,
+                                ]}
                             >
-                                <View style={[s.checkbox, selected && s.checkboxActive]}>
-                                    {selected && (
+                                {item.locked ? (
+                                    <Ionicons name="lock-closed" size={10} color={Colors.white} />
+                                ) : (
+                                    item.selected && (
                                         <Ionicons name="checkmark" size={11} color={Colors.white} />
-                                    )}
-                                </View>
-                                <Text style={[s.amenText, selected && s.amenTextActive]}>
-                                    {item.name}
-                                </Text>
-                                {item.isDefault && (
-                                    <View style={s.defaultBadge}>
-                                        <Ionicons
-                                            name="checkmark-circle"
-                                            size={11}
-                                            color={Colors.success}
-                                        />
-                                        <Text style={s.defaultBadgeText}>Included (Default)</Text>
-                                    </View>
+                                    )
                                 )}
-                            </TouchableOpacity>
-                            {selected && d && (
-                                <View style={s.amenExpanded}>
-                                    <View style={s.radioRow}>
-                                        <TouchableOpacity
-                                            style={s.radioBtn}
-                                            onPress={() => setAmenityPricing(item.id, 'included')}
-                                            activeOpacity={0.7}
-                                        >
-                                            <View
-                                                style={[
-                                                    s.radioOuter,
-                                                    d.pricing === 'included' && s.radioOuterActive,
-                                                ]}
-                                            >
-                                                {d.pricing === 'included' && (
-                                                    <View style={s.radioInner} />
-                                                )}
-                                            </View>
-                                            <Text
-                                                style={[
-                                                    s.radioLabel,
-                                                    d.pricing === 'included' && s.radioLabelActive,
-                                                ]}
-                                            >
-                                                Included
-                                            </Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity
-                                            style={s.radioBtn}
-                                            onPress={() => setAmenityPricing(item.id, 'paid')}
-                                            activeOpacity={0.7}
-                                        >
-                                            <View
-                                                style={[
-                                                    s.radioOuter,
-                                                    d.pricing === 'paid' && s.radioOuterPaid,
-                                                ]}
-                                            >
-                                                {d.pricing === 'paid' && (
-                                                    <View
-                                                        style={[s.radioInner, s.radioInnerPaid]}
-                                                    />
-                                                )}
-                                            </View>
-                                            <Text
-                                                style={[
-                                                    s.radioLabel,
-                                                    d.pricing === 'paid' && s.radioLabelPaid,
-                                                ]}
-                                            >
-                                                Paid
-                                            </Text>
-                                        </TouchableOpacity>
-                                        {d.pricing === 'paid' && (
-                                            <View style={s.rateRow}>
-                                                <Text style={s.rateLabel}>Rate:</Text>
-                                                <View style={s.rateInputBox}>
-                                                    <Text style={s.rupee}>₹</Text>
-                                                    <TextInput
-                                                        style={s.rateInputText}
-                                                        placeholder="0"
-                                                        placeholderTextColor={Colors.charcoalLight}
-                                                        value={d.rate}
-                                                        onChangeText={v =>
-                                                            setAmenityRate(item.id, v)
-                                                        }
-                                                        keyboardType="numeric"
-                                                    />
-                                                </View>
-                                                <View style={s.miniPickerWrap}>
-                                                    <PickerRow
-                                                        value={d.rateType}
-                                                        options={RATE_TYPES}
-                                                        open={d.rateTypeOpen}
-                                                        onToggle={() => toggleRateTypeOpen(item.id)}
-                                                        onSelect={v =>
-                                                            setAmenityRateType(item.id, v)
-                                                        }
-                                                    />
-                                                </View>
-                                            </View>
-                                        )}
-                                    </View>
+                            </View>
+
+                            <Text style={[s.amenText, item.selected && s.amenTextActive]}>
+                                {item.name}
+                            </Text>
+
+                            {item.locked && (
+                                <View style={s.lockedBadge}>
+                                    <Ionicons
+                                        name="shield-checkmark"
+                                        size={11}
+                                        color={Colors.danger}
+                                    />
+                                    <Text style={s.lockedBadgeText}>Mandatory</Text>
                                 </View>
                             )}
-                        </View>
-                    );
-                })}
+                            {item.isDefault && !item.locked && (
+                                <View style={s.defaultBadge}>
+                                    <Ionicons
+                                        name="checkmark-circle"
+                                        size={11}
+                                        color={Colors.success}
+                                    />
+                                    <Text style={s.defaultBadgeText}>Default</Text>
+                                </View>
+                            )}
+                        </TouchableOpacity>
+
+                        {/* Pricing — only for non-locked selected items */}
+                        {item.selected && !item.locked && (
+                            <View style={s.amenExpanded}>
+                                <View style={s.radioRow}>
+                                    <PricingRadio
+                                        value={item.type}
+                                        onChange={v => updateBasic(idx, { type: v, rate: '' })}
+                                    />
+                                    {item.type === 'Paid' && (
+                                        <View style={s.rateRow}>
+                                            <Text style={s.rateLabel}>Rate:</Text>
+                                            <View style={s.rateInputBox}>
+                                                <Text style={s.rupee}>₹</Text>
+                                                <TextInput
+                                                    style={s.rateInputText}
+                                                    placeholder="0"
+                                                    placeholderTextColor={Colors.charcoalLight}
+                                                    value={item.rate}
+                                                    onChangeText={v =>
+                                                        updateBasic(idx, { rate: v })
+                                                    }
+                                                    keyboardType="numeric"
+                                                />
+                                            </View>
+                                            <View style={s.miniPickerWrap}>
+                                                <RateTypePicker
+                                                    value={item.rateType}
+                                                    onChange={v =>
+                                                        updateBasic(idx, { rateType: v })
+                                                    }
+                                                />
+                                            </View>
+                                        </View>
+                                    )}
+                                </View>
+                            </View>
+                        )}
+                    </View>
+                ))}
             </SectionCard>
 
             {/* ── Beverages ── */}
@@ -328,64 +209,56 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                     iconColor={Colors.info}
                     bgColor={Colors.infoLight}
                 />
-                {BEVERAGES.map(bev => {
-                    const d = data.beverageData[bev.id];
-                    const checked = !!d?.checked;
-                    return (
-                        <View key={bev.id}>
-                            <TouchableOpacity
-                                style={[s.amenCard, checked && s.amenCardActive]}
-                                onPress={() => toggleBeverage(bev.id)}
-                                activeOpacity={0.75}
-                            >
-                                <View style={s.amenRow}>
-                                    <View style={[s.checkbox, checked && s.checkboxActive]}>
-                                        {checked && (
-                                            <Ionicons
-                                                name="checkmark"
-                                                size={11}
-                                                color={Colors.white}
-                                            />
-                                        )}
-                                    </View>
-                                    <Text style={[s.amenText, checked && s.amenTextActive]}>
-                                        {bev.name}
-                                    </Text>
-                                    <Text style={s.unitBadge}>{bev.unit}</Text>
+                {data.beverages.map((bev, idx) => (
+                    <View key={bev.id}>
+                        <TouchableOpacity
+                            style={[s.amenCard, bev.selected && s.amenCardActive]}
+                            onPress={() => updateBeverage(idx, { selected: !bev.selected })}
+                            activeOpacity={0.75}
+                        >
+                            <View style={s.amenRow}>
+                                <View style={[s.checkbox, bev.selected && s.checkboxActive]}>
+                                    {bev.selected && (
+                                        <Ionicons name="checkmark" size={11} color={Colors.white} />
+                                    )}
                                 </View>
-                            </TouchableOpacity>
-                            {checked && (
-                                <View style={s.expandedFields}>
-                                    <View style={s.fieldRow}>
-                                        <View style={{ flex: 1 }}>
-                                            <Field
-                                                label="Rate (₹)"
-                                                placeholder="0.00"
-                                                icon="cash-outline"
-                                                value={d?.rate || ''}
-                                                onChangeText={(v: string) =>
-                                                    updateBev(bev.id, 'rate', v)
-                                                }
-                                                keyboardType="numeric"
-                                            />
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <Field
-                                                label="Brand (optional)"
-                                                placeholder="e.g. Bisleri"
-                                                icon="pricetag-outline"
-                                                value={d?.brand || ''}
-                                                onChangeText={(v: string) =>
-                                                    updateBev(bev.id, 'brand', v)
-                                                }
-                                            />
-                                        </View>
+                                <Text style={[s.amenText, bev.selected && s.amenTextActive]}>
+                                    {bev.name}
+                                </Text>
+                                <Text style={s.unitBadge}>{bev.unit}</Text>
+                            </View>
+                        </TouchableOpacity>
+                        {bev.selected && (
+                            <View style={s.expandedFields}>
+                                <View style={s.fieldRow}>
+                                    <View style={{ flex: 1 }}>
+                                        <Field
+                                            label="Rate (₹)"
+                                            placeholder="0.00"
+                                            icon="cash-outline"
+                                            value={bev.ratePerUnit}
+                                            onChangeText={(v: string) =>
+                                                updateBeverage(idx, { ratePerUnit: v })
+                                            }
+                                            keyboardType="numeric"
+                                        />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Field
+                                            label="Brand (optional)"
+                                            placeholder="e.g. Bisleri"
+                                            icon="pricetag-outline"
+                                            value={bev.brand}
+                                            onChangeText={(v: string) =>
+                                                updateBeverage(idx, { brand: v })
+                                            }
+                                        />
                                     </View>
                                 </View>
-                            )}
-                        </View>
-                    );
-                })}
+                            </View>
+                        )}
+                    </View>
+                ))}
             </SectionCard>
 
             {/* ── Food Options ── */}
@@ -398,20 +271,20 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                     bgColor={Colors.successLight}
                 />
 
+                {/* Snacks */}
                 <Text style={s.foodGroupLabel}>Snacks</Text>
-                {SNACK_PACKS.map(pack => {
-                    const d = data.snackData[pack.id];
-                    const checked = !!d?.checked;
+                {snacks.map(pack => {
+                    const idx = foodIdx(pack);
                     return (
                         <View key={pack.id}>
                             <TouchableOpacity
-                                style={[s.amenCard, checked && s.amenCardActive]}
-                                onPress={() => togglePack(pack.id, 'snackData')}
+                                style={[s.amenCard, pack.selected && s.amenCardActive]}
+                                onPress={() => updateFood(idx, { selected: !pack.selected })}
                                 activeOpacity={0.75}
                             >
                                 <View style={s.amenRow}>
-                                    <View style={[s.checkbox, checked && s.checkboxActive]}>
-                                        {checked && (
+                                    <View style={[s.checkbox, pack.selected && s.checkboxActive]}>
+                                        {pack.selected && (
                                             <Ionicons
                                                 name="checkmark"
                                                 size={11}
@@ -419,12 +292,12 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                                             />
                                         )}
                                     </View>
-                                    <Text style={[s.amenText, checked && s.amenTextActive]}>
+                                    <Text style={[s.amenText, pack.selected && s.amenTextActive]}>
                                         {pack.name}
                                     </Text>
                                 </View>
                             </TouchableOpacity>
-                            {checked && (
+                            {pack.selected && (
                                 <View style={s.expandedFields}>
                                     <View style={s.fieldRow}>
                                         <View style={{ flex: 1 }}>
@@ -432,9 +305,9 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                                                 label="Rate per plate (₹)"
                                                 placeholder="0"
                                                 icon="cash-outline"
-                                                value={d?.rate || ''}
+                                                value={pack.ratePerPlate}
                                                 onChangeText={(v: string) =>
-                                                    updatePack(pack.id, 'rate', v, 'snackData')
+                                                    updateFood(idx, { ratePerPlate: v })
                                                 }
                                                 keyboardType="numeric"
                                             />
@@ -444,9 +317,9 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                                                 label="Item names"
                                                 placeholder="Samosa, Kachori..."
                                                 icon="list-outline"
-                                                value={d?.items || ''}
+                                                value={pack.items}
                                                 onChangeText={(v: string) =>
-                                                    updatePack(pack.id, 'items', v, 'snackData')
+                                                    updateFood(idx, { items: v })
                                                 }
                                             />
                                         </View>
@@ -457,20 +330,20 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                     );
                 })}
 
+                {/* Breakfast */}
                 <Text style={[s.foodGroupLabel, { marginTop: Spacing.md }]}>Breakfast Packs</Text>
-                {BREAKFAST_PACKS.map(pack => {
-                    const d = data.breakfastData[pack.id];
-                    const checked = !!d?.checked;
+                {breakfast.map(pack => {
+                    const idx = foodIdx(pack);
                     return (
                         <View key={pack.id}>
                             <TouchableOpacity
-                                style={[s.amenCard, checked && s.amenCardActive]}
-                                onPress={() => togglePack(pack.id, 'breakfastData')}
+                                style={[s.amenCard, pack.selected && s.amenCardActive]}
+                                onPress={() => updateFood(idx, { selected: !pack.selected })}
                                 activeOpacity={0.75}
                             >
                                 <View style={s.amenRow}>
-                                    <View style={[s.checkbox, checked && s.checkboxActive]}>
-                                        {checked && (
+                                    <View style={[s.checkbox, pack.selected && s.checkboxActive]}>
+                                        {pack.selected && (
                                             <Ionicons
                                                 name="checkmark"
                                                 size={11}
@@ -478,12 +351,12 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                                             />
                                         )}
                                     </View>
-                                    <Text style={[s.amenText, checked && s.amenTextActive]}>
+                                    <Text style={[s.amenText, pack.selected && s.amenTextActive]}>
                                         {pack.name}
                                     </Text>
                                 </View>
                             </TouchableOpacity>
-                            {checked && (
+                            {pack.selected && (
                                 <View style={s.expandedFields}>
                                     <View style={s.fieldRow}>
                                         <View style={{ flex: 1 }}>
@@ -491,9 +364,9 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                                                 label="Rate (₹)"
                                                 placeholder="0"
                                                 icon="cash-outline"
-                                                value={d?.rate || ''}
+                                                value={pack.ratePerPlate}
                                                 onChangeText={(v: string) =>
-                                                    updatePack(pack.id, 'rate', v, 'breakfastData')
+                                                    updateFood(idx, { ratePerPlate: v })
                                                 }
                                                 keyboardType="numeric"
                                             />
@@ -503,9 +376,9 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                                                 label="Item names"
                                                 placeholder="Poha, Idli..."
                                                 icon="list-outline"
-                                                value={d?.items || ''}
+                                                value={pack.items}
                                                 onChangeText={(v: string) =>
-                                                    updatePack(pack.id, 'items', v, 'breakfastData')
+                                                    updateFood(idx, { items: v })
                                                 }
                                             />
                                         </View>
@@ -516,72 +389,42 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                     );
                 })}
 
+                {/* Lunch Thalis */}
                 <Text style={[s.foodGroupLabel, { marginTop: Spacing.md }]}>Lunch Thalis</Text>
-                <Text style={s.foodGroupSub}>
-                    Select thali type, then choose categories (Regular/Special/Maharaja)
-                </Text>
+                <Text style={s.foodGroupSub}>Select thali type and add rate + items</Text>
                 <ThaliAddRow onAdd={addThali} />
-                {data.thalis.length === 0 ? (
+                {data.lunchThalis.length === 0 ? (
                     <View style={s.emptyThali}>
                         <Text style={s.emptyThaliText}>
                             No thalis added yet. Select from dropdown above.
                         </Text>
                     </View>
                 ) : (
-                    data.thalis.map((thali, idx) => (
-                        <View key={idx} style={s.expandedFields}>
-                            <View style={s.thaliHeader}>
-                                <Text style={s.thaliType}>{thali.type} Thali</Text>
-                                <TouchableOpacity onPress={() => removeThali(idx)} hitSlop={6}>
-                                    <Ionicons name="close-circle" size={18} color={Colors.danger} />
-                                </TouchableOpacity>
-                            </View>
-                            <View style={s.fieldRow}>
-                                <View style={{ flex: 1 }}>
-                                    <Field
-                                        label="Rate (₹)"
-                                        placeholder="0"
-                                        icon="cash-outline"
-                                        value={thali.rate}
-                                        onChangeText={v => updateThali(idx, 'rate', v)}
-                                        keyboardType="numeric"
-                                    />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Field
-                                        label="Item names"
-                                        placeholder="Dal, Sabzi, Roti..."
-                                        icon="list-outline"
-                                        value={thali.items}
-                                        onChangeText={v => updateThali(idx, 'items', v)}
-                                    />
-                                </View>
-                            </View>
-                        </View>
+                    data.lunchThalis.map((thali, idx) => (
+                        <ThaliCard
+                            key={idx}
+                            thali={thali}
+                            idx={idx}
+                            onUpdate={updateThali}
+                            onRemove={removeThali}
+                        />
                     ))
                 )}
 
+                {/* Kitchen & Dining */}
                 <View style={[s.fieldRow, { marginTop: Spacing.md }]}>
                     <View style={{ flex: 1 }}>
                         <FacilityToggle
                             label="Kitchen Access"
-                            available={data.kitchenAvail}
-                            onToggle={() => set({ kitchenAvail: !data.kitchenAvail })}
-                            pricing={data.kitchenPricing}
-                            open={false}
-                            onPricingToggle={() => {}}
-                            onPricingSelect={v => set({ kitchenPricing: v })}
+                            data={data.kitchenAccess}
+                            onChange={p => updateFacility('kitchenAccess', p)}
                         />
                     </View>
                     <View style={{ flex: 1 }}>
                         <FacilityToggle
                             label="Dining Area"
-                            available={data.diningAvail}
-                            onToggle={() => set({ diningAvail: !data.diningAvail })}
-                            pricing={data.diningPricing}
-                            open={false}
-                            onPricingToggle={() => {}}
-                            onPricingSelect={v => set({ diningPricing: v })}
+                            data={data.diningArea}
+                            onChange={p => updateFacility('diningArea', p)}
                         />
                     </View>
                 </View>
@@ -592,32 +435,63 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                 <SectionTitle
                     icon="build-outline"
                     title="Additional Facilities"
-                    subtitle="Select facilities available at your venue"
+                    subtitle="Select facilities and specify if they are included or paid"
                     iconColor={Colors.warning}
                     bgColor={Colors.warningLight}
                 />
-                {ADDITIONAL.map(item => {
-                    const selected = data.additionalSelected.includes(item);
-                    return (
+                {data.additional.map((item, idx) => (
+                    <View key={item.name} style={[s.amenCard, item.selected && s.amenCardActive]}>
                         <TouchableOpacity
-                            key={item}
-                            style={[s.amenCard, selected && s.amenCardActive]}
-                            onPress={() => toggleAdditional(item)}
+                            style={s.amenRow}
+                            onPress={() =>
+                                updateAdditional(idx, {
+                                    selected: !item.selected,
+                                    type: 'Included',
+                                    rate: '',
+                                })
+                            }
                             activeOpacity={0.75}
                         >
-                            <View style={s.amenRow}>
-                                <View style={[s.checkbox, selected && s.checkboxActive]}>
-                                    {selected && (
-                                        <Ionicons name="checkmark" size={11} color={Colors.white} />
-                                    )}
-                                </View>
-                                <Text style={[s.amenText, selected && s.amenTextActive]}>
-                                    {item}
-                                </Text>
+                            <View style={[s.checkbox, item.selected && s.checkboxActive]}>
+                                {item.selected && (
+                                    <Ionicons name="checkmark" size={11} color={Colors.white} />
+                                )}
                             </View>
+                            <Text style={[s.amenText, item.selected && s.amenTextActive]}>
+                                {item.name}
+                            </Text>
                         </TouchableOpacity>
-                    );
-                })}
+
+                        {item.selected && (
+                            <View style={s.amenExpanded}>
+                                <View style={s.radioRow}>
+                                    <PricingRadio
+                                        value={item.type}
+                                        onChange={v => updateAdditional(idx, { type: v, rate: '' })}
+                                    />
+                                </View>
+                                {item.type === 'Paid' && (
+                                    <View style={[s.rateRow, { marginTop: Spacing.xs }]}>
+                                        <Text style={s.rateLabel}>Rate:</Text>
+                                        <View style={s.rateInputBox}>
+                                            <Text style={s.rupee}>₹</Text>
+                                            <TextInput
+                                                style={s.rateInputText}
+                                                placeholder="0"
+                                                placeholderTextColor={Colors.charcoalLight}
+                                                value={item.rate}
+                                                onChangeText={v =>
+                                                    updateAdditional(idx, { rate: v })
+                                                }
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                    </View>
+                                )}
+                            </View>
+                        )}
+                    </View>
+                ))}
             </SectionCard>
 
             <NavButtons onPrev={onPrev} onNext={onNext} />
@@ -625,8 +499,68 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
     );
 }
 
-// ── Sub-components (unchanged from original) ──────────────────────────────────
+// ─── Shared sub-components ────────────────────────────────────────────────────
 
+/** Included / Paid radio pair */
+function PricingRadio({
+    value,
+    onChange,
+}: {
+    value: 'Included' | 'Paid';
+    onChange: (v: 'Included' | 'Paid') => void;
+}) {
+    return (
+        <>
+            <TouchableOpacity
+                style={s.radioBtn}
+                onPress={() => onChange('Included')}
+                activeOpacity={0.7}
+            >
+                <View style={[s.radioOuter, value === 'Included' && s.radioOuterActive]}>
+                    {value === 'Included' && <View style={s.radioInner} />}
+                </View>
+                <Text style={[s.radioLabel, value === 'Included' && s.radioLabelActive]}>
+                    Included
+                </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+                style={s.radioBtn}
+                onPress={() => onChange('Paid')}
+                activeOpacity={0.7}
+            >
+                <View style={[s.radioOuter, value === 'Paid' && s.radioOuterPaid]}>
+                    {value === 'Paid' && <View style={[s.radioInner, s.radioInnerPaid]} />}
+                </View>
+                <Text style={[s.radioLabel, value === 'Paid' && s.radioLabelPaid]}>Paid</Text>
+            </TouchableOpacity>
+        </>
+    );
+}
+
+/** Inline rate-type picker (Fixed / Per Use) */
+function RateTypePicker({
+    value,
+    onChange,
+}: {
+    value: 'Fixed' | 'Per Use';
+    onChange: (v: 'Fixed' | 'Per Use') => void;
+}) {
+    const [open, setOpen] = useState(false);
+    return (
+        <PickerRow
+            value={value}
+            options={RATE_TYPES}
+            open={open}
+            onToggle={() => setOpen(o => !o)}
+            onSelect={v => {
+                onChange(v as 'Fixed' | 'Per Use');
+                setOpen(false);
+            }}
+        />
+    );
+}
+
+/** Thali add row */
 function ThaliAddRow({ onAdd }: { onAdd: (type: string) => void }) {
     const [selected, setSelected] = useState(THALI_TYPES[0]);
     const [open, setOpen] = useState(false);
@@ -637,7 +571,7 @@ function ThaliAddRow({ onAdd }: { onAdd: (type: string) => void }) {
                     value={selected}
                     options={THALI_TYPES}
                     open={open}
-                    onToggle={() => setOpen(v => !v)}
+                    onToggle={() => setOpen(o => !o)}
                     onSelect={v => {
                         setSelected(v);
                         setOpen(false);
@@ -659,42 +593,125 @@ function ThaliAddRow({ onAdd }: { onAdd: (type: string) => void }) {
     );
 }
 
+/** Kitchen / Dining facility toggle */
 function FacilityToggle({
     label,
-    available,
-    onToggle,
-    pricing,
-    open,
-    onPricingToggle,
-    onPricingSelect,
+    data,
+    onChange,
 }: {
     label: string;
-    available: boolean;
-    onToggle: () => void;
-    pricing: string;
-    open: boolean;
-    onPricingToggle: () => void;
-    onPricingSelect: (v: string) => void;
+    data: FacilityForm;
+    onChange: (patch: Partial<FacilityForm>) => void;
 }) {
     return (
         <View style={ft.facilityCard}>
-            <TouchableOpacity style={ft.facilityRow} onPress={onToggle} activeOpacity={0.8}>
-                <View style={[ft.checkbox, available && ft.checkboxActive]}>
-                    {available && <Ionicons name="checkmark" size={11} color={Colors.white} />}
+            <TouchableOpacity
+                style={ft.facilityRow}
+                onPress={() => onChange({ available: !data.available, type: 'Included', rate: '' })}
+                activeOpacity={0.8}
+            >
+                <View style={[ft.checkbox, data.available && ft.checkboxActive]}>
+                    {data.available && <Ionicons name="checkmark" size={11} color={Colors.white} />}
                 </View>
-                <Text style={[ft.facilityLabel, available && ft.facilityLabelActive]}>{label}</Text>
+                <Text style={[ft.facilityLabel, data.available && ft.facilityLabelActive]}>
+                    {label}
+                </Text>
             </TouchableOpacity>
-            {available && (
-                <View style={{ marginTop: Spacing.xs }}>
-                    <PickerRow
-                        value={pricing}
-                        options={PRICING_OPTIONS}
-                        open={open}
-                        onToggle={onPricingToggle}
-                        onSelect={onPricingSelect}
+
+            {data.available && (
+                <>
+                    <View style={[s.radioRow, { marginTop: Spacing.xs }]}>
+                        <PricingRadio
+                            value={data.type}
+                            onChange={v => onChange({ type: v, rate: '' })}
+                        />
+                    </View>
+                    {data.type === 'Paid' && (
+                        <View style={[s.rateRow, { marginTop: Spacing.xs }]}>
+                            <Text style={s.rateLabel}>Rate:</Text>
+                            <View style={s.rateInputBox}>
+                                <Text style={s.rupee}>₹</Text>
+                                <TextInput
+                                    style={s.rateInputText}
+                                    placeholder="0"
+                                    placeholderTextColor={Colors.charcoalLight}
+                                    value={data.rate}
+                                    onChangeText={v => onChange({ rate: v })}
+                                    keyboardType="numeric"
+                                />
+                            </View>
+                        </View>
+                    )}
+                </>
+            )}
+        </View>
+    );
+}
+
+/** Individual thali card with type label, category picker, rate + items */
+function ThaliCard({
+    thali,
+    idx,
+    onUpdate,
+    onRemove,
+}: {
+    thali: ThaliForm;
+    idx: number;
+    onUpdate: (idx: number, patch: Partial<ThaliForm>) => void;
+    onRemove: (idx: number) => void;
+}) {
+    const [catOpen, setCatOpen] = useState(false);
+    const categoryValue = thali.category || THALI_CATEGORIES[0];
+
+    return (
+        <View style={s.expandedFields}>
+            {/* Header — thali type name + remove */}
+            <View style={s.thaliHeader}>
+                <Text style={s.thaliType}>{thali.thaliType}</Text>
+                <TouchableOpacity onPress={() => onRemove(idx)} hitSlop={6}>
+                    <Ionicons name="close-circle" size={18} color={Colors.danger} />
+                </TouchableOpacity>
+            </View>
+
+            {/* Category picker */}
+            <Text style={s.thaliCategoryLabel}>
+                Category <Text style={{ color: Colors.danger }}>*</Text>
+            </Text>
+            <View style={{ marginBottom: Spacing.sm }}>
+                <PickerRow
+                    value={categoryValue}
+                    options={THALI_CATEGORIES}
+                    open={catOpen}
+                    onToggle={() => setCatOpen(o => !o)}
+                    onSelect={v => {
+                        onUpdate(idx, { category: v === THALI_CATEGORIES[0] ? '' : v });
+                        setCatOpen(false);
+                    }}
+                />
+            </View>
+
+            {/* Rate + Items */}
+            <View style={s.fieldRow}>
+                <View style={{ flex: 1 }}>
+                    <Field
+                        label="Rate per plate (₹)"
+                        placeholder="0"
+                        icon="cash-outline"
+                        value={thali.ratePerPlate}
+                        onChangeText={v => onUpdate(idx, { ratePerPlate: v })}
+                        keyboardType="numeric"
                     />
                 </View>
-            )}
+                <View style={{ flex: 1 }}>
+                    <Field
+                        label="Item names"
+                        placeholder="Dal, Sabzi, Roti..."
+                        icon="list-outline"
+                        value={thali.items}
+                        onChangeText={v => onUpdate(idx, { items: v })}
+                    />
+                </View>
+            </View>
         </View>
     );
 }
@@ -735,6 +752,21 @@ const s = StyleSheet.create({
         flexShrink: 0,
     },
     checkboxActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+    checkboxLocked: { backgroundColor: Colors.danger, borderColor: Colors.danger },
+    lockedBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 3,
+        backgroundColor: Colors.dangerLight ?? '#fff0f0',
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 3,
+        borderRadius: Radii.full,
+    },
+    lockedBadgeText: {
+        fontSize: Typography.xs,
+        fontWeight: Typography.semiBold,
+        color: Colors.danger,
+    },
     defaultBadge: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -836,6 +868,14 @@ const s = StyleSheet.create({
         marginBottom: Spacing.xs,
     },
     thaliType: { fontSize: Typography.sm, fontWeight: Typography.bold, color: Colors.charcoalMid },
+    thaliCategoryLabel: {
+        fontSize: 11,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalMid,
+        letterSpacing: 0.6,
+        textTransform: 'uppercase',
+        marginBottom: 5,
+    },
 });
 
 const ft = StyleSheet.create({

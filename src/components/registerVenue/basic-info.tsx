@@ -24,12 +24,22 @@ interface VenueType {
 
 const CAPACITY_RANGES = [
     'Select capacity range',
-    '1–50',
-    '51–100',
-    '101–200',
-    '201–500',
-    '501–1000',
-    '1000+',
+    '10-20',
+    '20-30',
+    '30-40',
+    '40-50',
+    '50-100',
+    '100-200',
+    '200-300',
+    '300-400',
+    '400-500',
+    '500-600',
+    '600-700',
+    '700-800',
+    '800-1000',
+    '1000-1500',
+    '1500-2000',
+    'More than 2000',
 ];
 
 interface Props {
@@ -60,7 +70,7 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
         try {
             const response = await venueAPI.venueTypes();
             if (response?.success)
-                setVenueTypes(response.venueTypes.filter((t: VenueType) => t.isActive));
+            setVenueTypes(response.venueTypes.filter((t: VenueType) => t.isActive));
         } catch (e: any) {
             console.error('FETCH VENUE TYPE ERROR:', e);
         } finally {
@@ -192,7 +202,7 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
                                             <TouchableOpacity
                                                 key={type._id}
                                                 style={[s.item, selected && s.itemActive]}
-                                                onPress={() => toggleType(type._id)}
+                                                onPress={() => toggleType(type.name)}
                                                 activeOpacity={0.7}
                                             >
                                                 <View style={s.itemLeft}>
@@ -248,24 +258,6 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
                     )}
                 </View>
 
-                <Textarea
-                    label={`Venue Description (Max 200 words) *  —  ${wordCount}/200`}
-                    placeholder="Description.."
-                    value={data.description}
-                    onChangeText={v => {
-                        set({ description: v });
-                        setErrors(p => ({ ...p, description: '' }));
-                    }}
-                    numberOfLines={5}
-                    style={s.textarea}
-                />
-                {!!errors.description && (
-                    <View style={[s.errorRow, { marginTop: -Spacing.sm }]}>
-                        <Ionicons name="alert-circle" size={12} color={Colors.danger} />
-                        <Text style={s.errorText}>{errors.description}</Text>
-                    </View>
-                )}
-
                 <View style={s.pickerSection}>
                     <Text style={s.typeLabel}>
                         MAXIMUM CAPACITY <Text style={s.req}>*</Text>
@@ -301,6 +293,24 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
                     keyboardType="numeric"
                     error={errors.totalArea}
                 />
+
+                <Textarea
+                    label={`Venue Description (Max 200 words) *  —  ${wordCount}/200`}
+                    placeholder="Description.."
+                    value={data.description}
+                    onChangeText={v => {
+                        set({ description: v });
+                        setErrors(p => ({ ...p, description: '' }));
+                    }}
+                    numberOfLines={5}
+                    style={s.textarea}
+                />
+                {!!errors.description && (
+                    <View style={[s.errorRow, { marginTop: -Spacing.sm }]}>
+                        <Ionicons name="alert-circle" size={12} color={Colors.danger} />
+                        <Text style={s.errorText}>{errors.description}</Text>
+                    </View>
+                )}
             </SectionCard>
 
             <NavButtons

@@ -35,11 +35,12 @@ import { VenueFormData } from '../../types/venue.type';
 const ROLES = ['Select role', 'Owner', 'Manager', 'Partner', 'Director'];
 const BUSINESS_PROOF_TYPES = [
     'Select type',
-    'GST Certificate',
-    'Shop License',
+    'Business Regd. Certificate',
     'Trade License',
+    'Certificate of Incorporation',
     'Partnership Deed',
-    'Incorporation Certificate',
+    'Udyog Aadhar',
+    'Other',
 ];
 const ACCOUNT_TYPES = ['Select type', 'Savings', 'Current', 'Overdraft'];
 
@@ -92,7 +93,7 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
     const [sheetTarget, setSheetTarget] = React.useState<SheetTarget | null>(null);
     const sheetTargetRef = useRef<SheetTarget | null>(null);
 
-    // Always-current ref so async callbacks never close over stale data/onChange
+    // Always-current refs so async callbacks never close over stale data/onChange
     const dataRef = useRef(data);
     const onChangeRef = useRef(onChange);
     React.useEffect(() => {
@@ -102,7 +103,6 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
         onChangeRef.current = onChange;
     }, [onChange]);
 
-    // Safe setter that always reads latest data from ref
     const setLatest = useCallback((patch: Partial<VenueFormData['documents']>) => {
         onChangeRef.current({ ...dataRef.current, ...patch });
     }, []);
@@ -118,9 +118,7 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
     const uploadFile = useCallback(
         async (key: string, fileData: string, displayName: string) => {
             setUploading(p => ({ ...p, [key]: true }));
-            // Show filename immediately using latest data
             setLatest({ uploads: { ...dataRef.current.uploads, [key]: displayName } });
-
             try {
                 const isImage = fileData.startsWith('data:image');
                 const response = isImage
@@ -128,12 +126,10 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                     : await imageAPI.uploadDocument({ file: fileData, folder: 'documents' });
 
                 if (response?.success) {
-                    // Read uploadedDocs fresh from ref — not stale closure
                     const newDocs = [
                         ...dataRef.current.uploadedDocs.filter(d => d.uploadKey !== key),
                         { url: response.url, publicId: response.publicId, uploadKey: key },
                     ];
-                    // Merge both uploads + uploadedDocs in one call to avoid overwriting
                     setLatest({
                         uploads: { ...dataRef.current.uploads, [key]: displayName },
                         uploadedDocs: newDocs,
@@ -151,7 +147,7 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
         [setLatest],
     );
 
-    // ── Image picker result ───────────────────────────────────────────────────
+    // ── Image picker ──────────────────────────────────────────────────────────
     const onImagePickerResult = useCallback(
         async (res: ImagePickerResponse) => {
             closeSheet();
@@ -171,19 +167,23 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
         [uploadFile],
     );
 
-    const handleCamera = useCallback(() => {
-        launchCamera(
-            { mediaType: 'photo', saveToPhotos: false, quality: 0.8, includeBase64: true },
-            onImagePickerResult,
-        );
-    }, [onImagePickerResult]);
+    const handleCamera = useCallback(
+        () =>
+            launchCamera(
+                { mediaType: 'photo', saveToPhotos: false, quality: 0.8, includeBase64: true },
+                onImagePickerResult,
+            ),
+        [onImagePickerResult],
+    );
 
-    const handleGalleryImage = useCallback(() => {
-        launchImageLibrary(
-            { mediaType: 'photo', selectionLimit: 1, quality: 0.8, includeBase64: true },
-            onImagePickerResult,
-        );
-    }, [onImagePickerResult]);
+    const handleGalleryImage = useCallback(
+        () =>
+            launchImageLibrary(
+                { mediaType: 'photo', selectionLimit: 1, quality: 0.8, includeBase64: true },
+                onImagePickerResult,
+            ),
+        [onImagePickerResult],
+    );
 
     const handleFilePicker = useCallback(
         async (imageOnly = false) => {
@@ -304,6 +304,20 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
         return options;
     };
 
+    // ── Toggle GST ────────────────────────────────────────────────────────────
+    const toggleGST = () => {
+        const next = !data.hasGST;
+        // Clear GST data when unchecking
+        set({
+            hasGST: next,
+            gstNumber: next ? data.gstNumber : '',
+            uploads: next ? data.uploads : { ...data.uploads, gst_doc: '' },
+            uploadedDocs: next
+                ? data.uploadedDocs
+                : data.uploadedDocs.filter(d => d.uploadKey !== 'gst_doc'),
+        });
+    };
+
     return (
         <>
             <ScrollView
@@ -312,7 +326,7 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
             >
                 <StepHeader title="Step 6: Documents" current={6} />
 
-                {/* Owner Details */}
+                {/* ── Owner Details ── */}
                 <SectionCard accentColor={Colors.primary}>
                     <SectionTitle icon="person-outline" title="Owner Details" />
                     <View style={s.row}>
@@ -372,9 +386,68 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                             setRoleOpen(false);
                         }}
                     />
+
+                    {/* ── GST Section ── */}
+                    <View style={s.gstDivider} />
+
+                    {/* GST Checkbox */}
+                    <TouchableOpacity style={s.gstCheckRow} onPress={toggleGST} activeOpacity={0.8}>
+                        <View style={[s.gstCheckbox, data.hasGST && s.gstCheckboxActive]}>
+                            {data.hasGST && (
+                                <Ionicons name="checkmark" size={13} color={Colors.white} />
+                            )}
+                        </View>
+                        <View style={s.gstCheckContent}>
+                            <Text style={[s.gstCheckTitle, data.hasGST && s.gstCheckTitleActive]}>
+                                I have a GST Registration
+                            </Text>
+                            <Text style={s.gstCheckSub}>
+                                Required for GST-registered businesses
+                            </Text>
+                        </View>
+                        <View style={[s.gstBadge, data.hasGST && s.gstBadgeActive]}>
+                            <Text style={[s.gstBadgeText, data.hasGST && s.gstBadgeTextActive]}>
+                                {data.hasGST ? 'GST Registered' : 'Optional'}
+                            </Text>
+                        </View>
+                    </TouchableOpacity>
+
+                    {/* GST details — expand when checked */}
+                    {data.hasGST && (
+                        <View style={s.gstExpanded}>
+                            <Field
+                                label="GST Number"
+                                placeholder="22AAAAA0000A1Z5"
+                                icon="receipt-outline"
+                                value={data.gstNumber}
+                                onChangeText={v => set({ gstNumber: v.toUpperCase() })}
+                                autoCapitalize="characters"
+                                maxLength={15}
+                            />
+                            <Text style={s.uploadLabel}>
+                                UPLOAD GST CERTIFICATE <Text style={s.req}>*</Text>
+                            </Text>
+                            <UploadBtn
+                                uploadKey="gst_doc"
+                                mode="document"
+                                label="GST Certificate"
+                                btnLabel="Upload GST Certificate"
+                            />
+                            <View style={s.gstNote}>
+                                <Ionicons
+                                    name="information-circle-outline"
+                                    size={13}
+                                    color={Colors.charcoalLight}
+                                />
+                                <Text style={s.gstNoteText}>
+                                    Upload your GST registration certificate (PDF, JPG or PNG)
+                                </Text>
+                            </View>
+                        </View>
+                    )}
                 </SectionCard>
 
-                {/* ID Proof */}
+                {/* ── ID Proof ── */}
                 <SectionCard accentColor={Colors.info}>
                     <SectionTitle
                         icon="card-outline"
@@ -431,7 +504,7 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                     <UploadBtn uploadKey="id_back" mode="photo" label="ID Back" />
                 </SectionCard>
 
-                {/* Selfie */}
+                {/* ── Selfie ── */}
                 <SectionCard accentColor={Colors.success}>
                     <SectionTitle
                         icon="camera-outline"
@@ -448,7 +521,7 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                     />
                 </SectionCard>
 
-                {/* Business Documentation */}
+                {/* ── Business Documentation ── */}
                 <SectionCard accentColor={Colors.warning}>
                     <SectionTitle
                         icon="briefcase-outline"
@@ -482,7 +555,7 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                     <UploadBtn uploadKey="biz_doc" mode="document" label="Business Document" />
                 </SectionCard>
 
-                {/* Bank Details */}
+                {/* ── Bank Details ── */}
                 <SectionCard accentColor={Colors.primaryDark}>
                     <SectionTitle
                         icon="card-outline"
@@ -622,6 +695,72 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
 
 const s = StyleSheet.create({
     row: { flexDirection: 'row', gap: Spacing.sm },
+
+    // ── GST ──
+    gstDivider: { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.md },
+    gstCheckRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+        padding: Spacing.sm,
+        borderRadius: Radii.md,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        backgroundColor: Colors.background,
+    },
+    gstCheckbox: {
+        width: 22,
+        height: 22,
+        borderRadius: 5,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.surface,
+        flexShrink: 0,
+    },
+    gstCheckboxActive: { backgroundColor: Colors.success, borderColor: Colors.success },
+    gstCheckContent: { flex: 1 },
+    gstCheckTitle: {
+        fontSize: Typography.base,
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoalMid,
+    },
+    gstCheckTitleActive: { color: Colors.success },
+    gstCheckSub: { fontSize: Typography.xs, color: Colors.charcoalLight, marginTop: 1 },
+    gstBadge: {
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 3,
+        borderRadius: Radii.full,
+        backgroundColor: Colors.background,
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
+    gstBadgeActive: { backgroundColor: Colors.successLight, borderColor: Colors.success },
+    gstBadgeText: {
+        fontSize: Typography.xs,
+        color: Colors.charcoalLight,
+        fontWeight: Typography.medium,
+    },
+    gstBadgeTextActive: { color: Colors.success, fontWeight: Typography.semiBold },
+    gstExpanded: {
+        marginTop: Spacing.sm,
+        padding: Spacing.md,
+        backgroundColor: Colors.successLight,
+        borderRadius: Radii.md,
+        borderWidth: 1,
+        borderColor: Colors.success,
+        gap: Spacing.xs,
+    },
+    gstNote: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: Spacing.xs,
+        marginTop: Spacing.xs,
+    },
+    gstNoteText: { flex: 1, fontSize: Typography.xs, color: Colors.charcoalLight, lineHeight: 16 },
+
+    // ── Shared ──
     subLabel: {
         fontSize: Typography.base,
         fontWeight: Typography.semiBold,

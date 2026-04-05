@@ -41,6 +41,8 @@ export default function Step2Location({ data, onChange, onPrev, onNext }: Props)
                 landmark: 'Near DB City Mall',
                 city: 'Bhopal',
                 area: 'MP Nagar',
+                state: 'Madhya Pradesh',
+                village: '',
                 pincode: '462011',
                 googleMapLink: 'https://maps.google.com/?q=23.2332,77.4345',
             });
@@ -58,6 +60,7 @@ export default function Step2Location({ data, onChange, onPrev, onNext }: Props)
         if (!data.landmark.trim()) e.landmark = 'Landmark is required';
         if (!data.city.trim()) e.city = 'City is required';
         if (!data.area.trim()) e.area = 'Area/Locality is required';
+        if (!data.state.trim()) e.state = 'State is required';
         if (!data.pincode.trim()) e.pincode = 'Pincode is required';
         if (data.pincode.length > 0 && data.pincode.length !== 6)
             e.pincode = 'Enter a valid 6-digit pincode';
@@ -92,6 +95,7 @@ export default function Step2Location({ data, onChange, onPrev, onNext }: Props)
                         </>
                     )}
                 </TouchableOpacity>
+
                 <View style={s.divider}>
                     <View style={s.dividerLine} />
                     <Text style={s.dividerText}>or fill manually</Text>
@@ -123,6 +127,7 @@ export default function Step2Location({ data, onChange, onPrev, onNext }: Props)
                     error={errors.landmark}
                 />
 
+                {/* City + Area */}
                 <View style={s.row}>
                     <View style={{ flex: 1 }}>
                         <Field
@@ -152,6 +157,32 @@ export default function Step2Location({ data, onChange, onPrev, onNext }: Props)
                     </View>
                 </View>
 
+                {/* State + Village */}
+                <View style={s.row}>
+                    <View style={{ flex: 1 }}>
+                        <Field
+                            label="State"
+                            placeholder="Madhya Pradesh"
+                            icon="globe-outline"
+                            value={data.state}
+                            onChangeText={v => {
+                                set({ state: v });
+                                clearErr('state');
+                            }}
+                            error={errors.state}
+                        />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Field
+                            label="Village (optional)"
+                            placeholder="Village name"
+                            icon="home-outline"
+                            value={data.village}
+                            onChangeText={v => set({ village: v })}
+                        />
+                    </View>
+                </View>
+
                 <Field
                     label="Pincode"
                     placeholder="462001"
@@ -165,6 +196,7 @@ export default function Step2Location({ data, onChange, onPrev, onNext }: Props)
                     maxLength={6}
                     error={errors.pincode}
                 />
+
                 <Field
                     label="Google Maps Link"
                     placeholder="https://maps.google.com/..."
@@ -219,6 +251,7 @@ export default function Step2Location({ data, onChange, onPrev, onNext }: Props)
                     </View>
                 </View>
             </SectionCard>
+
             <NavButtons
                 onPrev={onPrev}
                 onNext={() => {

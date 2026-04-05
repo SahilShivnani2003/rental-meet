@@ -11,13 +11,19 @@ export const bookingAPI = {
 
     getById: (id: string) => apiClient.get(`bookings/${id}`),
 
-    updateStatus: (id: string, data: any) => apiClient.put(`bookings/${id}/status`, data, {
+    updateStatus: (id: string, data: {
+        status: string
+    }) => apiClient.put(`bookings/${id}/status`, data, {
         headers: getAuthHeader()
     }),
 
-    bookingCancel: (id: string, data: any) => apiClient.put(`bookings/${id}/cancel`, data, {
+    bookingCancel: (id: string, data: {
+        reason: string
+    }) => apiClient.put(`bookings/${id}/cancel`, data, {
         headers: getAuthHeader()
     }),
+
+    confirmSoon: (id:string) => apiClient.put(`bookings/${id}/approve-soon`),
 
     terms: () => apiClient.get('terms/'),
 }
