@@ -18,7 +18,7 @@ import {
     ThaliForm,
     AdditionalForm,
     FacilityForm,
-} from '../../types/venue.type';
+} from '../../types/Venue';
 
 const THALI_TYPES = [
     'Select Thali Type',

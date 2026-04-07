@@ -10,7 +10,7 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
 import { StepHeader } from '../UI/shared-components';
-import { VenueFormData } from '../../types/venue.type';
+import { VenueFormData } from '../../types/Venue';
 
 const TERMS = [
     {

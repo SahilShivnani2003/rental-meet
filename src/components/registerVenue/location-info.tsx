@@ -11,7 +11,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii } from '../../theme/theme';
 import Field from '../UI/input-field';
 import { StepHeader, SectionCard, PickerRow, NavButtons, Textarea } from '../UI/shared-components';
-import { VenueFormData } from '../../types/venue.type';
+import { VenueFormData } from '../../types/Venue';
 
 const PARKING_TYPES = ['Select parking type', 'Free', 'Paid', 'Limited', 'No'];
 

@@ -19,7 +19,7 @@ import {
     NavButtons,
     PickerRow,
 } from '../UI/shared-components';
-import { VenueFormData } from '../../types/venue.type';
+import { VenueFormData } from '../../types/Venue';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const ADVANCE_OPTIONS = [

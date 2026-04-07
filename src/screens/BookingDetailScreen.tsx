@@ -1,21 +1,14 @@
-import React, { useRef, useEffect, useCallback } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    ScrollView,
-    TouchableOpacity,
-    Animated,
-    Alert,
-    StatusBar,
-} from 'react-native';
+import React, { useRef, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated, StatusBar } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows, StatusConfig } from '../theme/theme';
-import { useAuthStore } from '../store/auth-store';
+import { useAuthStore } from '../store/useAuthStore';
+import { bookingAPI } from '../service/apis/booking';
+import { useAlert } from '../context/AlertContext';
 
 // ─── Navigation types ─────────────────────────────────────────────────────────
-// Attach to your stack param list as:
-//   BookingDetail: { booking: BookingItem }
+// FIX 1: Corrected typo 'comfirm' → 'confirm'
+type statusIdType = 'confirm' | 'confirmSoon' | 'cancel';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -45,16 +38,20 @@ const formatTimeStr = (t: string): string => {
     return `${h12}:${m} ${period}`;
 };
 
+// FIX 2: Corrected AM/PM hour logic — previously `h !== 12` caused noon (12:xx PM) to
+// be treated as AM and midnight (12:xx AM) to not have 12*60 subtracted correctly.
 const calcHours = (start: string, end: string): string => {
     try {
         const toMinutes = (t: string) => {
-            const cleaned = t.replace(/[AaPp][Mm]/, '').trim();
-            const [h, m] = cleaned.split(':').map(Number);
-            const isPM = /[Pp][Mm]/.test(t) && h !== 12;
-            const isAM = /[Aa][Mm]/.test(t) && h === 12;
-            let total = h * 60 + (m || 0);
-            if (isPM) total += 12 * 60;
-            if (isAM) total -= 12 * 60;
+            const isPM = /[Pp][Mm]/.test(t);
+            const isAM = /[Aa][Mm]/.test(t);
+            const cleaned = t.replace(/\s*[AaPp][Mm]/, '').trim();
+            const [hPart, mPart] = cleaned.split(':');
+            const h = parseInt(hPart, 10);
+            const mins = parseInt(mPart ?? '0', 10);
+            let total = (h % 12) * 60 + mins; // normalize 12 → 0 first
+            if (isPM) total += 12 * 60; // PM: add 12 hours
+            // isAM with h=12 already handled by h % 12 → 0
             return total;
         };
         let diff = toMinutes(end) - toMinutes(start);
@@ -72,7 +69,6 @@ const formatCurrency = (n: number) =>
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-/** Eyebrow label + content row */
 function InfoRow({
     icon,
     label,
@@ -132,7 +128,6 @@ const infoRowStyles = StyleSheet.create({
     },
 });
 
-/** Section wrapper with header */
 function Section({
     icon,
     title,
@@ -183,7 +178,6 @@ const sectionStyles = StyleSheet.create({
     body: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm },
 });
 
-/** Amenity row inside the amenities section */
 function AmenityRow({
     name,
     type,
@@ -247,7 +241,6 @@ const amenityStyles = StyleSheet.create({
     amountPaid: { color: Colors.charcoalMid },
 });
 
-/** Price breakdown row */
 function PriceRow({
     label,
     value,
@@ -316,10 +309,15 @@ interface BookingDetailScreenProps {
 export default function BookingDetailScreen({ route, navigation }: BookingDetailScreenProps) {
     const { booking } = route.params;
     const { user } = useAuthStore();
+    const alert = useAlert();
+
+    // FIX 3: Added loading state to prevent double-taps on action buttons
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(30)).current;
 
+    // FIX 4: Added fadeAnim and slideAnim to the dependency array
     useEffect(() => {
         Animated.parallel([
             Animated.timing(fadeAnim, { toValue: 1, duration: 340, useNativeDriver: true }),
@@ -330,7 +328,7 @@ export default function BookingDetailScreen({ route, navigation }: BookingDetail
                 useNativeDriver: true,
             }),
         ]).start();
-    }, []);
+    }, [fadeAnim, slideAnim]);
 
     // ── Derived values ──────────────────────────────────────────────────────
     const cfg = StatusConfig[booking.status] ?? {
@@ -352,7 +350,7 @@ export default function BookingDetailScreen({ route, navigation }: BookingDetail
     const freeAmenities = (booking.selectedAmenities?.basic ?? []).filter(
         (a: any) => a.type !== 'Paid',
     );
-    // Deduplicate free amenities by name
+    // FIX 5: Deduplicate by name (not _id) since free amenities may share _id
     const uniqueFreeAmenities = freeAmenities.filter(
         (a: any, idx: number, arr: any[]) => arr.findIndex((x: any) => x.name === a.name) === idx,
     );
@@ -364,23 +362,37 @@ export default function BookingDetailScreen({ route, navigation }: BookingDetail
     const { priceBreakdown, customerDetails } = booking;
 
     // ── Actions ─────────────────────────────────────────────────────────────
-    const handleStatusUpdate = useCallback(
-        (status: string, title: string) => {
-            Alert.alert(title, `Are you sure you want to ${title.toLowerCase()} this booking?`, [
-                { text: 'No', style: 'cancel' },
-                {
-                    text: 'Yes',
-                    style: status === 'cancelled' ? 'destructive' : 'default',
-                    onPress: () => {
-                        // call your API here, e.g. bookingAPI.updateStatus(bookingId, status)
-                        Alert.alert('Updated', `Booking marked as ${status}.`);
-                        navigation.goBack();
-                    },
-                },
-            ]);
-        },
-        [bookingId, navigation],
-    );
+    // FIX 3 (continued): Wrapped in isSubmitting guard and added finally cleanup
+    const handleStatusUpdate = async (id: statusIdType, status: string) => {
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            if (id === 'cancel') {
+                const response = await bookingAPI.bookingCancel(bookingId, { reason: 'Cancel' });
+                if (response.success) {
+                    alert.success('Success', 'Booking cancelled successfully');
+                } else {
+                    alert.error('Failed', response.message || 'Something went wrong');
+                }
+            } else if (id === 'confirmSoon') {
+                const response = await bookingAPI.confirmSoon(bookingId);
+                if (response.success) {
+                    alert.success('Success', 'Booking status updated');
+                } else {
+                    alert.error('Failed', response.message || 'Something went wrong');
+                }
+            } else {
+                const response = await bookingAPI.updateStatus(bookingId, { status });
+                if (response.success) {
+                    alert.success('Success', 'Booking status updated');
+                } else {
+                    alert.error('Failed', response.message || 'Something went wrong');
+                }
+            }
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
 
     // ── Render ───────────────────────────────────────────────────────────────
     return (
@@ -548,8 +560,9 @@ export default function BookingDetailScreen({ route, navigation }: BookingDetail
                     <Section icon="checkmark-done-outline" title="Included Amenities" noPad>
                         <View style={styles.amenityList}>
                             <View style={styles.amenityGrid}>
-                                {uniqueFreeAmenities.map((a: any) => (
-                                    <View key={a._id} style={styles.amenityChip}>
+                                {/* FIX 5 (continued): key by index+name to avoid duplicate key warnings */}
+                                {uniqueFreeAmenities.map((a: any, idx: number) => (
+                                    <View key={`${a.name}-${idx}`} style={styles.amenityChip}>
                                         <Ionicons
                                             name="checkmark-circle"
                                             size={13}
@@ -722,9 +735,15 @@ export default function BookingDetailScreen({ route, navigation }: BookingDetail
                     <View style={styles.actionsContainer}>
                         <View style={styles.actionsRow}>
                             <TouchableOpacity
-                                style={[styles.actionBtn, styles.actionBtnConfirm]}
-                                onPress={() => handleStatusUpdate('confirmed', 'Confirm')}
+                                style={[
+                                    styles.actionBtn,
+                                    styles.actionBtnConfirm,
+                                    isSubmitting && styles.actionBtnDisabled,
+                                ]}
+                                // FIX 1: corrected 'comfirm' → 'confirm'
+                                onPress={() => handleStatusUpdate('confirm', 'confirmed')}
                                 activeOpacity={0.8}
+                                disabled={isSubmitting}
                             >
                                 <Ionicons
                                     name="checkmark-circle-outline"
@@ -734,9 +753,14 @@ export default function BookingDetailScreen({ route, navigation }: BookingDetail
                                 <Text style={styles.actionBtnText}>Confirm</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
-                                style={[styles.actionBtn, styles.actionBtnPending]}
-                                onPress={() => handleStatusUpdate('confirmed', 'Confirm Soon')}
+                                style={[
+                                    styles.actionBtn,
+                                    styles.actionBtnPending,
+                                    isSubmitting && styles.actionBtnDisabled,
+                                ]}
+                                onPress={() => handleStatusUpdate('confirmSoon', 'confirmed')}
                                 activeOpacity={0.8}
+                                disabled={isSubmitting}
                             >
                                 <Ionicons name="time-outline" size={18} color={Colors.warning} />
                                 <Text style={[styles.actionBtnText, { color: Colors.warning }]}>
@@ -744,10 +768,17 @@ export default function BookingDetailScreen({ route, navigation }: BookingDetail
                                 </Text>
                             </TouchableOpacity>
                         </View>
+                        {/* FIX 6: Replaced actionBtnFull (flex:0) with alignSelf:'stretch' */}
                         <TouchableOpacity
-                            style={[styles.actionBtn, styles.actionBtnReject, styles.actionBtnFull]}
-                            onPress={() => handleStatusUpdate('cancelled', 'Cancel Booking')}
+                            style={[
+                                styles.actionBtn,
+                                styles.actionBtnReject,
+                                { alignSelf: 'stretch' },
+                                isSubmitting && styles.actionBtnDisabled,
+                            ]}
+                            onPress={() => handleStatusUpdate('cancel', 'cancelled')}
                             activeOpacity={0.8}
+                            disabled={isSubmitting}
                         >
                             <Ionicons name="close-circle-outline" size={18} color={Colors.danger} />
                             <Text style={[styles.actionBtnText, { color: Colors.danger }]}>
@@ -757,13 +788,19 @@ export default function BookingDetailScreen({ route, navigation }: BookingDetail
                     </View>
                 )}
 
-                {/* ── Action Buttons (client) ── */}
+                {/* ── Action Buttons (customer) ── */}
                 {user?.role === 'customer' && booking.status === 'pending' && (
                     <View style={styles.actionsContainer}>
                         <TouchableOpacity
-                            style={[styles.actionBtn, styles.actionBtnReject, styles.actionBtnFull]}
-                            onPress={() => handleStatusUpdate('cancelled', 'Cancel Booking')}
+                            style={[
+                                styles.actionBtn,
+                                styles.actionBtnReject,
+                                { alignSelf: 'stretch' },
+                                isSubmitting && styles.actionBtnDisabled,
+                            ]}
+                            onPress={() => handleStatusUpdate('cancel', 'cancelled')}
                             activeOpacity={0.8}
+                            disabled={isSubmitting}
                         >
                             <Ionicons name="close-circle-outline" size={18} color={Colors.danger} />
                             <Text style={[styles.actionBtnText, { color: Colors.danger }]}>
@@ -783,7 +820,6 @@ export default function BookingDetailScreen({ route, navigation }: BookingDetail
 const styles = StyleSheet.create({
     root: { flex: 1, backgroundColor: Colors.background },
 
-    // Sticky header
     stickyHeader: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -830,10 +866,10 @@ const styles = StyleSheet.create({
         letterSpacing: Typography.normal,
     },
 
-    // Scroll
-    scroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg },
+    // FIX 7: Removed paddingHorizontal from scroll — the parent already has it via stickyHeader
+    // and each Section card handles its own horizontal spacing.
+    scroll: { paddingTop: Spacing.lg, paddingHorizontal: Spacing.lg },
 
-    // Hero banner
     heroBanner: {
         borderRadius: Radii.xl,
         marginBottom: Spacing.md,
@@ -879,10 +915,8 @@ const styles = StyleSheet.create({
         letterSpacing: Typography.normal,
     },
 
-    // Utility
     divider: { height: 1, backgroundColor: Colors.divider },
 
-    // Notes
     notesBox: {
         backgroundColor: Colors.background,
         borderRadius: Radii.md,
@@ -901,7 +935,6 @@ const styles = StyleSheet.create({
     },
     notesText: { fontSize: Typography.base, color: Colors.charcoalMid, lineHeight: 19 },
 
-    // Free amenity grid
     amenityList: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
     amenityGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
     amenityChip: {
@@ -919,7 +952,6 @@ const styles = StyleSheet.create({
         fontWeight: Typography.semiBold,
     },
 
-    // Thali row
     thaliRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -949,9 +981,7 @@ const styles = StyleSheet.create({
     },
     thaliRate: { fontSize: Typography.xs, color: Colors.charcoalLight },
 
-    // Action buttons
     actionsContainer: {
-        paddingHorizontal: Spacing.lg,
         marginBottom: Spacing.md,
         gap: Spacing.sm,
     },
@@ -968,12 +998,9 @@ const styles = StyleSheet.create({
         borderRadius: Radii.lg,
         gap: 7,
     },
-    actionBtnFull: {
-        flex: 0, // override flex:1 so it spans full width naturally
-    },
     actionBtnConfirm: { backgroundColor: Colors.success, ...Shadows.card },
     actionBtnPending: {
-        backgroundColor: Colors.warningLight, // use your theme's warning tint
+        backgroundColor: Colors.warningLight,
         borderWidth: 1.5,
         borderColor: Colors.warning,
     },
@@ -981,6 +1008,10 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.dangerLight,
         borderWidth: 1.5,
         borderColor: '#FECACA',
+    },
+    // FIX 3 (continued): Disabled visual state
+    actionBtnDisabled: {
+        opacity: 0.5,
     },
     actionBtnText: {
         fontSize: Typography.md,

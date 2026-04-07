@@ -16,11 +16,13 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../theme/theme';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigations/RootNavigation';
-import { useAuthStore } from '../store/auth-store';
+import { useAuthStore } from '../store/useAuthStore';
 import { venueAPI } from '../service/apis/venues';
 import { bookingAPI } from '../service/apis/booking';
 import { useAlert } from '../context/AlertContext';
 import { Venue, SelectedAmenityItem } from './venue-detail';
+import { paymentAPI } from '../service/apis/paymentService';
+import RazorpayCheckout from 'react-native-razorpay';
 
 const { width: W } = Dimensions.get('window');
 
@@ -817,6 +819,58 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
         capacity,
     ]);
 
+    const handlePayment = async (bookingId: string) => {
+        try {
+            const order = await paymentAPI.createPayment({
+                bookingId: bookingId,
+                amount: total,
+            });
+
+            if (!order.success) {
+                alert.error('Failed', 'Failed to create paymet order');
+                return;
+            }
+
+            const options = {
+                key: '',
+                amount: order.order.amount,
+                currency: order.order.currency,
+                name: 'RentalMeet',
+                description: `Booking Payment - ${venue.businessName}`,
+                order_id: order.order.id,
+                prefill: {
+                    name: fullName,
+                    email: email,
+                    contact: phone,
+                },
+                theme: {
+                    color: '#F59F0A',
+                },
+            };
+
+            const RazorpayResponse = await RazorpayCheckout.open(options);
+
+            if (!RazorpayResponse?.razorpay_payment_id) throw new Error('Payment not completed');
+
+            const verifyPayment = await paymentAPI.verifyPayment({
+                razorpay_order_id: RazorpayResponse.razorpay_order_id,
+                razorpay_payment_id: RazorpayResponse.razorpay_payment_id,
+                razorpay_signature: RazorpayResponse.razorpay_signature,
+                bookingId: bookingId,
+            });
+
+            if (verifyPayment.success) {
+                alert.success('Payment Successfull! Booking confirmed');
+                navigation.popToTop?.() ?? navigation.goBack();
+                return;
+            } else {
+                alert.error('Failed', 'Payment verification failed');
+            }
+        } catch (error) {
+            console.error('');
+            alert.error('Failed', 'Payment Failed');
+        }
+    };
     // ── Submit ────────────────────────────────────────────────────────────────
     const handleConfirmBooking = async () => {
         const err = validate();
@@ -857,11 +911,8 @@ export default function BookingScreen({ navigation, route }: BookingScreenProps)
 
             const response = await bookingAPI.create(bookingData);
             if (response?.success) {
-                (alert.success ?? alert.show)?.(
-                    'Booking Requested! 🎉',
-                    'Your request has been submitted. The venue owner will confirm shortly.',
-                );
-                navigation.popToTop?.() ?? navigation.goBack();
+                debugger
+                await handlePayment(response.data._id);
             } else {
                 (alert.error ?? alert.show)?.(
                     'Booking Failed',

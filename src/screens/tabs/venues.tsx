@@ -16,7 +16,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
 import VenueCard from '../../components/venues/venueCard';
 import { venueAPI } from '../../service/apis/venues';
-import { useAuthStore } from '../../store/auth-store';
+import { useAuthStore } from '../../store/useAuthStore';
 import { OwnerTabParamList } from '../../navigations/tabNavigations/OwnerTabNavigation';
 import { ClientTabParamList } from '../../navigations/tabNavigations/ClientTabNavigation';
 import { tabParamList } from '../../navigations/tabNavigations/TabNavigation';

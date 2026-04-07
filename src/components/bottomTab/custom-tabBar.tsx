@@ -4,7 +4,7 @@ import { Colors, TAB_BAR_HEIGHT } from '../../theme/theme';
 import CenterTab from './center-tab';
 import RegularTab from './regular-tab';
 import ParticleBurst from './particle-burst';
-import { TabConfig } from '../../types/tabConfig';
+import { TabConfig } from '../../types/TabConfig';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 

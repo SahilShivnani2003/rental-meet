@@ -13,7 +13,7 @@ import { Colors, Typography, Spacing, Radii } from '../../theme/theme';
 import { StepHeader, SectionCard, PickerRow, NavButtons, Textarea } from '../UI/shared-components';
 import Field from '../UI/input-field';
 import { venueAPI } from '../../service/apis/venues';
-import { VenueFormData } from '../../types/venue.type';
+import { VenueFormData } from '../../types/Venue';
 
 interface VenueType {
     _id: string;

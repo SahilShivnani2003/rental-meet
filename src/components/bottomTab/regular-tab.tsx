@@ -2,7 +2,7 @@ import React, { useRef, useEffect } from "react";
 import { View, TouchableOpacity, StyleSheet, Animated } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { Colors, Typography } from "../../theme/theme";
-import { TabConfig } from "../../types/tabConfig";
+import { TabConfig } from "../../types/TabConfig";
 
 interface RegularTabProps {
     tab: TabConfig;

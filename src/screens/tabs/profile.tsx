@@ -14,7 +14,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigations/RootNavigation';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
 import { OwnerTabParamList } from '../../navigations/tabNavigations/OwnerTabNavigation';
-import { useAuthStore } from '../../store/auth-store';
+import { useAuthStore } from '../../store/useAuthStore';
 import { useAlert } from '../../context/AlertContext';
 import { bookingAPI } from '../../service/apis/booking';
 import { authAPI } from '../../service/apis/auth';

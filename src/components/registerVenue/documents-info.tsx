@@ -28,9 +28,9 @@ import {
     PickerRow,
     FileUploadBtn,
 } from '../UI/shared-components';
-import { useAuthStore } from '../../store/auth-store';
+import { useAuthStore } from '../../store/useAuthStore';
 import { imageAPI } from '../../service/apis/images';
-import { VenueFormData } from '../../types/venue.type';
+import { VenueFormData } from '../../types/Venue';
 
 const ROLES = ['Select role', 'Owner', 'Manager', 'Partner', 'Director'];
 const BUSINESS_PROOF_TYPES = [

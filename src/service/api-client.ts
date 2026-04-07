@@ -1,4 +1,4 @@
-import { useAuthStore } from "../store/auth-store";
+import { useAuthStore } from "../store/useAuthStore";
 
 const BASE_URL = "https://rentalmeet.onrender.com/api/";
 

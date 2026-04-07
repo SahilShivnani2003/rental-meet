@@ -21,7 +21,7 @@ import LoadingDots from '../../components/UI/loading-dots';
 import Field from '../../components/UI/input-field';
 import { useAlert } from '../../context/AlertContext';
 import { authAPI } from '../../service/apis/auth';
-import { useAuthStore } from '../../store/auth-store';
+import { useAuthStore } from '../../store/useAuthStore';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 

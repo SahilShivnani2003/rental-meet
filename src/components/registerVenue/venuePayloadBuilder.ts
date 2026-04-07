@@ -3,7 +3,7 @@ import {
     AmenityItem,
     Venue,
     WeekPrice,
-} from '../../types/venue.type';
+} from '../../types/Venue';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

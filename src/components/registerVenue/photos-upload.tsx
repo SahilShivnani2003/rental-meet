@@ -20,7 +20,7 @@ import {
 import { Colors, Typography, Spacing, Radii } from '../../theme/theme';
 import { StepHeader, SectionCard, NavButtons } from '../UI/shared-components';
 import { imageAPI } from '../../service/apis/images';
-import { VenueFormData } from '../../types/venue.type';
+import { VenueFormData } from '../../types/Venue';
 
 const PHOTO_SECTIONS = [
     { key: 'featured', label: 'Featured Photo', required: true },

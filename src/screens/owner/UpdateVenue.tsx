@@ -21,7 +21,7 @@ import Step5Photos from '../../components/registerVenue/photos-upload';
 import Step6Documents from '../../components/registerVenue/documents-info';
 import Step7Terms from '../../components/registerVenue/terms-info';
 
-import { VenueFormData, initialVenueFormData } from '../../types/venue.type';
+import { VenueFormData, initialVenueFormData } from '../../types/Venue';
 import { buildVenuePayload } from '../../components/registerVenue/venuePayloadBuilder';
 
 import { useAlert } from '../../context/AlertContext';

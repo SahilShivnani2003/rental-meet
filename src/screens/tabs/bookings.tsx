@@ -14,7 +14,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows, StatusConfig } from '../../theme/theme';
 import BookingCard from '../../components/booking/booking-card';
 import { bookingAPI } from '../../service/apis/booking';
-import { useAuthStore } from '../../store/auth-store';
+import { useAuthStore } from '../../store/useAuthStore';
 import NotAuthenticatedScreen from '../../components/not-authenticated';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
 import { ClientTabParamList } from '../../navigations/tabNavigations/ClientTabNavigation';

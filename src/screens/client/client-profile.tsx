@@ -12,7 +12,7 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
 import { useAlert } from '../../context/AlertContext';
-import { useAuthStore } from '../../store/auth-store';
+import { useAuthStore } from '../../store/useAuthStore';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
 import { ClientTabParamList } from '../../navigations/tabNavigations/ClientTabNavigation';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';

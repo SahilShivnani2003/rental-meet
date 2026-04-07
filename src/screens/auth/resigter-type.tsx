@@ -13,7 +13,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigations/RootNavigation';
-import { ROLES } from '../../types/role.type';
+import { ROLES } from '../../types/Role';
 import { RoleCard } from '../../components/registerType/role-card';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');

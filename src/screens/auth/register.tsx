@@ -22,7 +22,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigations/RootNavigation';
 import { useAlert } from '../../context/AlertContext';
 import { authAPI } from '../../service/apis/auth';
-import { useAuthStore } from '../../store/auth-store';
+import { useAuthStore } from '../../store/useAuthStore';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 

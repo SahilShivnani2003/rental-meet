@@ -16,7 +16,7 @@ import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
 import { PACKAGES } from '../../Data/landingData';
 import useEntrance from '../../hooks/useEntrance';
 import FeaturedCard from '../../components/landing/featuredCard';
-import { useAuthStore } from '../../store/auth-store';
+import { useAuthStore } from '../../store/useAuthStore';
 import { ClientTabParamList } from '../../navigations/tabNavigations/ClientTabNavigation';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
 import { venueAPI } from '../../service/apis/venues';

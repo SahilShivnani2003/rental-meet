@@ -18,7 +18,7 @@ import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-naviga
 import { RootStackParamList } from '../navigations/RootNavigation';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../theme/theme';
 import { useNavigation } from '@react-navigation/native';
-import { useAuthStore } from '../store/auth-store';
+import { useAuthStore } from '../store/useAuthStore';
 
 const { width, height } = Dimensions.get('window');
 const HERO_HEIGHT = height * 0.38;

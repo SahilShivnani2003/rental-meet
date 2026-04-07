@@ -1,4 +1,4 @@
-import { VenueFormData, Venue } from '../../types/venue.type';
+import { VenueFormData, Venue } from '../../types/Venue';
 
 /**
  * Maps backend Venue data to frontend VenueFormData structure

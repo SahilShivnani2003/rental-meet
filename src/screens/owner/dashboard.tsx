@@ -15,7 +15,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
 import { OwnerTabParamList } from '../../navigations/tabNavigations/OwnerTabNavigation';
-import { useAuthStore } from '../../store/auth-store';
+import { useAuthStore } from '../../store/useAuthStore';
 import { ownerAPI } from '../../service/apis/owner';
 import { useAlert } from '../../context/AlertContext';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
