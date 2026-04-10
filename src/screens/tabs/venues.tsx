@@ -308,6 +308,7 @@ export default function VenuesScreen({ navigation }: venueProps) {
                 if (maxPrice) params.maxPrice = maxPrice;
             }
 
+            params.status = 'all'
             const response = isOwner
                 ? await ownerAPI.getVenues()
                 : await venueAPI.getVenues(params);

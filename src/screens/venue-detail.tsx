@@ -12,6 +12,7 @@ import {
     Linking,
     Platform,
     Modal,
+    TextInput,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -29,11 +30,12 @@ type Props = NativeStackScreenProps<RootStackParamList, 'venueDetail'>;
 // ─── Domain types ──────────────────────────────────────────────────────────────
 
 export type BasicAmenity = { name: string; type: string; rate: number };
-export type AdditionalAmenity = { name: string; charges: number };
+
+// FIX: Added `type` field to match VenueResponse's additional amenity shape
+export type AdditionalAmenity = { name: string; charges: number; type?: 'Included' | 'Paid' };
+
 export type Beverage = { name: string; ratePerUnit: number };
 export type RefreshmentFood = { name: string; ratePerPlate: number };
-// Format 1 (flat):   { type, itemNames, ratePerPlate, numberOfItems }
-// Format 2 (nested): { thaliType, available, categories: [{ category, ratePerPlate, ... }] }
 export type LunchThaliCategory = {
     _id?: string;
     category: string;
@@ -42,12 +44,10 @@ export type LunchThaliCategory = {
     itemNames?: string;
 };
 export type LunchThali = {
-    // Format 1 fields
     type?: string;
     itemNames?: string;
     ratePerPlate?: number;
     numberOfItems?: number;
-    // Format 2 fields
     thaliType?: string;
     available?: boolean;
     categories?: LunchThaliCategory[];
@@ -87,7 +87,8 @@ export type Location = {
     pincode: string;
     parkingAvailability: string;
     googleMapLink: string;
-    nearestBusAuto: number;
+    // FIX: Both fields are strings in VenueResponse (they already include units like "200m")
+    nearestBusAuto: string;
     nearestMetroTrain: string;
 };
 export type Venue = {
@@ -160,8 +161,6 @@ function isWeekend(dateStr: string): boolean {
     return d.getDay() === 0 || d.getDay() === 6;
 }
 
-// FIX 1: Removed thaliGroupKey() entirely — not needed for direct flat list
-
 function buildSheetDurations(pricing: Pricing, wknd: boolean): SheetDurationOption[] {
     const opts: SheetDurationOption[] = [];
 
@@ -173,7 +172,7 @@ function buildSheetDurations(pricing: Pricing, wknd: boolean): SheetDurationOpti
 
     if (!useEnabled || pricing.enabledOptions?.perHour) {
         const rate = wknd ? pricing.perHour?.weekend : pricing.perHour?.weekday;
-        if (rate) {
+        if (rate && rate > 0) {
             [1, 2, 4].forEach(h =>
                 opts.push({ label: `${h}H`, hours: h, price: rate * h, type: 'perHour' }),
             );
@@ -181,11 +180,13 @@ function buildSheetDurations(pricing: Pricing, wknd: boolean): SheetDurationOpti
     }
     if (!useEnabled || pricing.enabledOptions?.halfDay) {
         const rate = wknd ? pricing.halfDay?.weekend : pricing.halfDay?.weekday;
-        if (rate) opts.push({ label: 'Half Day', hours: 4, price: rate, type: 'halfDay' });
+        if (rate && rate > 0)
+            opts.push({ label: 'Half Day', hours: 4, price: rate, type: 'halfDay' });
     }
     if (!useEnabled || pricing.enabledOptions?.fullDay) {
         const rate = wknd ? pricing.fullDay?.weekend : pricing.fullDay?.weekday;
-        if (rate) opts.push({ label: 'Full Day', hours: 8, price: rate, type: 'fullDay' });
+        if (rate && rate > 0)
+            opts.push({ label: 'Full Day', hours: 8, price: rate, type: 'fullDay' });
     }
 
     return opts;
@@ -243,7 +244,7 @@ function IncludedItem({ name }: { name: string }) {
     );
 }
 
-// ─── PaidItem ──────────────────────────────────────────────────────────────────
+// ─── PaidItem with manual input ────────────────────────────────────────────────
 
 type PaidItemProps = {
     name: string;
@@ -253,6 +254,7 @@ type PaidItemProps = {
     onToggle: () => void;
     onIncrement: () => void;
     onDecrement: () => void;
+    onQtyChange: (value: string) => void;
 };
 function PaidItem({
     name,
@@ -262,6 +264,7 @@ function PaidItem({
     onToggle,
     onIncrement,
     onDecrement,
+    onQtyChange,
 }: PaidItemProps) {
     return (
         <View style={am.paidRow}>
@@ -278,7 +281,13 @@ function PaidItem({
                     <TouchableOpacity onPress={onDecrement} style={am.stepBtn}>
                         <Text style={am.stepBtnText}>−</Text>
                     </TouchableOpacity>
-                    <Text style={am.stepQty}>{qty}</Text>
+                    <TextInput
+                        style={am.stepInput}
+                        value={String(qty)}
+                        onChangeText={onQtyChange}
+                        keyboardType="number-pad"
+                        selectTextOnFocus
+                    />
                     <TouchableOpacity onPress={onIncrement} style={am.stepBtn}>
                         <Text style={am.stepBtnText}>+</Text>
                     </TouchableOpacity>
@@ -290,7 +299,7 @@ function PaidItem({
     );
 }
 
-// ─── BeverageItem ──────────────────────────────────────────────────────────────
+// ─── BeverageItem with manual input ────────────────────────────────────────────
 
 type BeverageItemProps = {
     name: string;
@@ -300,6 +309,7 @@ type BeverageItemProps = {
     onToggle: () => void;
     onIncrement: () => void;
     onDecrement: () => void;
+    onQtyChange: (value: string) => void;
 };
 function BeverageItem({
     name,
@@ -309,6 +319,7 @@ function BeverageItem({
     onToggle,
     onIncrement,
     onDecrement,
+    onQtyChange,
 }: BeverageItemProps) {
     return (
         <View style={am.paidRow}>
@@ -327,7 +338,13 @@ function BeverageItem({
                     <TouchableOpacity onPress={onDecrement} style={am.stepBtn}>
                         <Text style={am.stepBtnText}>−</Text>
                     </TouchableOpacity>
-                    <Text style={am.stepQty}>{qty}</Text>
+                    <TextInput
+                        style={am.stepInput}
+                        value={String(qty)}
+                        onChangeText={onQtyChange}
+                        keyboardType="number-pad"
+                        selectTextOnFocus
+                    />
                     <TouchableOpacity onPress={onIncrement} style={am.stepBtn}>
                         <Text style={am.stepBtnText}>+</Text>
                     </TouchableOpacity>
@@ -358,8 +375,6 @@ function RefreshmentItem({ name, rate, checked, onToggle }: RefreshmentItemProps
     );
 }
 
-// FIX 2: ThaliGroup component and ThaliGroupProps type REMOVED — replaced by direct flat map in JSX
-
 // ─── BookingSheet ─────────────────────────────────────────────────────────────
 
 type BookingSheetProps = {
@@ -381,8 +396,12 @@ function BookingSheet({
 }: BookingSheetProps) {
     const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-    const today = new Date().toISOString().split('T')[0];
-    const wknd = isWeekend(today);
+    const tomorrowDate = new Date();
+    tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+    const tomorrowStr = `${tomorrowDate.getFullYear()}-${String(
+        tomorrowDate.getMonth() + 1,
+    ).padStart(2, '0')}-${String(tomorrowDate.getDate()).padStart(2, '0')}`;
+    const wknd = isWeekend(tomorrowStr);
 
     const durationOptions = useMemo(
         () => buildSheetDurations(venue.pricing, wknd),
@@ -393,6 +412,8 @@ function BookingSheet({
     const selected = durationOptions[durationIdx];
     const venueRental = selected?.price ?? 0;
     const estimatedSubtotal = venueRental + amenitiesTotal;
+
+    const baseHourlyRate = wknd ? venue.pricing.perHour.weekend : venue.pricing.perHour.weekday;
 
     const handleReserve = () => {
         if (!selected) return;
@@ -419,17 +440,16 @@ function BookingSheet({
                     <View style={sheet.header}>
                         <View>
                             <Text style={sheet.headerTitle}>Book This Venue</Text>
-                            <View style={sheet.priceRow}>
-                                <Text style={sheet.startingFrom}>Starting from </Text>
-                                <Text style={sheet.price}>
-                                    ₹
-                                    {(wknd
-                                        ? venue.pricing.perHour.weekend
-                                        : venue.pricing.perHour.weekday
-                                    ).toLocaleString()}
-                                </Text>
-                                <Text style={sheet.perHour}>/hour</Text>
-                            </View>
+                            {baseHourlyRate > 0 && (
+                                <View style={sheet.priceRow}>
+                                    <Text style={sheet.startingFrom}>Starting from </Text>
+                                    <Text style={sheet.price}>
+                                        ₹{baseHourlyRate.toLocaleString()}
+                                    </Text>
+                                    <Text style={sheet.perHour}>/hour</Text>
+                                    {wknd && <Text style={sheet.weekendTag}> · Weekend</Text>}
+                                </View>
+                            )}
                         </View>
                         <TouchableOpacity onPress={onClose} style={sheet.closeBtn}>
                             <Ionicons name="close" size={20} color={Colors.charcoalMid} />
@@ -583,9 +603,13 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
     const { venue } = route.params as { venue: Venue };
     const { user } = useAuthStore();
     const scrollY = useRef(new Animated.Value(0)).current;
+    const flatListRef = useRef<FlatList<VenueImage>>(null);
     const [activeImageIndex, setActiveImageIndex] = useState(0);
     const [bookingVisible, setBookingVisible] = useState(false);
     const { pricing, availability, amenities, location } = venue;
+
+    // FIX: Removed stray `debugger` statement
+
     const isOwner = user?.role === 'owner';
 
     const [paidChecked, setPaidChecked] = useState<Set<string>>(new Set());
@@ -595,11 +619,29 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
     const [refChecked, setRefChecked] = useState<Set<string>>(new Set());
     const [thaliChecked, setThaliChecked] = useState<Set<string>>(new Set());
 
+    // FIX: Removed the dead useEffect that filtered amenities.additional but never used the result
+
     const toggleSet = useCallback((set: Set<string>, key: string): Set<string> => {
         const next = new Set(set);
         next.has(key) ? next.delete(key) : next.add(key);
         return next;
     }, []);
+
+    const handleQtyChange = useCallback(
+        (
+            key: string,
+            value: string,
+            setter: React.Dispatch<React.SetStateAction<Record<string, number>>>,
+        ) => {
+            const num = parseInt(value, 10);
+            if (isNaN(num) || num < 1) {
+                setter(prev => ({ ...prev, [key]: 1 }));
+            } else {
+                setter(prev => ({ ...prev, [key]: Math.min(num, 999) }));
+            }
+        },
+        [],
+    );
 
     const { allAmenities, paidAmenities, amenitiesTotal } = useMemo(() => {
         const all: SelectedAmenityItem[] = [];
@@ -678,11 +720,8 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
             });
 
         // 6. Thalis — handle both API formats
-        //    Format 1: flat { type, ratePerPlate, itemNames, numberOfItems }
-        //    Format 2: nested { thaliType, categories: [{ category, ratePerPlate, ... }] }
         amenities.lunchThalis.forEach(t => {
             if (t.thaliType && Array.isArray(t.categories)) {
-                // Format 2 — iterate each category row; key = `${thaliType}__${category}`
                 t.categories.forEach(cat => {
                     const key = `${t.thaliType}__${cat.category}`;
                     if (thaliChecked.has(key)) {
@@ -700,8 +739,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                     }
                 });
             } else if (t.type) {
-                // Format 1 — flat entry; key = t.type
-                if (thaliChecked.has(t.type)) {
+                if (thaliChecked.has(t.type ?? '')) {
                     all.push({
                         name: t.type,
                         category: 'thali',
@@ -739,7 +777,10 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
         extrapolate: 'clamp',
     });
 
-    // FIX 6: thaliGroups reduce REMOVED — no grouping needed
+    const scrollToImage = useCallback((index: number) => {
+        flatListRef.current?.scrollToIndex({ index, animated: true });
+        setActiveImageIndex(index);
+    }, []);
 
     return (
         <View style={s.container}>
@@ -767,6 +808,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                         style={[s.heroInner, { transform: [{ translateY: heroTranslate }] }]}
                     >
                         <FlatList<VenueImage>
+                            ref={flatListRef}
                             data={venue.images}
                             horizontal
                             pagingEnabled
@@ -816,7 +858,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                             <TouchableOpacity
                                 key={i}
                                 style={[s.thumb, i === activeImageIndex && s.thumbActive]}
-                                onPress={() => setActiveImageIndex(i)}
+                                onPress={() => scrollToImage(i)}
                                 activeOpacity={0.8}
                             >
                                 <Image source={{ uri: img.url }} style={s.thumbImage} />
@@ -882,22 +924,24 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                 </View>
 
                 {/* Venue Types */}
-                <View style={s.section}>
-                    <View style={s.venueTypesHeader}>
-                        <Text style={s.venueTypesLabel}>VENUE TYPES</Text>
+                {venue.venueType.length > 0 && (
+                    <View style={s.section}>
+                        <View style={s.venueTypesHeader}>
+                            <Text style={s.venueTypesLabel}>VENUE TYPES</Text>
+                        </View>
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={s.typeChips}
+                        >
+                            {venue.venueType.map(t => (
+                                <View key={t} style={s.typeChip}>
+                                    <Text style={s.typeChipText}>{t}</Text>
+                                </View>
+                            ))}
+                        </ScrollView>
                     </View>
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={s.typeChips}
-                    >
-                        {venue.venueType.map(t => (
-                            <View key={t} style={s.typeChip}>
-                                <Text style={s.typeChipText}>{t}</Text>
-                            </View>
-                        ))}
-                    </ScrollView>
-                </View>
+                )}
 
                 {/* About */}
                 <View style={s.section}>
@@ -938,7 +982,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                         key={i}
                                         name={item.name}
                                         charge={item.rate}
-                                        qty={paidQty[item.name] ?? 0}
+                                        qty={paidQty[item.name] ?? 1}
                                         checked={paidChecked.has(item.name)}
                                         onToggle={() => {
                                             setPaidChecked(prev => toggleSet(prev, item.name));
@@ -957,49 +1001,61 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                                 [item.name]: Math.max(1, (p[item.name] ?? 1) - 1),
                                             }))
                                         }
+                                        onQtyChange={val =>
+                                            handleQtyChange(item.name, val, setPaidQty)
+                                        }
                                     />
                                 ))}
                         </View>
                     )}
 
-                    {amenities.additional.length > 0 && (
+                    {/* FIX: Only render Additional Services section when Paid items exist */}
+                    {amenities.additional.filter(a => a.type === 'Paid').length > 0 && (
                         <View style={am.subSection}>
                             <View style={am.subHeader}>
                                 <View style={[am.subDot, { backgroundColor: Colors.info }]} />
                                 <Text style={am.subTitle}>Additional Services</Text>
                             </View>
-                            {amenities.additional.map((item, i) => (
-                                <PaidItem
-                                    key={i}
-                                    name={item.name}
-                                    charge={item.charges}
-                                    qty={paidQty[`add_${item.name}`] ?? 0}
-                                    checked={paidChecked.has(`add_${item.name}`)}
-                                    onToggle={() => {
-                                        setPaidChecked(prev => toggleSet(prev, `add_${item.name}`));
-                                        if (!paidQty[`add_${item.name}`])
+                            {amenities.additional
+                                .filter(a => a.type === 'Paid')
+                                .map((item, i) => (
+                                    <PaidItem
+                                        key={i}
+                                        name={item.name}
+                                        charge={item.charges}
+                                        qty={paidQty[`add_${item.name}`] ?? 1}
+                                        checked={paidChecked.has(`add_${item.name}`)}
+                                        onToggle={() => {
+                                            setPaidChecked(prev =>
+                                                toggleSet(prev, `add_${item.name}`),
+                                            );
+                                            if (!paidQty[`add_${item.name}`])
+                                                setPaidQty(p => ({
+                                                    ...p,
+                                                    [`add_${item.name}`]: 1,
+                                                }));
+                                        }}
+                                        onIncrement={() =>
                                             setPaidQty(p => ({
                                                 ...p,
-                                                [`add_${item.name}`]: 1,
-                                            }));
-                                    }}
-                                    onIncrement={() =>
-                                        setPaidQty(p => ({
-                                            ...p,
-                                            [`add_${item.name}`]: (p[`add_${item.name}`] ?? 1) + 1,
-                                        }))
-                                    }
-                                    onDecrement={() =>
-                                        setPaidQty(p => ({
-                                            ...p,
-                                            [`add_${item.name}`]: Math.max(
-                                                1,
-                                                (p[`add_${item.name}`] ?? 1) - 1,
-                                            ),
-                                        }))
-                                    }
-                                />
-                            ))}
+                                                [`add_${item.name}`]:
+                                                    (p[`add_${item.name}`] ?? 1) + 1,
+                                            }))
+                                        }
+                                        onDecrement={() =>
+                                            setPaidQty(p => ({
+                                                ...p,
+                                                [`add_${item.name}`]: Math.max(
+                                                    1,
+                                                    (p[`add_${item.name}`] ?? 1) - 1,
+                                                ),
+                                            }))
+                                        }
+                                        onQtyChange={val =>
+                                            handleQtyChange(`add_${item.name}`, val, setPaidQty)
+                                        }
+                                    />
+                                ))}
                         </View>
                     )}
 
@@ -1014,7 +1070,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                     key={i}
                                     name={b.name}
                                     rate={b.ratePerUnit}
-                                    qty={bevQty[b.name] ?? 0}
+                                    qty={bevQty[b.name] ?? 1}
                                     checked={bevChecked.has(b.name)}
                                     onToggle={() => {
                                         setBevChecked(prev => toggleSet(prev, b.name));
@@ -1033,6 +1089,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                             [b.name]: Math.max(1, (p[b.name] ?? 1) - 1),
                                         }))
                                     }
+                                    onQtyChange={val => handleQtyChange(b.name, val, setBevQty)}
                                 />
                             ))}
                         </View>
@@ -1072,13 +1129,10 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                 />
                                 <Text style={am.subTitle}>Lunch Thalis</Text>
                             </View>
-                            {/* Handles both API formats for lunchThalis */}
                             {amenities.lunchThalis.map((t, i) => {
-                                // ── Format 2: nested { thaliType, categories[] } ──
                                 if (t.thaliType && Array.isArray(t.categories)) {
                                     return (
                                         <View key={t._id ?? t.thaliType ?? i} style={am.thaliGroup}>
-                                            {/* Cuisine header */}
                                             <Text style={am.thaliGroupName}>{t.thaliType}</Text>
                                             {t.categories.map((cat, ci) => {
                                                 const key = `${t.thaliType}__${cat.category}`;
@@ -1139,7 +1193,6 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                     );
                                 }
 
-                                // ── Format 1: flat { type, ratePerPlate, ... } ──
                                 const checked = thaliChecked.has(t.type ?? '');
                                 return (
                                     <TouchableOpacity
@@ -1179,46 +1232,59 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                         </View>
                     )}
 
-                    <View style={am.facilityRow}>
-                        {(
-                            [
-                                {
-                                    icon: 'restaurant-outline',
-                                    label: 'Kitchen Access',
-                                    data: amenities.kitchenAccess,
-                                },
-                                {
-                                    icon: 'cafe-outline',
-                                    label: 'Dining Area',
-                                    data: amenities.diningArea,
-                                },
-                            ] as FacilityDef[]
-                        ).map(f => (
-                            <View
-                                key={f.label}
-                                style={[am.facilityCard, f.data.available && am.facilityCardActive]}
-                            >
-                                <Ionicons
-                                    name={f.icon as any}
-                                    size={20}
-                                    color={f.data.available ? Colors.primary : Colors.charcoalLight}
-                                />
-                                <Text style={am.facilityName}>{f.label}</Text>
-                                <Text
-                                    style={[
-                                        am.facilityStatus,
-                                        !f.data.available && { color: Colors.charcoalLight },
-                                    ]}
-                                >
-                                    {f.data.available
-                                        ? f.data.type === 'Paid'
-                                            ? `₹${f.data.charges}`
-                                            : 'Included in booking'
-                                        : 'Not available'}
-                                </Text>
-                            </View>
-                        ))}
-                    </View>
+                    {(amenities.kitchenAccess.available || amenities.diningArea.available) && (
+                        <View style={am.facilityRow}>
+                            {(
+                                [
+                                    {
+                                        icon: 'restaurant-outline',
+                                        label: 'Kitchen Access',
+                                        data: amenities.kitchenAccess,
+                                    },
+                                    {
+                                        icon: 'cafe-outline',
+                                        label: 'Dining Area',
+                                        data: amenities.diningArea,
+                                    },
+                                ] as FacilityDef[]
+                            )
+                                .filter(f => f.data.available)
+                                .map(f => (
+                                    <View
+                                        key={f.label}
+                                        style={[
+                                            am.facilityCard,
+                                            f.data.available && am.facilityCardActive,
+                                        ]}
+                                    >
+                                        <Ionicons
+                                            name={f.icon as any}
+                                            size={20}
+                                            color={
+                                                f.data.available
+                                                    ? Colors.primary
+                                                    : Colors.charcoalLight
+                                            }
+                                        />
+                                        <Text style={am.facilityName}>{f.label}</Text>
+                                        <Text
+                                            style={[
+                                                am.facilityStatus,
+                                                !f.data.available && {
+                                                    color: Colors.charcoalLight,
+                                                },
+                                            ]}
+                                        >
+                                            {f.data.available
+                                                ? f.data.type === 'Paid'
+                                                    ? `₹${f.data.charges}`
+                                                    : 'Included in booking'
+                                                : 'Not available'}
+                                        </Text>
+                                    </View>
+                                ))}
+                        </View>
+                    )}
                 </View>
 
                 {/* Location */}
@@ -1255,7 +1321,9 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                 {
                                     icon: 'bus-outline',
                                     label: 'Bus / Auto',
-                                    value: `${location.nearestBusAuto}m`,
+                                    // FIX: nearestBusAuto is already a string with units in
+                                    // VenueResponse — render it directly, no `+ 'm'` suffix
+                                    value: location.nearestBusAuto,
                                 },
                                 {
                                     icon: 'train-outline',
@@ -1283,50 +1351,123 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
 
                 {/* Pricing */}
                 <View style={s.section}>
-                    <SectionTitle icon="pricetag-outline" label="Pricing (Weekday)" />
-                    <View style={pr.cardsRow}>
-                        {(
-                            [
-                                {
-                                    icon: 'time-outline',
-                                    label: '1 Hour',
-                                    price: pricing.perHour.weekday,
-                                    sub: '',
-                                },
-                                {
-                                    icon: 'sunny-outline',
-                                    label: 'Half Day',
-                                    price: pricing.halfDay.weekday,
-                                    sub: '4 Hours',
-                                },
-                                {
-                                    icon: 'calendar-outline',
-                                    label: 'Full Day',
-                                    price: pricing.fullDay.weekday,
-                                    sub: '8 Hours',
-                                },
-                            ] as PricingCard[]
-                        ).map((p, i) => (
-                            <View key={i} style={pr.card}>
-                                <View style={pr.iconWrap}>
-                                    <Ionicons
-                                        name={p.icon as any}
-                                        size={18}
-                                        color={Colors.primary}
-                                    />
-                                </View>
-                                <Text style={pr.cardLabel}>{p.label}</Text>
-                                {!!p.sub && <Text style={pr.cardSub}>{p.sub}</Text>}
-                                <Text style={pr.cardPrice}>₹{p.price.toLocaleString()}</Text>
+                    <SectionTitle icon="pricetag-outline" label="Pricing" />
+
+                    {(pricing.perHour.weekday > 0 ||
+                        pricing.halfDay.weekday > 0 ||
+                        pricing.fullDay.weekday > 0) && (
+                        <>
+                            <Text style={s.pricingSubheader}>Weekday</Text>
+                            <View style={pr.cardsRow}>
+                                {(
+                                    [
+                                        {
+                                            icon: 'time-outline',
+                                            label: '1 Hour',
+                                            price: pricing.perHour.weekday,
+                                            sub: '',
+                                        },
+                                        {
+                                            icon: 'sunny-outline',
+                                            label: 'Half Day',
+                                            price: pricing.halfDay.weekday,
+                                            sub: '4 Hours',
+                                        },
+                                        {
+                                            icon: 'calendar-outline',
+                                            label: 'Full Day',
+                                            price: pricing.fullDay.weekday,
+                                            sub: '8 Hours',
+                                        },
+                                    ] as PricingCard[]
+                                )
+                                    .filter(p => p.price > 0)
+                                    .map((p, i) => (
+                                        <View key={i} style={pr.card}>
+                                            <View style={pr.iconWrap}>
+                                                <Ionicons
+                                                    name={p.icon as any}
+                                                    size={18}
+                                                    color={Colors.primary}
+                                                />
+                                            </View>
+                                            <Text style={pr.cardLabel}>{p.label}</Text>
+                                            {!!p.sub && <Text style={pr.cardSub}>{p.sub}</Text>}
+                                            <Text style={pr.cardPrice}>
+                                                ₹{p.price.toLocaleString()}
+                                            </Text>
+                                        </View>
+                                    ))}
                             </View>
-                        ))}
-                    </View>
+                        </>
+                    )}
+
+                    {(pricing.perHour.weekend > 0 ||
+                        pricing.halfDay.weekend > 0 ||
+                        pricing.fullDay.weekend > 0) && (
+                        <>
+                            <Text style={[s.pricingSubheader, { marginTop: Spacing.lg }]}>
+                                Weekend
+                            </Text>
+                            <View style={pr.cardsRow}>
+                                {(
+                                    [
+                                        {
+                                            icon: 'time-outline',
+                                            label: '1 Hour',
+                                            price: pricing.perHour.weekend,
+                                            sub: '',
+                                        },
+                                        {
+                                            icon: 'sunny-outline',
+                                            label: 'Half Day',
+                                            price: pricing.halfDay.weekend,
+                                            sub: '4 Hours',
+                                        },
+                                        {
+                                            icon: 'calendar-outline',
+                                            label: 'Full Day',
+                                            price: pricing.fullDay.weekend,
+                                            sub: '8 Hours',
+                                        },
+                                    ] as PricingCard[]
+                                )
+                                    .filter(p => p.price > 0)
+                                    .map((p, i) => (
+                                        <View key={i} style={[pr.card, pr.cardWeekend]}>
+                                            <View style={pr.iconWrap}>
+                                                <Ionicons
+                                                    name={p.icon as any}
+                                                    size={18}
+                                                    color={Colors.primary}
+                                                />
+                                            </View>
+                                            <Text style={pr.cardLabel}>{p.label}</Text>
+                                            {!!p.sub && <Text style={pr.cardSub}>{p.sub}</Text>}
+                                            <Text style={pr.cardPrice}>
+                                                ₹{p.price.toLocaleString()}
+                                            </Text>
+                                        </View>
+                                    ))}
+                            </View>
+                        </>
+                    )}
+
                     {pricing.extraHourRate.weekday > 0 && (
                         <View style={pr.extraRow}>
                             <Ionicons name="add-circle-outline" size={14} color={Colors.primary} />
-                            <Text style={pr.extraLabel}>Extra Hour</Text>
+                            <Text style={pr.extraLabel}>Extra Hour (Weekday)</Text>
                             <Text style={pr.extraPrice}>
                                 ₹{pricing.extraHourRate.weekday.toLocaleString()}/hr
+                            </Text>
+                        </View>
+                    )}
+                    {pricing.extraHourRate.weekend > 0 && (
+                        <View style={[pr.extraRow, { marginTop: 6 }]}>
+                            <Ionicons name="add-circle-outline" size={14} color={Colors.primary} />
+                            <Text style={pr.extraLabel}>Extra Hour (Weekend)</Text>
+                            <Text style={pr.extraPrice}>
+                                ₹{pricing.extraHourRate.weekend.toLocaleString()}/hr
                             </Text>
                         </View>
                     )}
@@ -1382,21 +1523,28 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
 
             {/* CTA bar */}
             <View style={s.ctaBar}>
-                {!isOwner && (
+                {!isOwner && pricing.perHour.weekday > 0 && (
                     <View>
-                        <Text style={s.ctaFromLabel}>Starting from</Text>
+                        <Text style={s.ctaFromLabel}>Weekday from</Text>
                         <View style={s.ctaPriceRow}>
-                            <Text style={s.ctaPrice}>₹{pricing.perHour.weekday.toLocaleString()}</Text>
+                            <Text style={s.ctaPrice}>
+                                ₹{pricing.perHour.weekday.toLocaleString()}
+                            </Text>
                             <Text style={s.ctaPerHour}>/hr</Text>
                         </View>
-                        <AmenitiesSummaryBadge count={paidAmenities.length} total={amenitiesTotal} />
+                        <AmenitiesSummaryBadge
+                            count={paidAmenities.length}
+                            total={amenitiesTotal}
+                        />
                     </View>
                 )}
                 <TouchableOpacity
                     style={s.ctaButton}
-                    onPress={() => isOwner ? navigation.navigate('updateVenue',{
-                        venueId:venue._id
-                    }) : setBookingVisible(true)}
+                    onPress={() =>
+                        isOwner
+                            ? navigation.navigate('updateVenue', { venueId: venue._id })
+                            : setBookingVisible(true)
+                    }
                     activeOpacity={0.85}
                 >
                     <Ionicons
@@ -1627,6 +1775,14 @@ const s = StyleSheet.create({
         lineHeight: 22,
         letterSpacing: 0.1,
     },
+    pricingSubheader: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalMid,
+        letterSpacing: 0.3,
+        marginBottom: Spacing.sm,
+        textTransform: 'uppercase',
+    },
     ctaBar: {
         position: 'absolute',
         bottom: 0,
@@ -1754,14 +1910,14 @@ const am = StyleSheet.create({
         color: Colors.primary,
         lineHeight: 22,
     },
-    stepQty: {
+    stepInput: {
         fontSize: Typography.base,
         fontWeight: Typography.bold,
         color: Colors.primaryDark,
-        minWidth: 20,
+        minWidth: 30,
         textAlign: 'center',
+        paddingVertical: 2,
     },
-    // thaliGroup: bordered card container for Format 2 grouped thalis
     thaliGroup: {
         backgroundColor: Colors.background,
         borderRadius: Radii.md,
@@ -1770,7 +1926,6 @@ const am = StyleSheet.create({
         overflow: 'hidden',
         marginBottom: 10,
     },
-    // thaliGroupName: cuisine header shown at top of each Format 2 group
     thaliGroupName: {
         backgroundColor: Colors.primaryLight,
         paddingHorizontal: 14,
@@ -1873,6 +2028,10 @@ const pr = StyleSheet.create({
         gap: 4,
         borderWidth: 1.5,
         borderColor: Colors.border,
+    },
+    cardWeekend: {
+        backgroundColor: Colors.primaryDim,
+        borderColor: Colors.primaryBorder,
     },
     iconWrap: {
         width: 36,
@@ -2007,6 +2166,7 @@ const sheet = StyleSheet.create({
     startingFrom: { fontSize: Typography.sm, color: Colors.charcoalLight },
     price: { fontSize: Typography.xxl, fontWeight: Typography.extraBold, color: Colors.primary },
     perHour: { fontSize: Typography.sm, color: Colors.charcoalLight },
+    weekendTag: { fontSize: Typography.sm, color: Colors.primary, fontWeight: Typography.semiBold },
     closeBtn: {
         width: 36,
         height: 36,
