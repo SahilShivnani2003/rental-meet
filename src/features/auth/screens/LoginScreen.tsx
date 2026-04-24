@@ -18,10 +18,11 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import Field from '@/components/UI/InputField';
 import LoadingDots from '@/components/UI/loading-dots';
 import { useAlert } from '@/context/AlertContext';
-import { authAPI } from '@/service/apis/auth';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Colors, Spacing, Radii, Shadows, Typography } from '@/theme/theme';
 import { RootStackParamList } from '@/types/RootStackParamList';
+import { useLogin } from '../hooks/useLogin';
+import { ApiError } from '@/types/ApiError';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -29,6 +30,7 @@ type LoginProps = NativeStackScreenProps<RootStackParamList, 'login'>;
 
 export default function LoginScreen({ navigation }: LoginProps) {
     const { setUser } = useAuthStore();
+    const {mutate: login} = useLogin();
     const alert = useAlert();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -101,21 +103,20 @@ export default function LoginScreen({ navigation }: LoginProps) {
             Animated.spring(btnScale, { toValue: 1, useNativeDriver: true, speed: 20 }),
         ]).start();
 
-        try {
-            setLoading(true);
-            const response = await authAPI.login({ email, password });
-            if (!response?.success) {
-                alert.error('Login failed', response?.message || 'Something went wrong');
-                return;
+        setLoading(true);
+        login({email, password},
+            {
+                onSuccess:(data)=>{
+                    setLoading(false)
+                    alert.success('Success', data.message || 'Login successful');
+                    setUser(data?.user, data?.token);
+                },
+                onError:(error:ApiError)=>{
+                    setLoading(false)
+                    alert.error('Login failed', error?.message || 'Something went wrong');
+                }
             }
-            setUser(response?.user, response?.token);
-            alert.success('Success', response?.message || 'Login Successful');
-            navigation.replace(response?.user?.role === 'owner' ? 'owner' : 'client');
-        } catch (error: any) {
-            alert.error('Login failed', error?.message || 'Something went wrong');
-        } finally {
-            setLoading(false);
-        }
+        )
     };
 
     // ── Skip — navigates as a guest client ──────────────────────────────────────
