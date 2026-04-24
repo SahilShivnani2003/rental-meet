@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
-import Field from '../../components/UI/input-field';
+import Field from '../../components/UI/InputField';
 import LoadingDots from '../../components/UI/loading-dots';
 import PasswordStrength from '../../components/UI/password-strength-bar';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';

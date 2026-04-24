@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii } from '../../theme/theme';
-import Field from '../UI/input-field';
+import Field from '../UI/InputField';
 import {
     StepHeader,
     SectionCard,

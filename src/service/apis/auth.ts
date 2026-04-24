@@ -1,4 +1,4 @@
-import { apiClient, getAuthHeader } from "../api-client";
+import { apiClient, getAuthHeader } from "../apiClient";
 
 export const authAPI = {
     register: (data: any) => apiClient.post('auth/register', data),

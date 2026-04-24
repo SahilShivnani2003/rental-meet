@@ -1,4 +1,4 @@
-import { apiClient, getAuthHeader } from "../api-client";
+import { apiClient, getAuthHeader } from "../apiClient";
 
 export const bookingAPI = {
     getAll: () => apiClient.get('bookings', {

@@ -16,7 +16,8 @@
       "@service/*": ["src/service/*"],
       "@store/*": ["src/store/*"],
       "@theme/*": ["src/theme/*"],
-      "@types/*": ["src/types/*"]
+      "@types/*": ["src/types/*"],
+      "@features/*": ["src/features/*"]
     }   
   },
   "include": ["**/*.ts", "**/*.tsx"],

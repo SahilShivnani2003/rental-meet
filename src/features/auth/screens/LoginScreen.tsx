@@ -14,14 +14,14 @@ import {
     Alert,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../navigations/RootNavigation';
-import LoadingDots from '../../components/UI/loading-dots';
-import Field from '../../components/UI/InputField';
-import { useAlert } from '../../context/AlertContext';
-import { authAPI } from '../../service/apis/auth';
-import { useAuthStore } from '../../store/useAuthStore';
+import Field from '@/components/UI/InputField';
+import LoadingDots from '@/components/UI/loading-dots';
+import { useAlert } from '@/context/AlertContext';
+import { authAPI } from '@/service/apis/auth';
+import { useAuthStore } from '@/store/useAuthStore';
+import { Colors, Spacing, Radii, Shadows, Typography } from '@/theme/theme';
+import { RootStackParamList } from '@/types/RootStackParamList';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -187,7 +187,7 @@ export default function LoginScreen({ navigation }: LoginProps) {
                             style={styles.logo}
                             resizeMode="contain"
                         />
-                    </View>                    
+                    </View>
                 </Animated.View>
 
                 {/* ── Login card ── */}

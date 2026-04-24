@@ -19,7 +19,7 @@ import {
 } from 'react-native-image-picker';
 import { pick, types, DocumentPickerResponse, errorCodes } from '@react-native-documents/picker';
 import { Colors, Typography, Spacing, Radii } from '../../theme/theme';
-import Field from '../UI/input-field';
+import Field from '../UI/InputField';
 import {
     StepHeader,
     SectionCard,
