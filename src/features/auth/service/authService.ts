@@ -1,11 +1,12 @@
 import { publicClient } from "@/service/apiClient";
+import { RegisterClient, RegisterOwner, RegisterVendor } from "../types/Register";
 
-export const registerUser = async() =>{
+export const registerUser = async(data: RegisterClient | RegisterVendor | RegisterOwner) =>{
     try{
 
         console.log('User registering...');
 
-        const response = await publicClient.post('/auth/register');
+        const response = await publicClient.post('/auth/register', data);
 
         console.log('User register response : ', response.data);
 

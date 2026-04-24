@@ -19,10 +19,10 @@ import Field from '../../components/UI/InputField';
 import LoadingDots from '../../components/UI/loading-dots';
 import PasswordStrength from '../../components/UI/password-strength-bar';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../navigations/RootNavigation';
 import { useAlert } from '../../context/AlertContext';
 import { authAPI } from '../../service/apis/auth';
 import { useAuthStore } from '../../store/useAuthStore';
+import { RootStackParamList } from '@/types/RootStackParamList';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
