@@ -1,4 +1,4 @@
-import { Colors } from "../theme/theme";
+import { Colors } from "../../../theme/theme";
 
 export const ROLES = [
     {

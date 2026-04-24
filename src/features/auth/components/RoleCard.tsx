@@ -1,15 +1,15 @@
-import { useRef, useEffect } from "react";
-import { Animated, View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import Ionicons from "react-native-vector-icons/Ionicons";
-import { Colors, Radii, Shadows, Spacing, Typography } from "../../theme/theme";
-import { ROLES } from "../../features/auth/types/Role";
+import { useRef, useEffect } from 'react';
+import { Animated, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import { ROLES } from '../types/Role';
+import { Colors, Spacing, Radii, Shadows, Typography } from '@/theme/theme';
 
 export function RoleCard({
     role,
     index,
     onSelect,
 }: {
-    role: typeof ROLES[0];
+    role: (typeof ROLES)[0];
     index: number;
     onSelect: (id: string) => void;
 }) {
@@ -35,8 +35,10 @@ export function RoleCard({
         ]).start();
     }, []);
 
-    const onPressIn = () => Animated.spring(scaleAnim, { toValue: 0.97, useNativeDriver: true, speed: 30 }).start();
-    const onPressOut = () => Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 22 }).start();
+    const onPressIn = () =>
+        Animated.spring(scaleAnim, { toValue: 0.97, useNativeDriver: true, speed: 30 }).start();
+    const onPressOut = () =>
+        Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 22 }).start();
 
     return (
         <Animated.View
@@ -85,7 +87,7 @@ export function RoleCard({
 
                     {/* Perks */}
                     <View style={styles.perksWrap}>
-                        {role.perks.map((perk) => (
+                        {role.perks.map(perk => (
                             <View key={perk} style={styles.perkRow}>
                                 <View style={[styles.perkDot, { backgroundColor: role.color }]} />
                                 <Text style={styles.perkText}>{perk}</Text>
@@ -96,11 +98,11 @@ export function RoleCard({
             </TouchableOpacity>
         </Animated.View>
     );
-};
+}
 
 const styles = StyleSheet.create({
     cardWrap: {
-        marginBottom: Spacing.md
+        marginBottom: Spacing.md,
     },
     featuredBadge: {
         flexDirection: 'row',
@@ -112,88 +114,90 @@ const styles = StyleSheet.create({
         paddingVertical: 5,
         borderRadius: Radii.full,
         marginBottom: -1,
-        marginRight: 4, ...Shadows.primary
+        marginRight: 4,
+        ...Shadows.primary,
     },
     featuredBadgeText: {
         fontSize: 10,
         fontWeight: Typography.extraBold,
         color: Colors.white,
         letterSpacing: 0.8,
-        textTransform: 'uppercase'
+        textTransform: 'uppercase',
     },
     card: {
         backgroundColor: Colors.surface,
         borderRadius: Radii.xl,
         flexDirection: 'row',
-        overflow: 'hidden', ...Shadows.card
+        overflow: 'hidden',
+        ...Shadows.card,
     },
     cardAccent: {
-        width: 5
+        width: 5,
     },
     cardInner: {
         flex: 1,
         padding: Spacing.lg,
-        gap: Spacing.sm
+        gap: Spacing.sm,
     },
 
     // Card header
     cardHeader: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: Spacing.md
+        gap: Spacing.md,
     },
     iconWrap: {
         width: 54,
         height: 54,
         borderRadius: Radii.md,
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
     },
     cardTitles: {
-        flex: 1
+        flex: 1,
     },
     cardTitle: {
         fontSize: 18,
         fontWeight: Typography.extraBold,
         color: Colors.charcoal,
-        letterSpacing: -0.3
+        letterSpacing: -0.3,
     },
     cardSubtitle: {
         fontSize: 12,
         fontWeight: Typography.bold,
         letterSpacing: 0.3,
         textTransform: 'uppercase',
-        marginTop: 2
+        marginTop: 2,
     },
     arrowWrap: {
         width: 34,
         height: 34,
         borderRadius: 17,
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
     },
     cardDescription: {
         fontSize: 13,
         color: Colors.charcoalLight,
-        lineHeight: 20
+        lineHeight: 20,
     },
     perksWrap: {
         gap: 6,
-        paddingTop: Spacing.xxs
+        paddingTop: Spacing.xxs,
     },
     perkRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: Spacing.sm
+        gap: Spacing.sm,
     },
     perkDot: {
         width: 6,
         height: 6,
-        borderRadius: 3
+        borderRadius: 3,
     },
     perkText: {
         fontSize: 12,
         color: Colors.charcoalMid,
-        fontWeight: Typography.medium
+        fontWeight: Typography.medium,
     },
-})
+});

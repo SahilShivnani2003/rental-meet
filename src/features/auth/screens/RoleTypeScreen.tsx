@@ -10,11 +10,11 @@ import {
     ScrollView,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ROLES } from '../../features/auth/types/Role';
-import { RoleCard } from '../../components/registerType/role-card';
+import { Colors, Spacing, Radii, Shadows, Typography } from '@/theme/theme';
 import { RootStackParamList } from '@/types/RootStackParamList';
+import { RoleCard } from '../components/RoleCard';
+import { ROLES } from '../types/Role';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -29,8 +29,6 @@ export default function RegisterTypeScreen({ navigation }: registerTypeParams) {
     }, []);
 
     const handleSelect = (roleId: string) => {
-        // Navigate to your Register form screen, passing the chosen role
-        //navigation.navigate('Register', { role: roleId });
         navigation.navigate('register',{
             role:roleId
         });
