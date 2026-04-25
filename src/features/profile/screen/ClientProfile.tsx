@@ -10,45 +10,32 @@ import {
     Dimensions,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
-import { useAlert } from '../../context/AlertContext';
-import { useAuthStore } from '../../store/useAuthStore';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
-import { ClientTabParamList } from '../../navigations/tabNavigations/ClientTabNavigation';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../navigations/RootNavigation';
-import { bookingAPI } from '../../service/apis/booking';
+import { useAlert } from '@/context/AlertContext';
+import { Booking } from '@/features/booking/types/Booking';
+import { ClientTabParamList } from '@/navigations/tabNavigations/ClientTabNavigation';
+import { useAuthStore } from '@/store/useAuthStore';
+import { Colors, Spacing, Radii, Shadows, Typography } from '@/theme/theme';
+import { RootStackParamList } from '@/types/RootStackParamList';
+import useEntrance from '@/hooks/useEntrance';
+import { useGetMyProfile } from '../hooks/useGetMyProfile';
+import { useUpdateProfile } from '../hooks/useUpdateProfile';
+import { useChangePassword } from '../hooks/useChangePassword';
+import { useUploadKycDoc } from '../hooks/useUploadkycDoc';
+import { useGetAllBookings } from '@/features/booking/hooks/useGetAllbookings';
+import { User } from '../types/User';
+import ChangePasswordModal from '../models/ChangePasswordModal';
+import EditProfileModal from '../models/EditProfileModal';
+import KycUploadModal from '../models/KycUploadModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
-// ── Booking type matching API response ────────────────────────────────────────
-type Booking = {
-    _id: string;
-    bookingNumber: string;
-    venue: {
-        _id: string;
-        businessName: string;
-        images: { url: string; isFeatured: boolean }[];
-        location?: { city: string };
-    };
-    bookingDate: string;
-    startTime: string;
-    endTime: string;
-    bookingType: string;
-    amount: number;
-    status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
-    paymentStatus: string;
-    customerDetails?: {
-        eventType: string;
-        guestCount: number;
-    };
-    createdAt: string;
-};
-
-// ── User type config ──────────────────────────────────────────────────────────
+// ── Role → display config ─────────────────────────────────────────────────────
+// Keys match User.role union values exactly
 const USER_TYPE_CONFIG: Record<string, { label: string; icon: string; color: string; bg: string }> =
     {
-        client: { label: 'Client', icon: 'person', color: Colors.info, bg: Colors.infoLight },
+        customer: { label: 'Customer', icon: 'person', color: Colors.info, bg: Colors.infoLight },
         owner: {
             label: 'Space Owner',
             icon: 'business',
@@ -61,61 +48,23 @@ const USER_TYPE_CONFIG: Record<string, { label: string; icon: string; color: str
             color: Colors.success,
             bg: Colors.successLight,
         },
+        admin: { label: 'Admin', icon: 'shield', color: Colors.warning, bg: Colors.warningLight },
+        subadmin: {
+            label: 'Sub Admin',
+            icon: 'shield-half',
+            color: Colors.warning,
+            bg: Colors.warningLight,
+        },
+        employee: {
+            label: 'Employee',
+            icon: 'briefcase',
+            color: Colors.charcoalLight,
+            bg: Colors.border,
+        },
     };
+const DEFAULT_TYPE_CFG = USER_TYPE_CONFIG.customer;
 
-// ── Status config ─────────────────────────────────────────────────────────────
-const STATUS_MAP: Record<string, { color: string; bg: string; label: string }> = {
-    confirmed: { color: Colors.success, bg: Colors.successLight, label: 'Confirmed' },
-    pending: { color: Colors.warning, bg: Colors.warningLight, label: 'Pending' },
-    completed: { color: Colors.info, bg: Colors.infoLight, label: 'Completed' },
-    cancelled: { color: Colors.danger, bg: Colors.dangerLight, label: 'Cancelled' },
-};
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function formatBookingDate(dateStr: string): string {
-    try {
-        return new Date(dateStr).toLocaleDateString('en-IN', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-        });
-    } catch {
-        return dateStr;
-    }
-}
-
-function formatTime(t: string): string {
-    if (!t) return '';
-    // Already formatted like "02:30 PM" or "14:30"
-    if (t.includes('AM') || t.includes('PM')) return t;
-    const [h, m] = t.split(':').map(Number);
-    const suffix = h < 12 ? 'AM' : 'PM';
-    const displayH = h % 12 === 0 ? 12 : h % 12;
-    return `${displayH}:${m.toString().padStart(2, '0')} ${suffix}`;
-}
-
-const fmt = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
-
-// ── Entrance animation hook ───────────────────────────────────────────────────
-function useEntrance(delay: number) {
-    const fade = useRef(new Animated.Value(0)).current;
-    const slide = useRef(new Animated.Value(20)).current;
-    useEffect(() => {
-        Animated.parallel([
-            Animated.timing(fade, { toValue: 1, delay, duration: 320, useNativeDriver: true }),
-            Animated.spring(slide, {
-                toValue: 0,
-                delay,
-                useNativeDriver: true,
-                speed: 18,
-                bounciness: 7,
-            }),
-        ]).start();
-    }, []);
-    return { fade, slide };
-}
-
-// ── Stat card ─────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 type StatItem = {
     id: string;
     label: string;
@@ -125,6 +74,7 @@ type StatItem = {
     bg: string;
 };
 
+// ── Stat card ─────────────────────────────────────────────────────────────────
 function StatCard({ stat, index }: { stat: StatItem; index: number }) {
     const { fade, slide } = useEntrance(320 + index * 60);
     return (
@@ -136,71 +86,6 @@ function StatCard({ stat, index }: { stat: StatItem; index: number }) {
             </View>
             <Text style={[styles.statNum, { color: stat.color }]}>{stat.value}</Text>
             <Text style={styles.statLabel}>{stat.label}</Text>
-        </Animated.View>
-    );
-}
-
-// ── Booking row ───────────────────────────────────────────────────────────────
-function BookingRow({ item, index }: { item: Booking; index: number }) {
-    const { fade, slide } = useEntrance(600 + index * 80);
-    const scaleAnim = useRef(new Animated.Value(1)).current;
-    const st = STATUS_MAP[item.status] ?? STATUS_MAP.pending;
-
-    return (
-        <Animated.View style={{ opacity: fade, transform: [{ translateY: slide }] }}>
-            <TouchableOpacity
-                style={styles.bookingRow}
-                onPressIn={() =>
-                    Animated.spring(scaleAnim, {
-                        toValue: 0.97,
-                        useNativeDriver: true,
-                        speed: 30,
-                    }).start()
-                }
-                onPressOut={() =>
-                    Animated.spring(scaleAnim, {
-                        toValue: 1,
-                        useNativeDriver: true,
-                        speed: 22,
-                    }).start()
-                }
-                activeOpacity={1}
-            >
-                <View style={[styles.bookingAccent, { backgroundColor: st.color }]} />
-                <View style={styles.bookingBody}>
-                    <View style={styles.bookingTop}>
-                        <Text style={styles.bookingVenue} numberOfLines={1}>
-                            {item.venue?.businessName ?? '—'}
-                        </Text>
-                        <View style={[styles.statusChip, { backgroundColor: st.bg }]}>
-                            <Text style={[styles.statusChipText, { color: st.color }]}>
-                                {st.label}
-                            </Text>
-                        </View>
-                    </View>
-                    <View style={styles.bookingMeta}>
-                        <View style={styles.bookingMetaItem}>
-                            <Ionicons
-                                name="calendar-outline"
-                                size={11}
-                                color={Colors.charcoalLight}
-                            />
-                            <Text style={styles.bookingMetaText}>
-                                {formatBookingDate(item.bookingDate)}
-                            </Text>
-                        </View>
-                        <View style={styles.bookingMetaItem}>
-                            <Ionicons name="time-outline" size={11} color={Colors.charcoalLight} />
-                            <Text style={styles.bookingMetaText}>
-                                {formatTime(item.startTime)} – {formatTime(item.endTime)}
-                            </Text>
-                        </View>
-                    </View>
-                    {/* FIX: use ₹ and format correctly */}
-                    <Text style={styles.bookingAmount}>{fmt(item.amount)}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={Colors.border} />
-            </TouchableOpacity>
         </Animated.View>
     );
 }
@@ -274,18 +159,38 @@ function MenuSection({ title, items }: { title: string; items: any[] }) {
 type clientProfileProps = NativeBottomTabScreenProps<ClientTabParamList, 'profile'>;
 
 export default function ClientProfile({ navigation }: clientProfileProps) {
-    const { user } = useAuthStore();
-    const typeCfg = USER_TYPE_CONFIG[user.userType] ?? USER_TYPE_CONFIG.client;
+    // ── Profile data ──────────────────────────────────────────────────────────
+    const { data: userData, isLoading: profileLoading } = useGetMyProfile();
+    const user: Partial<User> = userData?.user ?? {};
+    const typeCfg = USER_TYPE_CONFIG[user.role ?? ''] ?? DEFAULT_TYPE_CFG;
+    const initials = user.name?.trim().slice(0, 2).toUpperCase() ?? '??';
+
+    // ── Bookings data ─────────────────────────────────────────────────────────
+    const {
+        data: bookingData,
+        isLoading: bookingsLoading,
+        isRefetching: bookingsRefetching,
+        refetch: refetchBookings,
+    } = useGetAllBookings();
+    const bookings: Booking[] = bookingData?.bookings ?? [];
+
+    // ── Mutation hooks — passed down to modals ────────────────────────────────
+    const { mutate: updateUser } = useUpdateProfile();
+    const { mutate: changePassword } = useChangePassword();
+    const { mutate: uploadKycDoc } = useUploadKycDoc();
+
     const alert = useAlert();
     const { logOut } = useAuthStore();
 
-    // FIX: typed state
-    const [bookings, setBookings] = useState<Booking[]>([]);
+    // ── Modal visibility ──────────────────────────────────────────────────────
+    const [editProfileVisible, setEditProfileVisible] = useState(false);
+    const [changePasswordVisible, setChangePasswordVisible] = useState(false);
+    const [kycVisible, setKycVisible] = useState(false);
 
+    // ── Animations ────────────────────────────────────────────────────────────
     const headerFade = useRef(new Animated.Value(0)).current;
     const heroSlide = useRef(new Animated.Value(-16)).current;
 
-    // FIX: call fetchBookingData on mount
     useEffect(() => {
         Animated.parallel([
             Animated.timing(headerFade, { toValue: 1, duration: 400, useNativeDriver: true }),
@@ -296,22 +201,9 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                 bounciness: 6,
             }),
         ]).start();
-
-        fetchBookingData();
     }, []);
 
-    const fetchBookingData = async () => {
-        try {
-            const response = await bookingAPI.getAll();
-            if (response?.success) {
-                setBookings(response.bookings ?? []);
-            }
-        } catch (error: any) {
-            console.error('FETCH BOOKING ERROR FROM PROFILE : ', error);
-        }
-    };
-
-    // FIX: compute stats from real bookings data
+    // ── Stats derived from API bookings ───────────────────────────────────────
     const stats: StatItem[] = useMemo(() => {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -321,7 +213,6 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
             d.setHours(0, 0, 0, 0);
             return (b.status === 'confirmed' || b.status === 'pending') && d >= today;
         }).length;
-
         const completed = bookings.filter(b => b.status === 'completed').length;
         const cancelled = bookings.filter(b => b.status === 'cancelled').length;
 
@@ -361,20 +252,12 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
         ];
     }, [bookings]);
 
-    // FIX: recent 3 bookings from API, sorted by createdAt desc
-    const recentBookings = useMemo(
-        () =>
-            [...bookings]
-                .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-                .slice(0, 3),
-        [bookings],
-    );
-
+    // ── Logout ────────────────────────────────────────────────────────────────
     const handleLogout = () => {
         alert.show({
             type: 'confirm',
             title: 'Log Out',
-            message: 'Are you sure want to log out',
+            message: 'Are you sure you want to log out?',
             buttons: [
                 { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },
                 {
@@ -391,27 +274,7 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
         });
     };
 
-    const accountItems = [
-        {
-            id: 'edit-profile',
-            icon: 'person-circle-outline',
-            iconColor: Colors.primary,
-            iconBg: Colors.primaryLight,
-            title: 'Edit Profile',
-            subtitle: 'Update your personal info',
-            onPress: () => Alert.alert('Coming Soon', 'Edit profile is coming soon.'),
-        },
-        {
-            id: 'payment',
-            icon: 'card-outline',
-            iconColor: Colors.info,
-            iconBg: Colors.infoLight,
-            title: 'Payment Methods',
-            subtitle: 'Cards & billing info',
-            onPress: () => Alert.alert('Coming Soon', 'Payment methods coming soon.'),
-        },
-    ].filter(Boolean) as any[];
-
+    // ── Menu items ────────────────────────────────────────────────────────────
     const quickActions = [
         {
             id: 'bookings',
@@ -432,6 +295,46 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
             onPress: () => navigation.navigate('venues'),
         },
     ];
+
+    const accountItems = [
+        {
+            id: 'edit-profile',
+            icon: 'person-circle-outline',
+            iconColor: Colors.primary,
+            iconBg: Colors.primaryLight,
+            title: 'Edit Profile',
+            subtitle: 'Update your personal info',
+            onPress: () => setEditProfileVisible(true),
+        },
+        {
+            id: 'change-password',
+            icon: 'lock-closed-outline',
+            iconColor: Colors.warning,
+            iconBg: Colors.warningLight,
+            title: 'Change Password',
+            subtitle: 'Update your password',
+            onPress: () => setChangePasswordVisible(true),
+        },
+        {
+            id: 'kyc',
+            icon: 'document-text-outline',
+            iconColor: Colors.info,
+            iconBg: Colors.infoLight,
+            title: 'KYC Documents',
+            subtitle: user.kyc?.verifiedAt ? 'Verified ✓' : 'Upload to verify',
+            onPress: () => setKycVisible(true),
+        },
+        {
+            id: 'payment',
+            icon: 'card-outline',
+            iconColor: Colors.info,
+            iconBg: Colors.infoLight,
+            title: 'Payment Methods',
+            subtitle: 'Cards & billing info',
+            onPress: () => Alert.alert('Coming Soon', 'Payment methods coming soon.'),
+        },
+    ];
+
     const preferenceItems = [
         {
             id: 'notifications',
@@ -463,9 +366,10 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
         },
     ];
 
+    // ── Render ────────────────────────────────────────────────────────────────
     return (
         <View style={styles.container}>
-            {/* ── Header ── */}
+            {/* Header */}
             <Animated.View
                 style={[
                     styles.header,
@@ -478,29 +382,6 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                         <Text style={styles.headerEyebrow}>ACCOUNT</Text>
                         <Text style={styles.headerTitle}>Profile</Text>
                     </View>
-                    {/* <View style={styles.headerActions}>
-                        <TouchableOpacity
-                            style={styles.iconBtn}
-                            onPress={() => console.log('navigating to message')}
-                        >
-                            <Ionicons
-                                name="chatbubble-outline"
-                                size={19}
-                                color={Colors.charcoalMid}
-                            />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.iconBtn}>
-                            <Ionicons
-                                name="notifications-outline"
-                                size={19}
-                                color={Colors.charcoalMid}
-                            />
-                            <View style={styles.notifDot} />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.settingsBtn}>
-                            <Ionicons name="settings-outline" size={19} color={Colors.charcoal} />
-                        </TouchableOpacity>
-                    </View> */}
                 </View>
             </Animated.View>
 
@@ -509,50 +390,66 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                 contentContainerStyle={styles.contentPadding}
                 showsVerticalScrollIndicator={false}
             >
-                {/* ── Profile card ── */}
+                {/* Profile card */}
                 <Animated.View style={[styles.profileCard, { opacity: headerFade }]}>
                     <View style={styles.profileBanner} />
                     <View style={styles.profileContent}>
                         <View style={styles.avatarWrapper}>
                             <View style={styles.avatarRing}>
                                 <View style={styles.avatar}>
-                                    <Text style={styles.avatarInitials}>
-                                        {user.name.slice(0, 2).toUpperCase()}
-                                    </Text>
+                                    <Text style={styles.avatarInitials}>{initials}</Text>
                                 </View>
                             </View>
-                            <TouchableOpacity style={styles.cameraBtn}>
+                            <TouchableOpacity
+                                style={styles.cameraBtn}
+                                onPress={() => setEditProfileVisible(true)}
+                            >
                                 <Ionicons name="camera" size={14} color={Colors.white} />
                             </TouchableOpacity>
                         </View>
-                        <Text style={styles.userName}>{user.name}</Text>
-                        <Text style={styles.userEmail}>{user.email}</Text>
+
+                        <Text style={styles.userName}>{user.name ?? '—'}</Text>
+                        <Text style={styles.userEmail}>{user.email ?? '—'}</Text>
+
                         <View style={styles.memberBadge}>
                             <View style={styles.memberDot} />
-                            <Text style={styles.memberText}>{user.role}</Text>
+                            <Text style={styles.memberText}>
+                                {(user.role ?? 'member').toUpperCase()}
+                            </Text>
                         </View>
+
                         <View style={[styles.typeBadge, { backgroundColor: typeCfg.bg }]}>
                             <Ionicons name={typeCfg.icon as any} size={13} color={typeCfg.color} />
                             <Text style={[styles.typeBadgeText, { color: typeCfg.color }]}>
                                 {typeCfg.label}
                             </Text>
                         </View>
+
+                        {user.kyc?.verifiedAt && (
+                            <View style={styles.kycBadge}>
+                                <Ionicons
+                                    name="shield-checkmark"
+                                    size={12}
+                                    color={Colors.success}
+                                />
+                                <Text style={styles.kycBadgeText}>KYC Verified</Text>
+                            </View>
+                        )}
                     </View>
                 </Animated.View>
 
-                {/* ── Booking stats — computed from API ── */}
+                {/* Stats */}
                 <View style={styles.statsRow}>
-                    {stats.map((s, i) => (
-                        <StatCard key={s.id} stat={s} index={i} />
+                    {stats.map((stat, i) => (
+                        <StatCard key={stat.id} stat={stat} index={i} />
                     ))}
                 </View>
 
-                {/* ── Account menu ── */}
                 <MenuSection title="QUICK ACTIONS" items={quickActions} />
                 <MenuSection title="ACCOUNT" items={accountItems} />
                 <MenuSection title="PREFERENCES" items={preferenceItems} />
 
-                {/* ── Logout ── */}
+                {/* Logout */}
                 <TouchableOpacity
                     style={styles.logoutBtn}
                     onPress={handleLogout}
@@ -566,6 +463,25 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
 
                 <Text style={styles.versionText}>RentalMeet v1.0.0</Text>
             </ScrollView>
+
+            {/* ── Modals ── */}
+            <EditProfileModal
+                visible={editProfileVisible}
+                onClose={() => setEditProfileVisible(false)}
+                user={user}
+                mutate={updateUser}
+            />
+            <ChangePasswordModal
+                visible={changePasswordVisible}
+                onClose={() => setChangePasswordVisible(false)}
+                mutate={changePassword}
+            />
+            <KycUploadModal
+                visible={kycVisible}
+                onClose={() => setKycVisible(false)}
+                mutate={uploadKycDoc}
+                existingKyc={user.kyc}
+            />
         </View>
     );
 }
@@ -575,8 +491,6 @@ const STAT_W = (SCREEN_WIDTH - Spacing.lg * 2 - Spacing.sm * 3) / 4;
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
-
-    // Header
     header: {
         backgroundColor: Colors.surface,
         borderBottomLeftRadius: Radii.xxl,
@@ -606,40 +520,8 @@ const styles = StyleSheet.create({
         color: Colors.charcoal,
         letterSpacing: Typography.tight,
     },
-    headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
-    iconBtn: {
-        width: 38,
-        height: 38,
-        borderRadius: Radii.md,
-        backgroundColor: Colors.background,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    notifDot: {
-        position: 'absolute',
-        top: 8,
-        right: 8,
-        width: 7,
-        height: 7,
-        borderRadius: 3.5,
-        backgroundColor: Colors.primary,
-        borderWidth: 1.5,
-        borderColor: Colors.surface,
-    },
-    settingsBtn: {
-        width: 46,
-        height: 46,
-        borderRadius: Radii.md,
-        backgroundColor: Colors.background,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-
-    // Content
     content: { flex: 1 },
     contentPadding: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.xl, paddingBottom: 120 },
-
-    // Profile card
     profileCard: {
         backgroundColor: Colors.surface,
         borderRadius: 24,
@@ -736,14 +618,23 @@ const styles = StyleSheet.create({
         paddingHorizontal: 14,
         paddingVertical: 7,
         borderRadius: Radii.full,
+        marginBottom: 8,
     },
     typeBadgeText: {
         fontSize: Typography.base,
         fontWeight: Typography.bold,
         letterSpacing: Typography.normal,
     },
-
-    // Stats
+    kycBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        backgroundColor: Colors.successLight,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: Radii.full,
+    },
+    kycBadgeText: { fontSize: 11, fontWeight: Typography.bold, color: Colors.success },
     statsRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
     statCard: {
         width: STAT_W,
@@ -769,101 +660,6 @@ const styles = StyleSheet.create({
         fontWeight: Typography.semiBold,
         textAlign: 'center',
     },
-
-    // Quick actions
-    quickSection: { marginBottom: Spacing.lg },
-    quickRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
-    quickTile: {
-        flex: 1,
-        borderRadius: Radii.xl,
-        padding: Spacing.md,
-        minHeight: 115,
-        justifyContent: 'flex-end',
-        ...Shadows.card,
-    },
-    quickTileIcon: {
-        width: 40,
-        height: 40,
-        borderRadius: Radii.md,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 'auto' as any,
-    },
-    quickTileLabel: {
-        fontSize: 12,
-        fontWeight: Typography.extraBold,
-        color: Colors.white,
-        letterSpacing: -0.2,
-        marginTop: Spacing.md,
-        marginBottom: 2,
-    },
-    quickTileSub: { fontSize: 9.5, color: 'rgba(255,255,255,0.68)', fontWeight: Typography.medium },
-
-    // Section helpers
-    sectionHeading: {
-        fontSize: 17,
-        fontWeight: Typography.extraBold,
-        color: Colors.charcoal,
-        letterSpacing: -0.3,
-    },
-    sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-    sectionAccent: { width: 4, height: 20, backgroundColor: Colors.primary, borderRadius: 2 },
-
-    // Bookings card
-    bookingsCard: {
-        backgroundColor: Colors.surface,
-        borderRadius: Radii.xl,
-        padding: Spacing.lg,
-        marginBottom: Spacing.lg,
-        ...Shadows.card,
-    },
-    bookingsCardHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: Spacing.lg,
-    },
-    viewAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    viewAllText: { fontSize: 13, fontWeight: Typography.bold, color: Colors.primary },
-
-    bookingRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: Spacing.md,
-        gap: Spacing.sm,
-    },
-    bookingAccent: { width: 3, height: 56, borderRadius: 2 },
-    bookingBody: { flex: 1 },
-    bookingTop: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginBottom: 6,
-    },
-    bookingVenue: {
-        fontSize: 14,
-        fontWeight: Typography.bold,
-        color: Colors.charcoal,
-        flex: 1,
-        marginRight: Spacing.sm,
-    },
-    statusChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radii.full },
-    statusChipText: { fontSize: 10, fontWeight: Typography.bold, letterSpacing: 0.3 },
-    bookingMeta: { flexDirection: 'row', gap: Spacing.md, marginBottom: 4 },
-    bookingMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    bookingMetaText: { fontSize: 11, color: Colors.charcoalLight, fontWeight: Typography.medium },
-    bookingAmount: { fontSize: 15, fontWeight: Typography.extraBold, color: Colors.primary },
-    bookingDivider: { height: 1, backgroundColor: Colors.background, marginLeft: 15 },
-
-    // Empty bookings state
-    emptyBookings: { alignItems: 'center', paddingVertical: 28, gap: 8 },
-    emptyBookingsText: {
-        fontSize: Typography.base,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.medium,
-    },
-
-    // Menu
     menuSection: { marginBottom: Spacing.lg },
     menuSectionLabel: {
         fontSize: Typography.sm,
@@ -913,8 +709,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     menuDivider: { height: 1, backgroundColor: Colors.background, marginLeft: 72 },
-
-    // Logout
     logoutBtn: {
         flexDirection: 'row',
         alignItems: 'center',
