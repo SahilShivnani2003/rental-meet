@@ -57,7 +57,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
         isLoading: venuesLoading,
         isRefetching: venuesRefetching,
         refetch: refetchVenues,
-    } = useGetAllVenue();
+    } = useGetAllVenue({limit: '6'});
 
     const {
         data: citiesData,

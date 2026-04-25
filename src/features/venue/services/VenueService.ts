@@ -1,11 +1,23 @@
 import { privateClient, publicClient } from "@/service/apiClient";
 import { Venue } from "../types/Venue";
 
-export const getAllVenues = async () => {
+export interface VenueParams {
+  city?: string;
+  location?: string;
+  venueType?: string;
+  capacity?: string;
+  status?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  search?: string;
+  page?: string;
+  limit?: string;
+}
+export const getAllVenues = async (params?:VenueParams) => {
     try {
         console.log('Fetching all venues....');
 
-        const response = await publicClient.get('/venues');
+        const response = await publicClient.get('/venues', {params});
 
         console.log('Venues response : ', response.data);
 

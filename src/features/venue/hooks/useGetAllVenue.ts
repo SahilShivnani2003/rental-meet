@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query"
-import { getAllVenues } from "../services/VenueService"
+import { getAllVenues, VenueParams } from "../services/VenueService"
 
-export const useGetAllVenue = () => {
-    return useQuery({
-        queryKey: ['get-venue'],
-        queryFn: getAllVenues
-    })
+export const useGetAllVenue = (params?: VenueParams) => {
+  return useQuery({
+    queryKey: ['get-venue', params],
+    queryFn: () => getAllVenues(params)
+  })
 }
