@@ -37,8 +37,17 @@ export type RootStackParamList = {
     vDetail: {
         venueId: string;
     };
-    modifyBooking:{
-        bookingId: string; 
+    modifyBooking: {
+        bookingId: string;
         booking: Booking;
+    };
+    vendorDetail: {
+        service: any;
+    };
+    serviceBooking: {
+        service: any;
+    };
+    getQuotation: {
+        service: any;
     }
 };
