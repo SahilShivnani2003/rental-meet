@@ -32,8 +32,8 @@ export const createVenue = async (data: Venue) => {
     }
 }
 
-export const getMyVenue = async() =>{
-    try{
+export const getMyVenue = async () => {
+    try {
 
         console.log('Fetching my venues.....');
 
@@ -41,15 +41,15 @@ export const getMyVenue = async() =>{
 
         console.log('My venue response : ', response.data);
 
-        return response.data;        
-    }catch(error){
+        return response.data;
+    } catch (error) {
         console.log('Errr while fetching my venue : ', error);
         throw error;
     }
 }
 
-export const getVenueLocations = async() =>{
-    try{
+export const getVenueLocations = async () => {
+    try {
         console.log('Fetching venue location ');
 
         const response = await publicClient.get('venues/locations/all');
@@ -57,8 +57,58 @@ export const getVenueLocations = async() =>{
         console.log('Venue location response : ', response.data);
 
         return response.data;
-    }catch(error){
+    } catch (error) {
         console.error('Error while fetching my locations : ', error);
+        throw error;
+    }
+}
+
+export const getVenueById = async (id: string) => {
+    try {
+
+        console.log("Fetching venue detail by id...");
+
+        const response = await publicClient.get(`/venues/${id}`);
+
+        console.log('Venue detail response : ', response.data);
+
+        return response.data;
+    } catch (error) {
+        console.error('Error while fetching venue by Id : ', error);
+        throw error;
+    }
+}
+
+export const deleteVenue = async (id: string) => {
+    try {
+        console.log('Deleting venue....');
+
+        const response = await privateClient.delete(`/venues/${id}`);
+
+        console.log('Venue delete response : ', response.data);
+
+        return response.data;
+    } catch (error) {
+        console.error('Error while deleting venue : ', error);
+        throw error;
+    }
+}
+
+interface updateVenuePayload {
+    id: string;
+    data: Venue;
+}
+export const updateVenue = async (payload: updateVenuePayload) => {
+    try {
+        console.log('Updating venue .....');
+
+        const response = await privateClient.put(`/venues/${payload.id}`, payload.data);
+
+        console.log('Update venue respone : ', response.data);
+
+        return response.data
+    } catch (error) {
+        console.error('Error while updating venue : ', error);
         throw error;
     }
 }

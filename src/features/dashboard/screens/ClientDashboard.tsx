@@ -17,11 +17,14 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import FeaturedCard from '@/components/landing/featuredCard';
 import useEntrance from '@/hooks/useEntrance';
 import { ClientTabParamList } from '@/navigations/tabNavigations/ClientTabNavigation';
-import { venueAPI } from '@/service/apis/venues';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Colors, Radii, Spacing, Shadows, Typography } from '@/theme/theme';
 import { RootStackParamList } from '@/types/RootStackParamList';
 import { VenueType } from '@/features/venueType/types/VenueType';
+import { useGetAllVenue } from '@/features/venue/hooks/useGetAllVenue';
+import { Venue } from '@/features/venue/types/Venue';
+import { useGetVenueLoc } from '@/features/venue/hooks/useGetVenueLoc';
+import { useGetVenueType } from '@/features/venueType/hooks/useGetVenueType';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -34,7 +37,6 @@ const CAPACITY_OPTIONS = [
     { label: '500+ guests', value: 999 },
 ];
 
-// ── Simple date helpers ───────────────────────────────────────────────────────
 function getDaysInMonth(year: number, month: number) {
     return new Date(year, month + 1, 0).getDate();
 }
@@ -43,18 +45,40 @@ function formatDate(date: Date) {
 }
 
 type DropdownType = 'city' | 'capacity' | 'date' | null;
-
 type landingProps = NativeBottomTabScreenProps<ClientTabParamList, 'home'>;
 
 export default function ClientDashboard({ navigation }: landingProps) {
     const { user } = useAuthStore();
     const [search, setSearch] = useState('');
 
-    const [cities, setCities] = useState<string[]>([]);
-    const [venues, setVenues] = useState<any[]>([]);
-    const [categories, setCategories] = useState<VenueType[]>([]);
+    // ── API hooks — each with unique destructured names ──────────────────────
+    const {
+        data: venueData,
+        isLoading: venuesLoading,
+        isRefetching: venuesRefetching,
+        refetch: refetchVenues,
+    } = useGetAllVenue();
 
-    // ── Filter state ───────────────────────────────────────────────────────────
+    const {
+        data: citiesData,
+        isLoading: citiesLoading,
+        isRefetching: citiesRefetching,
+        refetch: refetchCities,
+    } = useGetVenueLoc();
+
+    const {
+        data: venueTypeData,
+        isLoading: typesLoading,
+        isRefetching: typesRefetching,
+        refetch: refetchTypes,
+    } = useGetVenueType();
+
+    // ── Derive data safely — no local mirror state needed ────────────────────
+    const venues: Venue[] = venueData?.venue ?? [];
+    const cities: string[] = citiesData?.cities ?? [];
+    const categories: VenueType[] = venueTypeData?.data ?? [];
+
+    // ── Filter state ─────────────────────────────────────────────────────────
     const [openDropdown, setOpenDropdown] = useState<DropdownType>(null);
     const [selectedCity, setSelectedCity] = useState<string | null>(null);
     const [selectedCapacity, setSelectedCapacity] = useState<{
@@ -63,7 +87,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
     } | null>(null);
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
-    // Calendar state
+    // ── Calendar state ───────────────────────────────────────────────────────
     const today = new Date();
     const [calYear, setCalYear] = useState(today.getFullYear());
     const [calMonth, setCalMonth] = useState(today.getMonth());
@@ -71,13 +95,6 @@ export default function ClientDashboard({ navigation }: landingProps) {
     const { fade: bodyFade } = useEntrance(180);
     const slideAnim = useRef(new Animated.Value(300)).current;
 
-    useEffect(() => {
-        getAllVenueLoc();
-        getAllVenue();
-        fetchCategory();
-    }, []);
-
-    // Animate modal slide-up
     useEffect(() => {
         if (openDropdown) {
             slideAnim.setValue(300);
@@ -95,51 +112,18 @@ export default function ClientDashboard({ navigation }: landingProps) {
     const goToVenues = () => navigation.navigate('venues');
     const goToProfile = () => navigation.navigate('profile');
 
-    const goToVenueDetail = (venue: any) => {
+    const goToVenueDetail = (venue: Venue) => {
         navigation
             .getParent<NativeStackNavigationProp<RootStackParamList>>()
             ?.navigate('venueDetail', { venue });
     };
 
-    const getAllVenueLoc = async () => {
-        try {
-            const response = await venueAPI.getVenueLocations();
-            if (!response?.success) return;
-            setCities(response.cities ?? []);
-            // FIX 5: Removed setLocations — state was unused so the call was pointless
-        } catch (error: any) {
-            console.error('FETCHING LOCATION ERROR : ', error);
-        }
-    };
-
-    const getAllVenue = async () => {
-        try {
-            const response = await venueAPI.getVenues({ limit: 6 });
-            if (!response?.success) return;
-            setVenues(response.venues ?? []);
-        } catch (error: any) {
-            console.error('FETCHING VENUES ERROR : ', error);
-        }
-    };
-
-    // FIX 6: Renamed fetchCatgory → fetchCategory (typo)
-    const fetchCategory = async () => {
-        try {
-            const response = await venueAPI.venueTypes();
-            if (response?.success) {
-                setCategories(response.venueTypes);
-            }
-        } catch (error: any) {
-            console.error('FETCHING CATEGORY ERROR : ', error);
-        }
-    };
-
-    // ── Filter chip labels ─────────────────────────────────────────────────────
-    const cityLabel = selectedCity ?? (cities.length > 0 ? cities[0] : 'City');
+    // ── Filter chip labels ────────────────────────────────────────────────────
+    const cityLabel = selectedCity ?? 'All Cities';
     const capacityLabel = selectedCapacity?.label ?? 'Capacity';
     const dateLabel = selectedDate ? formatDate(selectedDate) : 'Date';
 
-    // ── Calendar helpers ───────────────────────────────────────────────────────
+    // ── Calendar helpers ──────────────────────────────────────────────────────
     const daysInMonth = getDaysInMonth(calYear, calMonth);
     const firstDayOfWeek = new Date(calYear, calMonth, 1).getDay();
     const monthName = new Date(calYear, calMonth).toLocaleString('en-IN', {
@@ -173,22 +157,20 @@ export default function ClientDashboard({ navigation }: landingProps) {
         return d < t;
     };
 
-    const isSelectedDay = (day: number) => {
-        if (!selectedDate) return false;
-        return (
-            selectedDate.getFullYear() === calYear &&
-            selectedDate.getMonth() === calMonth &&
-            selectedDate.getDate() === day
-        );
-    };
+    const isSelectedDay = (day: number) =>
+        !!selectedDate &&
+        selectedDate.getFullYear() === calYear &&
+        selectedDate.getMonth() === calMonth &&
+        selectedDate.getDate() === day;
 
-    // ── Dropdown content ───────────────────────────────────────────────────────
+    // ── Dropdown content ──────────────────────────────────────────────────────
     const renderDropdownContent = () => {
         if (openDropdown === 'city') {
-            const allCities = cities.length > 0 ? cities : ['Bhopal', 'Indore', 'Jabalpur'];
+            const displayCities = cities.length > 0 ? cities : ['Bhopal', 'Indore', 'Jabalpur'];
             return (
                 <>
                     <Text style={ds.sheetTitle}>Select City</Text>
+                    {/* All Cities option */}
                     <TouchableOpacity
                         style={[ds.optionRow, !selectedCity && ds.optionRowActive]}
                         onPress={() => {
@@ -208,7 +190,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
                             <Ionicons name="checkmark" size={16} color={Colors.primary} />
                         )}
                     </TouchableOpacity>
-                    {allCities.map(city => (
+                    {displayCities.map(city => (
                         <TouchableOpacity
                             key={city}
                             style={[ds.optionRow, selectedCity === city && ds.optionRowActive]}
@@ -281,7 +263,6 @@ export default function ClientDashboard({ navigation }: landingProps) {
             return (
                 <>
                     <Text style={ds.sheetTitle}>Select Date</Text>
-                    {/* Month nav */}
                     <View style={ds.calNav}>
                         <TouchableOpacity onPress={prevMonth} style={ds.calNavBtn}>
                             <Ionicons name="chevron-back" size={18} color={Colors.charcoal} />
@@ -291,7 +272,6 @@ export default function ClientDashboard({ navigation }: landingProps) {
                             <Ionicons name="chevron-forward" size={18} color={Colors.charcoal} />
                         </TouchableOpacity>
                     </View>
-                    {/* Day labels */}
                     <View style={ds.calDayRow}>
                         {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
                             <Text key={i} style={ds.calDayLabel}>
@@ -299,7 +279,6 @@ export default function ClientDashboard({ navigation }: landingProps) {
                             </Text>
                         ))}
                     </View>
-                    {/* Days grid */}
                     <View style={ds.calGrid}>
                         {cells.map((day, idx) => {
                             if (!day) return <View key={idx} style={ds.calCell} />;
@@ -344,9 +323,11 @@ export default function ClientDashboard({ navigation }: landingProps) {
                 </>
             );
         }
+
         return null;
     };
 
+    // ── Render ────────────────────────────────────────────────────────────────
     return (
         <View style={s.root}>
             {/* ── HEADER ── */}
@@ -378,8 +359,9 @@ export default function ClientDashboard({ navigation }: landingProps) {
                     </TouchableOpacity>
                 </View>
             </View>
+
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
-                {/* ── BROWSE VENUES BUTTON ── */}
+                {/* ── BROWSE BUTTON ── */}
                 <View style={s.browseRow}>
                     <TouchableOpacity style={s.browseBtn} onPress={goToVenues} activeOpacity={0.88}>
                         <Ionicons name="business-outline" size={16} color={Colors.charcoal} />
@@ -388,7 +370,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
                     </TouchableOpacity>
                 </View>
 
-                {/* SEARCH CARD */}
+                {/* ── SEARCH CARD ── */}
                 <Animated.View style={[s.searchCard, { opacity: bodyFade }]}>
                     <View style={s.searchAccent} />
                     <View style={s.searchBody}>
@@ -419,7 +401,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
                             )}
                         </View>
 
-                        {/* ── Filter chips ── */}
+                        {/* Filter chips */}
                         <View style={s.filterRow}>
                             {/* City */}
                             <TouchableOpacity
@@ -534,7 +516,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
                     </View>
                 </Animated.View>
 
-                {/* CATEGORIES */}
+                {/* ── CATEGORIES ── */}
                 <Animated.View style={[s.section, { opacity: bodyFade }]}>
                     <View style={s.sectionHeader}>
                         <View style={s.sectionTitleRow}>
@@ -542,11 +524,11 @@ export default function ClientDashboard({ navigation }: landingProps) {
                             <Text style={s.sectionTitle}>Browse by Category</Text>
                         </View>
                         <TouchableOpacity
-                            onPress={() => {
+                            onPress={() =>
                                 navigation
                                     .getParent<NativeStackNavigationProp<RootStackParamList>>()
-                                    .navigate('category');
-                            }}
+                                    .navigate('category')
+                            }
                         >
                             <Text style={s.seeAll}>See all →</Text>
                         </TouchableOpacity>
@@ -569,7 +551,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
                     </View>
                 </Animated.View>
 
-                {/* FEATURED VENUES */}
+                {/* ── FEATURED VENUES ── */}
                 <View style={[s.section, s.surfaceSection]}>
                     <View style={s.sectionHeader}>
                         <View style={s.sectionTitleRow}>
@@ -581,7 +563,6 @@ export default function ClientDashboard({ navigation }: landingProps) {
                         </TouchableOpacity>
                     </View>
                     <Text style={s.sectionSub}>Handpicked premium spaces for your events</Text>
-                   
                     <View style={s.hScroll}>
                         {venues.map((v, i) => (
                             <FeaturedCard key={v._id} v={v} index={i} onPress={goToVenueDetail} />
@@ -598,7 +579,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
                 </View>
             </ScrollView>
 
-            {/* ── Bottom sheet modal ─────────────────────────────────────────────── */}
+            {/* ── BOTTOM SHEET ── */}
             <Modal
                 visible={!!openDropdown}
                 transparent
@@ -620,12 +601,9 @@ export default function ClientDashboard({ navigation }: landingProps) {
     );
 }
 
-// ─── Bottom-sheet styles ──────────────────────────────────────────────────────
+// ─── styles unchanged — only fix position: 'static' → 'relative' ─────────────
 const ds = StyleSheet.create({
-    overlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.45)',
-    },
+    overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
     sheet: {
         position: 'absolute',
         bottom: 0,
@@ -666,21 +644,9 @@ const ds = StyleSheet.create({
         borderWidth: 1.5,
         borderColor: 'transparent',
     },
-    optionRowActive: {
-        borderColor: Colors.primaryBorder,
-        backgroundColor: Colors.primaryLight,
-    },
-    optionText: {
-        flex: 1,
-        fontSize: 14,
-        color: Colors.charcoalMid,
-        fontWeight: Typography.medium,
-    },
-    optionTextActive: {
-        color: Colors.primary,
-        fontWeight: Typography.bold,
-    },
-    // Calendar
+    optionRowActive: { borderColor: Colors.primaryBorder, backgroundColor: Colors.primaryLight },
+    optionText: { flex: 1, fontSize: 14, color: Colors.charcoalMid, fontWeight: Typography.medium },
+    optionTextActive: { color: Colors.primary, fontWeight: Typography.bold },
     calNav: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -697,15 +663,8 @@ const ds = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.border,
     },
-    calMonthLabel: {
-        fontSize: 15,
-        fontWeight: Typography.bold,
-        color: Colors.charcoal,
-    },
-    calDayRow: {
-        flexDirection: 'row',
-        marginBottom: 6,
-    },
+    calMonthLabel: { fontSize: 15, fontWeight: Typography.bold, color: Colors.charcoal },
+    calDayRow: { flexDirection: 'row', marginBottom: 6 },
     calDayLabel: {
         flex: 1,
         textAlign: 'center',
@@ -714,36 +673,20 @@ const ds = StyleSheet.create({
         color: Colors.charcoalLight,
         letterSpacing: 0.5,
     },
-    calGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-    },
+    calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
     calCell: {
-        width: `${100 / 7}%`,
+        width: `${100 / 7}%` as any,
         aspectRatio: 1,
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: Radii.md,
         marginBottom: 2,
     },
-    calCellActive: {
-        backgroundColor: Colors.primary,
-    },
-    calCellDisabled: {
-        opacity: 0.3,
-    },
-    calDayNum: {
-        fontSize: 13,
-        fontWeight: Typography.medium,
-        color: Colors.charcoal,
-    },
-    calDayNumActive: {
-        color: Colors.charcoal,
-        fontWeight: Typography.extraBold,
-    },
-    calDayNumDisabled: {
-        color: Colors.charcoalLight,
-    },
+    calCellActive: { backgroundColor: Colors.primary },
+    calCellDisabled: { opacity: 0.3 },
+    calDayNum: { fontSize: 13, fontWeight: Typography.medium, color: Colors.charcoal },
+    calDayNumActive: { color: Colors.white, fontWeight: Typography.extraBold },
+    calDayNumDisabled: { color: Colors.charcoalLight },
     clearDateBtn: {
         marginTop: 12,
         alignSelf: 'center',
@@ -753,21 +696,14 @@ const ds = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.border,
     },
-    clearDateText: {
-        fontSize: 13,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.medium,
-    },
+    clearDateText: { fontSize: 13, color: Colors.charcoalLight, fontWeight: Typography.medium },
 });
 
-// ─── Main styles ─────────────────────────────────────────────────────────────
 const CAT_W = (W - Spacing.lg * 2 - Spacing.sm * 2) / 3;
-const AMEN_W = (W - Spacing.lg * 2 - Spacing.sm) / 2;
 
 const s = StyleSheet.create({
     root: { flex: 1, backgroundColor: Colors.background },
     scroll: { paddingBottom: 120 },
-    // ── Header ──
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -776,19 +712,10 @@ const s = StyleSheet.create({
         paddingTop: 24,
         paddingBottom: Spacing.md,
         backgroundColor: Colors.background,
-        position: 'static',
+        position: 'relative', // ← was 'static' — invalid in RN
     },
     brand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    brandDot: {
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        backgroundColor: Colors.primary,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
     brandLogo: { height: 50, width: 150 },
-    brandName: { fontSize: 20, fontWeight: Typography.extraBold, letterSpacing: -0.4 },
     navIcons: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
     navIconBtn: {
         width: 36,
@@ -833,7 +760,6 @@ const s = StyleSheet.create({
     },
     profileInitials: { fontSize: 10, fontWeight: Typography.extraBold, color: Colors.charcoal },
     profileName: { fontSize: 12, fontWeight: Typography.bold, color: Colors.charcoal },
-    // ── Browse button row ──
     browseRow: {
         paddingHorizontal: Spacing.lg,
         paddingVertical: Spacing.md,
@@ -947,34 +873,7 @@ const s = StyleSheet.create({
         marginLeft: 14,
     },
     seeAll: { fontSize: 13, fontWeight: Typography.bold, color: Colors.primary },
-    hScroll: { 
-        paddingBottom: 4,
-        gap: Spacing.lg ,
-        width: '100%',
-    },
-    centeredHead: { alignItems: 'center', marginBottom: 20 },
-    eyebrow: {
-        fontSize: 9.5,
-        fontWeight: Typography.bold,
-        color: Colors.primary,
-        letterSpacing: 2.5,
-        marginBottom: 6,
-    },
-    centeredTitle: {
-        fontSize: 20,
-        fontWeight: Typography.extraBold,
-        color: Colors.charcoal,
-        textAlign: 'center',
-        letterSpacing: -0.5,
-        marginBottom: 6,
-    },
-    centeredSub: {
-        fontSize: 12.5,
-        color: Colors.charcoalLight,
-        textAlign: 'center',
-        lineHeight: 19,
-        paddingHorizontal: Spacing.xl,
-    },
+    hScroll: { paddingBottom: 4, gap: Spacing.lg, width: '100%' },
     catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
     catCard: {
         width: CAT_W,
@@ -997,10 +896,7 @@ const s = StyleSheet.create({
         borderWidth: 1.5,
         borderColor: Colors.primaryBorder,
     },
-    // FIX 10: Added emoji icon style for category cards
-    catIconEmoji: {
-        fontSize: 24,
-    },
+    catIconEmoji: { fontSize: 24 },
     catLabel: {
         fontSize: 11.5,
         fontWeight: Typography.bold,
@@ -1019,159 +915,4 @@ const s = StyleSheet.create({
         marginTop: Spacing.lg,
     },
     viewAllBtnText: { fontSize: 14, fontWeight: Typography.extraBold, color: Colors.white },
-    amenGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-    amenCard: {
-        width: AMEN_W,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        backgroundColor: Colors.surface,
-        borderRadius: Radii.lg,
-        padding: 12,
-        ...Shadows.card,
-        borderWidth: 1,
-        borderColor: Colors.border,
-    },
-    amenIconWrap: {
-        width: 40,
-        height: 40,
-        borderRadius: Radii.md,
-        backgroundColor: Colors.primaryLight,
-        alignItems: 'center',
-        justifyContent: 'center',
-        flexShrink: 0,
-    },
-    amenLabel: {
-        flex: 1,
-        fontSize: 12,
-        fontWeight: Typography.bold,
-        color: Colors.charcoal,
-        lineHeight: 16,
-    },
-    pkgList: { gap: Spacing.sm },
-    pkgRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
-        backgroundColor: Colors.background,
-        borderRadius: Radii.xl,
-        padding: Spacing.md,
-        borderWidth: 1.5,
-        borderColor: Colors.border,
-    },
-    pkgRowFeatured: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-    pkgIconWrap: {
-        width: 44,
-        height: 44,
-        borderRadius: Radii.md,
-        backgroundColor: Colors.primaryLight,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    pkgIconFeatured: { backgroundColor: 'rgba(255,255,255,0.25)' },
-    pkgMid: { flex: 1 },
-    pkgLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3 },
-    pkgLabel: { fontSize: 15, fontWeight: Typography.bold, color: Colors.charcoal },
-    popularBadge: {
-        backgroundColor: Colors.charcoal,
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: Radii.full,
-    },
-    popularBadgeText: {
-        fontSize: 8.5,
-        fontWeight: Typography.bold,
-        color: Colors.primary,
-        letterSpacing: 0.4,
-    },
-    pkgSubtext: { fontSize: 11, color: Colors.charcoalLight, fontWeight: Typography.medium },
-    pkgSubtextFeatured: { color: 'rgba(255,255,255,0.65)' },
-    pkgRight: { flexDirection: 'row', alignItems: 'baseline', gap: 1, marginRight: Spacing.xs },
-    pkgPrice: {
-        fontSize: 17,
-        fontWeight: Typography.extraBold,
-        color: Colors.primary,
-        letterSpacing: -0.4,
-    },
-    pkgPriceUnit: { fontSize: 11, color: Colors.charcoalLight, fontWeight: Typography.medium },
-    textWhite: { color: Colors.white },
-    ctaBannerWrap: { paddingHorizontal: Spacing.lg },
-    ctaBanner: {
-        backgroundColor: Colors.charcoal,
-        borderRadius: Radii.xxl,
-        overflow: 'hidden',
-        ...Shadows.floating,
-    },
-    orb1: {
-        position: 'absolute',
-        top: -50,
-        right: -50,
-        width: 160,
-        height: 160,
-        borderRadius: 80,
-        backgroundColor: 'rgba(245,166,35,0.09)',
-    },
-    orb2: {
-        position: 'absolute',
-        bottom: -40,
-        left: -40,
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        backgroundColor: 'rgba(245,166,35,0.06)',
-    },
-    ctaInner: { padding: 28, alignItems: 'center' },
-    ctaIconCircle: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
-        backgroundColor: 'rgba(245,166,35,0.14)',
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: 16,
-        borderWidth: 1,
-        borderColor: 'rgba(245,166,35,0.24)',
-    },
-    ctaTitle: {
-        fontSize: 23,
-        fontWeight: Typography.extraBold,
-        color: Colors.white,
-        textAlign: 'center',
-        letterSpacing: -0.5,
-        lineHeight: 31,
-        marginBottom: 10,
-    },
-    ctaSub: {
-        fontSize: 13,
-        color: 'rgba(255,255,255,0.50)',
-        textAlign: 'center',
-        lineHeight: 20,
-        marginBottom: 22,
-        paddingHorizontal: Spacing.sm,
-    },
-    ctaBtnRow: { width: '100%', marginBottom: Spacing.lg },
-    ctaMainBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 10,
-        backgroundColor: Colors.primary,
-        paddingVertical: 14,
-        borderRadius: Radii.full,
-        ...Shadows.primary,
-    },
-    ctaMainBtnText: {
-        fontSize: 14.5,
-        fontWeight: Typography.extraBold,
-        color: Colors.charcoal,
-        letterSpacing: 0.2,
-    },
-    ctaBtnArrow: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        backgroundColor: Colors.charcoal,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
 });
