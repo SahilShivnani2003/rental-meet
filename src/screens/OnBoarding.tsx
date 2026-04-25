@@ -12,8 +12,8 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../navigations/RootNavigation';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../theme/theme';
+import { RootStackParamList } from '@/types/RootStackParamList';
 
 const { width: W, height: H } = Dimensions.get('window');
 type Props = NativeStackScreenProps<RootStackParamList, 'onBoarding'>;
