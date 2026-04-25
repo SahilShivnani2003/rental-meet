@@ -20,6 +20,7 @@ import VenueDetail from '../screens/VenueDetailScreen';
 import { RootStackParamList } from '@/types/RootStackParamList';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/service/queryClient';
+import ModifyBookingScreen from '@/features/booking/screens/ModifyBookingScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -59,6 +60,7 @@ export default function RootNavigator() {
                         <Stack.Screen name="addVenue" component={RegisterVenueScreen} />
                         <Stack.Screen name="updateVenue" component={UpdateVenueScreen} />
                         <Stack.Screen name="vDetail" component={VenueDetail} />
+                        <Stack.Screen name="modifyBooking" component={ModifyBookingScreen}/>
                     </Stack.Navigator>
                 </NavigationContainer>
             </AlertProvider>

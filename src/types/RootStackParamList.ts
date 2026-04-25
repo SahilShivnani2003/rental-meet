@@ -1,3 +1,4 @@
+import { Booking } from "@/features/booking/types/Booking";
 import { ClientTabParamList } from "@/navigations/tabNavigations/ClientTabNavigation";
 import { OwnerTabParamList } from "@/navigations/tabNavigations/OwnerTabNavigation";
 import { tabParamList } from "@/navigations/tabNavigations/TabNavigation";
@@ -26,7 +27,7 @@ export type RootStackParamList = {
         preselectedDurationType?: string;
     };
     bookingDetail: {
-        booking: any;
+        bookingId: string;
     };
     onBoarding: undefined;
     addVenue: undefined;
@@ -36,4 +37,8 @@ export type RootStackParamList = {
     vDetail: {
         venueId: string;
     };
+    modifyBooking:{
+        bookingId: string; 
+        booking: Booking;
+    }
 };
