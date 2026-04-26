@@ -129,7 +129,7 @@ export default function LoginScreen({ navigation }: LoginProps) {
                 {
                     label: 'Continue',
                     onPress: () => {
-                        navigation.replace('main');
+                        navigation.replace('client');
                         alert.dismiss();
                     },
                     style: 'primary',

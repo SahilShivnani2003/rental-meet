@@ -3,8 +3,8 @@ import { View, Text, Animated, StyleSheet, Dimensions, StatusBar } from 'react-n
 
 import { Colors, Typography, Spacing } from '../theme/theme'; // adjust path
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../navigations/RootNavigation';
 import { useAuthStore } from '../store/useAuthStore';
+import { RootStackParamList } from '@/types/RootStackParamList';
 
 const { width, height } = Dimensions.get('window');
 

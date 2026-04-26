@@ -1,11 +1,13 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import BookingsScreen from '../../screens/tabs/bookings';
-import HomeScreen from '../../screens/tabs/venues';
-import LandingScreen from '../../screens/tabs/landing';
-import ClientProfile from '../../screens/client/client-profile';
-import OtherServicesScreen from '../../screens/tabs/other-service';
 import CustomTabBar from '../../components/bottomTab/custom-tabBar';
+import ClientDashboard from '@/features/dashboard/screens/ClientDashboard';
+import VenuesScreen from '@/features/venue/screens/VenueScreen';
+import BookingsScreen from '@/features/booking/screens/BookingScreen';
+import OtherServicesScreen from '@/features/otherService/screens/OtherServiceScreen';
+import ClientProfile from '@/features/profile/screen/ClientProfile';
+import { useAuthStore } from '@/store/useAuthStore';
+import GuestProfile from '@/features/profile/screen/GuestProfile';
 
 export type ClientTabParamList = {
     home: undefined;
@@ -39,16 +41,17 @@ const clientTabs = [
 const Tabs = createBottomTabNavigator<ClientTabParamList>();
 
 export function ClientTabNavigation() {
+    const isAuthenticated = useAuthStore().isAuthenticated;
     return (
         <Tabs.Navigator
             tabBar={props => <CustomTabBar {...props} tabs={clientTabs} />}
             screenOptions={{ headerShown: false }}
         >
-            <Tabs.Screen name="home" component={LandingScreen} />
-            <Tabs.Screen name="venues" component={HomeScreen} />
+            <Tabs.Screen name="home" component={ClientDashboard} />
+            <Tabs.Screen name="venues" component={VenuesScreen} />
             <Tabs.Screen name="bookings" component={BookingsScreen} />
             <Tabs.Screen name="otherService" component={OtherServicesScreen} />
-            <Tabs.Screen name="profile" component={ClientProfile} />
+            <Tabs.Screen name="profile" component={isAuthenticated ? ClientProfile : GuestProfile} />
         </Tabs.Navigator>
     );
 }

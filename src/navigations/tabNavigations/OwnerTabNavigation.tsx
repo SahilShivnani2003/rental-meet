@@ -1,11 +1,10 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import OwnerDashboardScreen from '../../screens/owner/dashboard';
-import BookingsScreen from '../../screens/tabs/bookings';
-import ProfileScreen from '../../screens/tabs/profile';
-import VenuesScreen from '../../screens/tabs/venues';
 import CustomTabBar from '../../components/bottomTab/custom-tabBar';
-import RegisterVenueScreen from '../../screens/owner/AddVenue';
+import OwnerDashboardScreen from '@/features/dashboard/screens/OwnerDashboardScreen';
+import BookingsScreen from '@/features/booking/screens/BookingScreen';
+import VenuesScreen from '@/features/venue/screens/VenueScreen';
+import ProfileScreen from '@/features/profile/screen/OwnerProfile';
 
 export type OwnerTabParamList = {
     dashboard: undefined;
