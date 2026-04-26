@@ -1,5 +1,5 @@
 import { privateClient } from "@/service/apiClient";
-import { ModifyBookingPayload } from "../types/Booking";
+import { Booking, ModifyBookingPayload } from "../types/Booking";
 
 export const getAllBookings = async () => {
     try {
@@ -90,6 +90,21 @@ export const approveSoon = async (id: string) => {
         return response.data;
     } catch (error) {
         console.error('Error while update status to approve soon : ', error);
+        throw error;
+    }
+};
+
+export const createBooking = async (data: Booking) => {
+    try {
+        console.log('Creating booking ....')
+
+        const response = await privateClient.post('/bookings');
+
+        console.log('Crate booking response : ', response.data);
+
+        return response.data
+    } catch (error) {
+        console.log('Creating booking error : ', error);
         throw error;
     }
 }

@@ -1,8 +1,9 @@
 import { Booking } from "@/features/booking/types/Booking";
+import { SelectedAmenityItem } from "@/features/venue/models/BookingSheet";
+import { Venue } from "@/features/venue/types/Venue";
 import { ClientTabParamList } from "@/navigations/tabNavigations/ClientTabNavigation";
 import { OwnerTabParamList } from "@/navigations/tabNavigations/OwnerTabNavigation";
 import { tabParamList } from "@/navigations/tabNavigations/TabNavigation";
-import { Venue, SelectedAmenityItem } from "@/screens/venue-detail";
 import { NavigatorScreenParams } from "@react-navigation/native";
 
 export type RootStackParamList = {

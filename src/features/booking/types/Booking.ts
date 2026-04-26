@@ -3,10 +3,10 @@ import { Venue } from "@/features/venue/types/Venue";
 export interface Booking {
     _id?: string;
 
-    bookingNumber: string;
+    bookingNumber?: string;
 
     venue: string | Venue;
-    customer: string;
+    customer?: string;
 
     bookingDate: Date;
     startTime: string;
