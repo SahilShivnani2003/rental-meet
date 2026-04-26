@@ -16,7 +16,6 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import RazorpayCheckout from 'react-native-razorpay';
 import { useAlert } from '@/context/AlertContext';
-import { SelectedAmenityItem } from '@/screens/venue-detail';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Colors, Spacing, Radii, Shadows, Typography } from '@/theme/theme';
 import { RootStackParamList } from '@/types/RootStackParamList';
@@ -26,6 +25,7 @@ import { useCreateBooking } from '../hooks/useCreateBooking';
 import { useCreatePaymentOrder, useVerifyPayment } from '../hooks/usePayment';
 import { usePlatformSetting } from '../hooks/usePlatformSetting';
 import { useTermsCondition } from '../hooks/useTermsCondition';
+import { SelectedAmenityItem } from '@/features/venue/models/BookingSheet';
 
 const { width: W } = Dimensions.get('window');
 
