@@ -10,15 +10,15 @@ import {
     Platform,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { Colors, Typography, Spacing, Radii } from '../../theme/theme';
-import Field from '../UI/InputField';
+import { Colors, Typography, Spacing, Radii } from '../../../theme/theme';
+import Field from '../../../components/UI/InputField';
 import {
     StepHeader,
     SectionCard,
     SectionTitle,
     NavButtons,
     PickerRow,
-} from '../UI/shared-components';
+} from '../../../components/UI/shared-components';
 import { VenueFormData } from '../../types/Venue';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];

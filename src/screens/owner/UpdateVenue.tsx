@@ -13,22 +13,22 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
 
-import Step1BasicInfo from '../../components/registerVenue/basic-info';
-import Step2Location from '../../components/registerVenue/location-info';
-import Step3Amenities from '../../components/registerVenue/amenities-info';
-import Step4Pricing from '../../components/registerVenue/pricing-info';
-import Step5Photos from '../../components/registerVenue/photos-upload';
-import Step6Documents from '../../components/registerVenue/documents-info';
-import Step7Terms from '../../components/registerVenue/terms-info';
+import Step1BasicInfo from '../../features/venue/components/basic-info';
+import Step2Location from '../../features/venue/components/location-info';
+import Step3Amenities from '../../features/venue/components/amenities-info';
+import Step4Pricing from '../../features/venue/components/pricing-info';
+import Step5Photos from '../../features/venue/components/photos-upload';
+import Step6Documents from '../../features/venue/components/documents-info';
+import Step7Terms from '../../features/venue/components/terms-info';
 
 import { VenueFormData, initialVenueFormData } from '../../types/Venue';
-import { buildVenuePayload } from '../../components/registerVenue/venuePayloadBuilder';
+import { buildVenuePayload } from '../../features/venue/components/venuePayloadBuilder';
 
 import { useAlert } from '../../context/AlertContext';
 import { venueAPI } from '../../service/apis/venues';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigations/RootNavigation';
-import { mapVenueToFormData } from '../../components/registerVenue/mapVenueFormData';
+import { mapVenueToFormData } from '../../features/venue/components/mapVenueFormData';
 
 const TOTAL_STEPS = 7;
 const STEP_LABELS = [

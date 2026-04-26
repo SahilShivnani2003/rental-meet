@@ -18,8 +18,8 @@ import {
     Asset,
 } from 'react-native-image-picker';
 import { pick, types, DocumentPickerResponse, errorCodes } from '@react-native-documents/picker';
-import { Colors, Typography, Spacing, Radii } from '../../theme/theme';
-import Field from '../UI/InputField';
+import { Colors, Typography, Spacing, Radii } from '../../../theme/theme';
+import Field from '../../../components/UI/InputField';
 import {
     StepHeader,
     SectionCard,
@@ -27,8 +27,8 @@ import {
     NavButtons,
     PickerRow,
     FileUploadBtn,
-} from '../UI/shared-components';
-import { useAuthStore } from '../../store/useAuthStore';
+} from '../../../components/UI/shared-components';
+import { useAuthStore } from '../../../store/useAuthStore';
 import { imageAPI } from '../../service/apis/images';
 import { VenueFormData } from '../../types/Venue';
 

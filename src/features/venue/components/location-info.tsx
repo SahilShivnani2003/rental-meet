@@ -8,9 +8,9 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { Colors, Typography, Spacing, Radii } from '../../theme/theme';
-import Field from '../UI/InputField';
-import { StepHeader, SectionCard, PickerRow, NavButtons, Textarea } from '../UI/shared-components';
+import { Colors, Typography, Spacing, Radii } from '../../../theme/theme';
+import Field from '../../../components/UI/InputField';
+import { StepHeader, SectionCard, PickerRow, NavButtons, Textarea } from '../../../components/UI/shared-components';
 import { VenueFormData } from '../../types/Venue';
 
 const PARKING_TYPES = ['Select parking type', 'Free', 'Paid', 'Limited', 'No'];

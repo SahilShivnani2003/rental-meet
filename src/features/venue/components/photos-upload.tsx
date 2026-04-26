@@ -17,8 +17,8 @@ import {
     ImagePickerResponse,
     Asset,
 } from 'react-native-image-picker';
-import { Colors, Typography, Spacing, Radii } from '../../theme/theme';
-import { StepHeader, SectionCard, NavButtons } from '../UI/shared-components';
+import { Colors, Typography, Spacing, Radii } from '../../../theme/theme';
+import { StepHeader, SectionCard, NavButtons } from '../../../components/UI/shared-components';
 import { imageAPI } from '../../service/apis/images';
 import { VenueFormData } from '../../types/Venue';
 
