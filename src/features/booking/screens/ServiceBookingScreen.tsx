@@ -21,6 +21,8 @@ import { useAlert } from '@/context/AlertContext';
 import { useCreateServiceBooking } from '@/features/services/hooks/useCreateServiceBooking';
 import { ApiError } from '@/types/ApiError';
 import { VendorService } from '@/features/otherService/types/VendorService';
+import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
+import { VendorTabParamList } from '@/navigations/tabNavigations/VendorTabNavigation';
 
 const { width: W } = Dimensions.get('window');
 
@@ -60,7 +62,7 @@ const isPast = (d: Date) => {
     return d < t;
 };
 
-type Props = NativeStackScreenProps<RootStackParamList, 'serviceBooking'>;
+type Props = NativeBottomTabScreenProps<VendorTabParamList, 'booking'>
 
 export default function ServiceBookingScreen({ navigation, route }: Props) {
     const { service } = route.params as { service: VendorService };

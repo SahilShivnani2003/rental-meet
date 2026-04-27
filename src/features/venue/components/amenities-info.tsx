@@ -10,15 +10,7 @@ import {
     NavButtons,
     PickerRow,
 } from '../../../components/UI/shared-components';
-import {
-    VenueFormData,
-    BasicAmenityForm,
-    BeverageForm,
-    FoodPackForm,
-    ThaliForm,
-    AdditionalForm,
-    FacilityForm,
-} from '../../types/Venue';
+import { AdditionalForm, BasicAmenityForm, BeverageForm, FacilityForm, FoodPackForm, ThaliForm, VenueFormData } from '../types/VenueFormData';
 
 const THALI_TYPES = [
     'Select Thali Type',

@@ -1,7 +1,7 @@
 export interface Venue {
     _id?: string;
 
-    owner: string;
+    owner?: string;
     sku?: string;
 
     businessName: string;

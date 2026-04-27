@@ -23,6 +23,7 @@ import { Colors, Spacing, Radii, Shadows, Typography } from '@/theme/theme';
 import { RootStackParamList } from '@/types/RootStackParamList';
 import { useLogin } from '../hooks/useLogin';
 import { ApiError } from '@/types/ApiError';
+import { User } from '@/features/profile/types/User';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -110,6 +111,19 @@ export default function LoginScreen({ navigation }: LoginProps) {
                     setLoading(false)
                     alert.success('Success', data.message || 'Login successful');
                     setUser(data?.user, data?.token);
+
+                    const userData = data?.user as User;
+
+                    if(userData.role === 'owner'){
+                        navigation.replace('owner');
+                    }else if(userData.role === 'vendor'){
+                        navigation.replace('vendor');
+                    }else if(userData.role === 'customer'){
+                        navigation.replace('client');
+                    }else{
+                        navigation.replace('login')
+                    }
+                    
                 },
                 onError:(error:ApiError)=>{
                     setLoading(false)

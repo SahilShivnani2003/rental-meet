@@ -10,10 +10,16 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii } from '../../../theme/theme';
-import { StepHeader, SectionCard, PickerRow, NavButtons, Textarea } from '../../../components/UI/shared-components';
+import {
+    StepHeader,
+    SectionCard,
+    PickerRow,
+    NavButtons,
+    Textarea,
+} from '../../../components/UI/shared-components';
 import Field from '../../../components/UI/InputField';
-import { venueAPI } from '../../service/apis/venues';
-import { VenueFormData } from '../../types/Venue';
+import { VenueFormData, CAPACITY_RANGES } from '../types/VenueFormData'; 
+import { useGetVenueType } from '@/features/venueType/hooks/useGetVenueType';
 
 interface VenueType {
     _id: string;
@@ -21,26 +27,6 @@ interface VenueType {
     icon: string;
     isActive: boolean;
 }
-
-const CAPACITY_RANGES = [
-    'Select capacity range',
-    '10-20',
-    '20-30',
-    '30-40',
-    '40-50',
-    '50-100',
-    '100-200',
-    '200-300',
-    '300-400',
-    '400-500',
-    '500-600',
-    '600-700',
-    '700-800',
-    '800-1000',
-    '1000-1500',
-    '1500-2000',
-    'More than 2000',
-];
 
 interface Props {
     data: VenueFormData['basic'];
@@ -50,9 +36,9 @@ interface Props {
 
 export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
     const set = (patch: Partial<VenueFormData['basic']>) => onChange({ ...data, ...patch });
-
+    const {data:venueTypeData, isLoading} = useGetVenueType();
     const [errors, setErrors] = useState<Record<string, string>>({});
-    const [venueTypes, setVenueTypes] = useState<VenueType[]>([]);
+    const [venueTypes, setVenueTypes] = useState<VenueType[]>(venueTypeData?.data);
     const [loadingTypes, setLoadingTypes] = useState(false);
     const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
     const [typeSearch, setTypeSearch] = useState('');
@@ -61,27 +47,13 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
     const wordCount =
         data.description.trim() === '' ? 0 : data.description.trim().split(/\s+/).length;
 
-    React.useEffect(() => {
-        fetchVenueTypes();
-    }, []);
-
-    const fetchVenueTypes = async () => {
-        setLoadingTypes(true);
-        try {
-            const response = await venueAPI.venueTypes();
-            if (response?.success)
-            setVenueTypes(response.venueTypes.filter((t: VenueType) => t.isActive));
-        } catch (e: any) {
-            console.error('FETCH VENUE TYPE ERROR:', e);
-        } finally {
-            setLoadingTypes(false);
-        }
-    };
 
     const filteredTypes = venueTypes.filter(t =>
         t.name.toLowerCase().includes(typeSearch.toLowerCase()),
     );
 
+    // FIX: was `toggleType(type.name)` in the JSX — must use `type._id` so the
+    // stored array contains IDs that getTypeName / getTypeIcon can look up.
     const toggleType = (id: string) => {
         const next = data.venueTypes.includes(id)
             ? data.venueTypes.filter(x => x !== id)
@@ -89,8 +61,10 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
         set({ venueTypes: next });
         setErrors(p => ({ ...p, venueType: '' }));
     };
+
     const removeType = (id: string) => set({ venueTypes: data.venueTypes.filter(x => x !== id) });
-    const getTypeName = (id: string) => venueTypes.find(t => t._id === id)?.name ?? '';
+
+    const getTypeName = (id: string) => venueTypes.find(t => t._id === id)?.name ?? id;
     const getTypeIcon = (id: string) => venueTypes.find(t => t._id === id)?.icon ?? '';
 
     const validate = () => {
@@ -125,6 +99,7 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
                     error={errors.venueName}
                 />
 
+                {/* ── Venue Type picker ── */}
                 <View style={s.typeSection}>
                     <Text style={s.typeLabel}>
                         VENUE TYPE <Text style={s.req}>*</Text>
@@ -202,7 +177,8 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
                                             <TouchableOpacity
                                                 key={type._id}
                                                 style={[s.item, selected && s.itemActive]}
-                                                onPress={() => toggleType(type.name)}
+                                                // FIX: was toggleType(type.name) — must use _id
+                                                onPress={() => toggleType(type._id)}
                                                 activeOpacity={0.7}
                                             >
                                                 <View style={s.itemLeft}>
@@ -237,6 +213,7 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
                         </View>
                     )}
 
+                    {/* Selected tags */}
                     {data.venueTypes.length > 0 && (
                         <View style={s.tagRow}>
                             {data.venueTypes.map(id => (
@@ -250,14 +227,10 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
                             ))}
                         </View>
                     )}
-                    {!!errors.venueType && (
-                        <View style={s.errorRow}>
-                            <Ionicons name="alert-circle" size={12} color={Colors.danger} />
-                            <Text style={s.errorText}>{errors.venueType}</Text>
-                        </View>
-                    )}
+                    {!!errors.venueType && <ErrorRow msg={errors.venueType} />}
                 </View>
 
+                {/* ── Capacity picker ── */}
                 <View style={s.pickerSection}>
                     <Text style={s.typeLabel}>
                         MAXIMUM CAPACITY <Text style={s.req}>*</Text>
@@ -273,12 +246,7 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
                             setErrors(p => ({ ...p, capacity: '' }));
                         }}
                     />
-                    {!!errors.capacity && (
-                        <View style={s.errorRow}>
-                            <Ionicons name="alert-circle" size={12} color={Colors.danger} />
-                            <Text style={s.errorText}>{errors.capacity}</Text>
-                        </View>
-                    )}
+                    {!!errors.capacity && <ErrorRow msg={errors.capacity} />}
                 </View>
 
                 <Field
@@ -296,7 +264,7 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
 
                 <Textarea
                     label={`Venue Description (Max 200 words) *  —  ${wordCount}/200`}
-                    placeholder="Description.."
+                    placeholder="Describe your venue..."
                     value={data.description}
                     onChangeText={v => {
                         set({ description: v });
@@ -307,8 +275,7 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
                 />
                 {!!errors.description && (
                     <View style={[s.errorRow, { marginTop: -Spacing.sm }]}>
-                        <Ionicons name="alert-circle" size={12} color={Colors.danger} />
-                        <Text style={s.errorText}>{errors.description}</Text>
+                        <ErrorRow msg={errors.description} />
                     </View>
                 )}
             </SectionCard>
@@ -320,6 +287,15 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
                 showPrev={false}
             />
         </ScrollView>
+    );
+}
+
+function ErrorRow({ msg }: { msg: string }) {
+    return (
+        <View style={s.errorRow}>
+            <Ionicons name="alert-circle" size={12} color={Colors.danger} />
+            <Text style={s.errorText}>{msg}</Text>
+        </View>
     );
 }
 
@@ -394,7 +370,11 @@ const s = StyleSheet.create({
         borderTopColor: Colors.border,
         backgroundColor: Colors.primaryLight,
     },
-    doneText: { fontSize: Typography.md, fontWeight: Typography.semiBold, color: Colors.primary },
+    doneText: {
+        fontSize: Typography.md,
+        fontWeight: Typography.semiBold,
+        color: Colors.primary,
+    },
     tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginTop: Spacing.sm },
     tag: {
         flexDirection: 'row',
@@ -408,7 +388,11 @@ const s = StyleSheet.create({
         backgroundColor: Colors.primaryLight,
     },
     tagIcon: { fontSize: 12 },
-    tagText: { fontSize: Typography.xs, fontWeight: Typography.semiBold, color: Colors.primary },
+    tagText: {
+        fontSize: Typography.xs,
+        fontWeight: Typography.semiBold,
+        color: Colors.primary,
+    },
     textarea: { height: 120 },
     pickerSection: { marginBottom: Spacing.md },
     errorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 },

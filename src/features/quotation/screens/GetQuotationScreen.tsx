@@ -19,6 +19,8 @@ import { useAlert } from '@/context/AlertContext';
 import { useSendQuotationRequest } from '@/features/services/hooks/useSendQuotationRequest';
 import { ApiError } from '@/types/ApiError';
 import { VendorService } from '@/features/otherService/types/VendorService';
+import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
+import { VendorTabParamList } from '@/navigations/tabNavigations/VendorTabNavigation';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const CAT_COLOR: Record<string, string> = {
@@ -60,7 +62,7 @@ const isPast = (d: Date) => {
     return d < t;
 };
 
-type Props = NativeStackScreenProps<RootStackParamList, 'getQuotation'>;
+type Props = NativeBottomTabScreenProps<VendorTabParamList, 'quotationDownload'>
 
 export default function GetQuotationScreen({ navigation, route }: Props) {
     const { service } = route.params as { service: VendorService };

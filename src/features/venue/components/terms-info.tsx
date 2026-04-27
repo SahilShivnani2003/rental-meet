@@ -10,7 +10,7 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../../theme/theme';
 import { StepHeader } from '../../../components/UI/shared-components';
-import { VenueFormData } from '../../types/Venue';
+import { VenueFormData } from '../types/VenueFormData';
 
 const TERMS = [
     {
@@ -61,22 +61,24 @@ interface Props {
     data: VenueFormData['terms'];
     onChange: (data: VenueFormData['terms']) => void;
     onPrev: () => void;
+    /**
+     * Synchronous — the parent (RegisterVenueScreen) owns the async mutation.
+     * FIX: was async, but the parent's handleSubmit is sync (mutation is fire-and-forget).
+     * The loading spinner is now driven by `isSubmitting` passed from the parent.
+     */
     onSubmit: () => void;
+    /** True while the createVenue mutation is in flight */
+    isSubmitting?: boolean;
 }
 
-export default function Step7Terms({ data, onChange, onPrev, onSubmit }: Props) {
-    const [submitting, setSubmitting] = useState(false);
+export default function Step7Terms({
+    data,
+    onChange,
+    onPrev,
+    onSubmit,
+    isSubmitting = false,
+}: Props) {
     const set = (patch: Partial<VenueFormData['terms']>) => onChange({ ...data, ...patch });
-
-    const handleSubmit = async () => {
-        if (!data.agreed) return;
-        setSubmitting(true);
-        try {
-            await onSubmit();
-        } finally {
-            setSubmitting(false);
-        }
-    };
 
     return (
         <ScrollView
@@ -119,6 +121,7 @@ export default function Step7Terms({ data, onChange, onPrev, onSubmit }: Props) 
                                 style={[s.hourChip, active && s.hourChipActive]}
                                 onPress={() => set({ confirmationHours: hr })}
                                 activeOpacity={0.75}
+                                disabled={isSubmitting}
                             >
                                 <View style={[s.hourCircle, active && s.hourCircleActive]}>
                                     <Text style={[s.hourNum, active && s.hourNumActive]}>{hr}</Text>
@@ -181,8 +184,9 @@ export default function Step7Terms({ data, onChange, onPrev, onSubmit }: Props) 
             {/* ── Agree checkbox ── */}
             <TouchableOpacity
                 style={[s.checkRow, data.agreed && s.checkRowActive]}
-                onPress={() => set({ agreed: !data.agreed })}
+                onPress={() => !isSubmitting && set({ agreed: !data.agreed })}
                 activeOpacity={0.8}
+                disabled={isSubmitting}
             >
                 <View style={[s.checkbox, data.agreed && s.checkboxActive]}>
                     {data.agreed && <Ionicons name="checkmark" size={14} color={Colors.white} />}
@@ -195,18 +199,23 @@ export default function Step7Terms({ data, onChange, onPrev, onSubmit }: Props) 
 
             {/* ── Nav ── */}
             <View style={s.navRow}>
-                <TouchableOpacity style={s.prevBtn} onPress={onPrev} activeOpacity={0.8}>
+                <TouchableOpacity
+                    style={[s.prevBtn, isSubmitting && s.btnDisabled]}
+                    onPress={onPrev}
+                    activeOpacity={0.8}
+                    disabled={isSubmitting}
+                >
                     <Ionicons name="chevron-back" size={15} color={Colors.primary} />
                     <Text style={s.prevText}>Previous</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                    style={[s.submitBtn, !data.agreed && s.submitBtnDisabled]}
-                    onPress={handleSubmit}
-                    disabled={!data.agreed || submitting}
+                    style={[s.submitBtn, (!data.agreed || isSubmitting) && s.submitBtnDisabled]}
+                    onPress={onSubmit}
+                    disabled={!data.agreed || isSubmitting}
                     activeOpacity={0.85}
                 >
-                    {submitting ? (
+                    {isSubmitting ? (
                         <ActivityIndicator size="small" color={Colors.white} />
                     ) : (
                         <>
@@ -243,8 +252,6 @@ const s = StyleSheet.create({
     },
     infoTitle: { fontSize: Typography.md, fontWeight: Typography.bold, color: Colors.charcoal },
     infoSub: { fontSize: Typography.sm, color: Colors.charcoalLight, marginTop: 2 },
-
-    // ── Confirmation hours card ──
     confirmCard: {
         marginHorizontal: Spacing.lg,
         marginTop: Spacing.md,
@@ -274,16 +281,8 @@ const s = StyleSheet.create({
         fontWeight: Typography.bold,
         color: Colors.charcoal,
     },
-    confirmSub: {
-        fontSize: Typography.sm,
-        color: Colors.charcoalLight,
-        marginTop: 2,
-    },
-    hoursRow: {
-        flexDirection: 'row',
-        gap: Spacing.sm,
-        marginBottom: Spacing.sm,
-    },
+    confirmSub: { fontSize: Typography.sm, color: Colors.charcoalLight, marginTop: 2 },
+    hoursRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
     hourChip: {
         flex: 1,
         flexDirection: 'row',
@@ -337,12 +336,7 @@ const s = StyleSheet.create({
         color: Colors.charcoalLight,
         lineHeight: 16,
     },
-    confirmNoteHighlight: {
-        fontWeight: Typography.bold,
-        color: Colors.charcoalMid,
-    },
-
-    // ── Terms box ──
+    confirmNoteHighlight: { fontWeight: Typography.bold, color: Colors.charcoalMid },
     termsBox: {
         marginHorizontal: Spacing.lg,
         marginTop: Spacing.md,
@@ -370,8 +364,6 @@ const s = StyleSheet.create({
     termPoint: { flexDirection: 'row', gap: Spacing.xs, marginBottom: 4 },
     bullet: { fontSize: Typography.base, color: Colors.charcoalLight },
     termText: { flex: 1, fontSize: Typography.sm, color: Colors.charcoalLight, lineHeight: 18 },
-
-    // ── Agree checkbox ──
     checkRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -398,14 +390,7 @@ const s = StyleSheet.create({
         marginTop: 1,
     },
     checkboxActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-    checkText: {
-        flex: 1,
-        fontSize: Typography.base,
-        color: Colors.charcoalMid,
-        lineHeight: 19,
-    },
-
-    // ── Nav ──
+    checkText: { flex: 1, fontSize: Typography.base, color: Colors.charcoalMid, lineHeight: 19 },
     navRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -443,4 +428,5 @@ const s = StyleSheet.create({
         color: Colors.charcoal,
     },
     submitTextDisabled: { color: Colors.charcoalLight },
+    btnDisabled: { opacity: 0.5 },
 });

@@ -19,8 +19,8 @@ import {
 } from 'react-native-image-picker';
 import { Colors, Typography, Spacing, Radii } from '../../../theme/theme';
 import { StepHeader, SectionCard, NavButtons } from '../../../components/UI/shared-components';
-import { imageAPI } from '../../service/apis/images';
-import { VenueFormData } from '../../types/Venue';
+import { VenueFormData } from '../types/VenueFormData';
+import { useUploadImage } from '../hooks/useUpload';
 
 const PHOTO_SECTIONS = [
     { key: 'featured', label: 'Featured Photo', required: true },
@@ -45,6 +45,7 @@ interface Props {
 }
 
 export default function Step5Photos({ data, onChange, onPrev, onNext }: Props) {
+    const {mutateAsync: uploadImageAsync} = useUploadImage();
     const [pickerTarget, setPickerTarget] = useState<string | null>(null);
     const pickerTargetRef = useRef<string | null>(null);
     const [uploading, setUploading] = useState<Record<string, boolean>>({});
@@ -76,7 +77,7 @@ export default function Step5Photos({ data, onChange, onPrev, onNext }: Props) {
                     continue;
                 }
                 const base64DataUri = `data:${asset.type ?? 'image/jpeg'};base64,${asset.base64}`;
-                const res = await imageAPI.uploadImage({ file: base64DataUri, folder: 'venues' });
+                const res = await uploadImageAsync({ file: base64DataUri, folder: 'venues' });
                 if (res?.success)
                     newImages = [
                         ...newImages,

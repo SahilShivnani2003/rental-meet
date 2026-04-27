@@ -1,3 +1,6 @@
+import Field from '@/components/UI/InputField';
+import { StepHeader, SectionCard, SectionTitle, PickerRow, NavButtons } from '@/components/UI/shared-components';
+import { Colors, Spacing, Typography, Radii } from '@/theme/theme';
 import React, { useState, useRef, useCallback } from 'react';
 import {
     View,
@@ -10,16 +13,7 @@ import {
     Platform,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { Colors, Typography, Spacing, Radii } from '../../../theme/theme';
-import Field from '../../../components/UI/InputField';
-import {
-    StepHeader,
-    SectionCard,
-    SectionTitle,
-    NavButtons,
-    PickerRow,
-} from '../../../components/UI/shared-components';
-import { VenueFormData } from '../../types/Venue';
+import { VenueFormData } from '../types/VenueFormData';
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const ADVANCE_OPTIONS = [

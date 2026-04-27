@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
     View,
     Text,
@@ -29,8 +29,8 @@ import {
     FileUploadBtn,
 } from '../../../components/UI/shared-components';
 import { useAuthStore } from '../../../store/useAuthStore';
-import { imageAPI } from '../../service/apis/images';
-import { VenueFormData } from '../../types/Venue';
+import { VenueFormData } from '../types/VenueFormData';
+import { useUploadDocument, useUploadImage } from '../hooks/useUpload';
 
 const ROLES = ['Select role', 'Owner', 'Manager', 'Partner', 'Director'];
 const BUSINESS_PROOF_TYPES = [
@@ -51,6 +51,13 @@ interface SheetTarget {
     label: string;
 }
 
+/** Shape returned by both upload mutations on success */
+interface UploadResult {
+    success: boolean;
+    url: string;
+    publicId: string;
+}
+
 const IMAGE_TYPES = [types.images];
 const DOC_TYPES = [
     types.pdf,
@@ -69,6 +76,49 @@ function truncateName(name: string | null | undefined): string {
     return name.length > 28 ? name.slice(0, 25) + '…' : name;
 }
 
+// ─── UploadBtn — module-level component (never define inside parent) ───────────
+interface UploadBtnProps {
+    uploadKey: string;
+    mode: TargetMode;
+    label: string;
+    btnLabel?: string;
+    uploads: Record<string, string>;
+    uploading: Record<string, boolean>;
+    onOpen: (key: string, mode: TargetMode, label: string) => void;
+}
+
+function UploadBtn({
+    uploadKey,
+    mode,
+    label,
+    btnLabel,
+    uploads,
+    uploading,
+    onOpen,
+}: UploadBtnProps) {
+    const uploaded = uploads[uploadKey];
+    const isUploading = uploading[uploadKey] ?? false;
+    return (
+        <FileUploadBtn
+            label={
+                isUploading
+                    ? 'Uploading…'
+                    : uploaded
+                    ? truncateName(uploaded)
+                    : btnLabel ?? 'Choose File'
+            }
+            done={!!uploaded && !isUploading}
+            disabled={isUploading}
+            rightElement={
+                isUploading ? <ActivityIndicator size="small" color={Colors.primary} /> : undefined
+            }
+            onPress={() => !isUploading && onOpen(uploadKey, mode, label)}
+        />
+    );
+}
+
+// ─── Main component ────────────────────────────────────────────────────────────
+
 interface Props {
     data: VenueFormData['documents'];
     onChange: (data: VenueFormData['documents']) => void;
@@ -77,23 +127,28 @@ interface Props {
 }
 
 export default function Step6Documents({ data, onChange, onPrev, onNext }: Props) {
+    const { mutateAsync: uploadImageAsync } = useUploadImage();
+    const { mutateAsync: uploadDocumentAsync } = useUploadDocument();
+
     const { user } = useAuthStore();
     const set = (patch: Partial<VenueFormData['documents']>) => onChange({ ...data, ...patch });
 
-    // Init from user if fields are blank
+    // Prefill from logged-in user on first mount only
     React.useEffect(() => {
-        if (!data.fullName && user?.name)
+        if (!data.fullName && user?.name) {
             set({ fullName: user.name, email: user.email, mobile: user.phone });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    const [roleOpen, setRoleOpen] = React.useState(false);
-    const [bpOpen, setBpOpen] = React.useState(false);
-    const [atOpen, setAtOpen] = React.useState(false);
-    const [uploading, setUploading] = React.useState<Record<string, boolean>>({});
-    const [sheetTarget, setSheetTarget] = React.useState<SheetTarget | null>(null);
+    const [roleOpen, setRoleOpen] = useState(false);
+    const [bpOpen, setBpOpen] = useState(false);
+    const [atOpen, setAtOpen] = useState(false);
+    const [uploading, setUploading] = useState<Record<string, boolean>>({});
+    const [sheetTarget, setSheetTarget] = useState<SheetTarget | null>(null);
     const sheetTargetRef = useRef<SheetTarget | null>(null);
 
-    // Always-current refs so async callbacks never close over stale data/onChange
+    // Always-current refs so async callbacks never close over stale values
     const dataRef = useRef(data);
     const onChangeRef = useRef(onChange);
     React.useEffect(() => {
@@ -118,12 +173,15 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
     const uploadFile = useCallback(
         async (key: string, fileData: string, displayName: string) => {
             setUploading(p => ({ ...p, [key]: true }));
+            // Optimistically show the filename while upload is in progress
             setLatest({ uploads: { ...dataRef.current.uploads, [key]: displayName } });
+
             try {
                 const isImage = fileData.startsWith('data:image');
-                const response = isImage
-                    ? await imageAPI.uploadImage({ file: fileData, folder: 'documents' })
-                    : await imageAPI.uploadDocument({ file: fileData, folder: 'documents' });
+
+                const response: UploadResult = isImage
+                    ? await uploadImageAsync({ file: fileData, folder: 'documents' })
+                    : await uploadDocumentAsync({ file: fileData, folder: 'documents' });
 
                 if (response?.success) {
                     const newDocs = [
@@ -135,19 +193,21 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                         uploadedDocs: newDocs,
                     });
                 } else {
+                    // API returned success:false — roll back the optimistic filename
                     setLatest({ uploads: { ...dataRef.current.uploads, [key]: '' } });
                 }
             } catch (e: any) {
                 console.error('DOCUMENT UPLOAD ERROR:', e);
+                // Roll back optimistic filename on any error
                 setLatest({ uploads: { ...dataRef.current.uploads, [key]: '' } });
             } finally {
                 setUploading(p => ({ ...p, [key]: false }));
             }
         },
-        [setLatest],
+        [setLatest, uploadImageAsync, uploadDocumentAsync],
     );
 
-    // ── Image picker ──────────────────────────────────────────────────────────
+    // ── Image picker result handler ───────────────────────────────────────────
     const onImagePickerResult = useCallback(
         async (res: ImagePickerResponse) => {
             closeSheet();
@@ -155,7 +215,7 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
             if (!key || res.didCancel || res.errorCode || !res.assets?.[0]) return;
             const asset: Asset = res.assets[0];
             if (!asset.base64) {
-                console.warn('No base64 — pass includeBase64: true');
+                console.warn('No base64 data — ensure includeBase64: true is set');
                 return;
             }
             await uploadFile(
@@ -213,42 +273,7 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
         [uploadFile],
     );
 
-    // ── Upload button ─────────────────────────────────────────────────────────
-    const UploadBtn = ({
-        uploadKey,
-        mode,
-        label,
-        btnLabel,
-    }: {
-        uploadKey: string;
-        mode: TargetMode;
-        label: string;
-        btnLabel?: string;
-    }) => {
-        const uploaded = data.uploads[uploadKey];
-        const isUploading = uploading[uploadKey] ?? false;
-        return (
-            <FileUploadBtn
-                label={
-                    isUploading
-                        ? 'Uploading…'
-                        : uploaded
-                        ? truncateName(uploaded)
-                        : btnLabel ?? 'Choose File'
-                }
-                done={!!uploaded && !isUploading}
-                disabled={isUploading}
-                rightElement={
-                    isUploading ? (
-                        <ActivityIndicator size="small" color={Colors.primary} />
-                    ) : undefined
-                }
-                onPress={() => !isUploading && openSheet(uploadKey, mode, label)}
-            />
-        );
-    };
-
-    // ── Sheet options ─────────────────────────────────────────────────────────
+    // ── Sheet option list ─────────────────────────────────────────────────────
     const renderSheetOptions = () => {
         if (!sheetTarget) return null;
         const { mode } = sheetTarget;
@@ -260,6 +285,7 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
             sub: string;
             onPress: () => void;
         }[] = [];
+
         if (mode === 'photo' || mode === 'selfie') {
             options.push({
                 icon: 'camera-outline',
@@ -307,7 +333,6 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
     // ── Toggle GST ────────────────────────────────────────────────────────────
     const toggleGST = () => {
         const next = !data.hasGST;
-        // Clear GST data when unchecking
         set({
             hasGST: next,
             gstNumber: next ? data.gstNumber : '',
@@ -317,6 +342,9 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                 : data.uploadedDocs.filter(d => d.uploadKey !== 'gst_doc'),
         });
     };
+
+    // Shared props passed to every UploadBtn
+    const uploadBtnShared = { uploads: data.uploads, uploading, onOpen: openSheet };
 
     return (
         <>
@@ -387,10 +415,8 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                         }}
                     />
 
-                    {/* ── GST Section ── */}
                     <View style={s.gstDivider} />
 
-                    {/* GST Checkbox */}
                     <TouchableOpacity style={s.gstCheckRow} onPress={toggleGST} activeOpacity={0.8}>
                         <View style={[s.gstCheckbox, data.hasGST && s.gstCheckboxActive]}>
                             {data.hasGST && (
@@ -412,7 +438,6 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                         </View>
                     </TouchableOpacity>
 
-                    {/* GST details — expand when checked */}
                     {data.hasGST && (
                         <View style={s.gstExpanded}>
                             <Field
@@ -432,6 +457,7 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                                 mode="document"
                                 label="GST Certificate"
                                 btnLabel="Upload GST Certificate"
+                                {...uploadBtnShared}
                             />
                             <View style={s.gstNote}>
                                 <Ionicons
@@ -495,13 +521,23 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                             <Text style={s.uploadLabel}>
                                 UPLOAD FRONT <Text style={s.req}>*</Text>
                             </Text>
-                            <UploadBtn uploadKey="id_front" mode="photo" label="ID Front" />
+                            <UploadBtn
+                                uploadKey="id_front"
+                                mode="photo"
+                                label="ID Front"
+                                {...uploadBtnShared}
+                            />
                         </View>
                     </View>
                     <Text style={[s.uploadLabel, { marginTop: Spacing.sm }]}>
                         UPLOAD BACK <Text style={s.req}>*</Text>
                     </Text>
-                    <UploadBtn uploadKey="id_back" mode="photo" label="ID Back" />
+                    <UploadBtn
+                        uploadKey="id_back"
+                        mode="photo"
+                        label="ID Back"
+                        {...uploadBtnShared}
+                    />
                 </SectionCard>
 
                 {/* ── Selfie ── */}
@@ -518,6 +554,7 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                         mode="selfie"
                         label="Selfie"
                         btnLabel="Take / Upload Selfie"
+                        {...uploadBtnShared}
                     />
                 </SectionCard>
 
@@ -552,7 +589,12 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                     <Text style={[s.uploadLabel, { marginTop: Spacing.sm }]}>
                         UPLOAD DOCUMENT <Text style={s.req}>*</Text>
                     </Text>
-                    <UploadBtn uploadKey="biz_doc" mode="document" label="Business Document" />
+                    <UploadBtn
+                        uploadKey="biz_doc"
+                        mode="document"
+                        label="Business Document"
+                        {...uploadBtnShared}
+                    />
                 </SectionCard>
 
                 {/* ── Bank Details ── */}
@@ -695,8 +737,6 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
 
 const s = StyleSheet.create({
     row: { flexDirection: 'row', gap: Spacing.sm },
-
-    // ── GST ──
     gstDivider: { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.md },
     gstCheckRow: {
         flexDirection: 'row',
@@ -759,8 +799,6 @@ const s = StyleSheet.create({
         marginTop: Spacing.xs,
     },
     gstNoteText: { flex: 1, fontSize: Typography.xs, color: Colors.charcoalLight, lineHeight: 16 },
-
-    // ── Shared ──
     subLabel: {
         fontSize: Typography.base,
         fontWeight: Typography.semiBold,
@@ -885,7 +923,11 @@ const s = StyleSheet.create({
         color: Colors.charcoal,
     },
     sheetOptionSub: { fontSize: Typography.sm, color: Colors.charcoalLight, marginTop: 2 },
-    sheetDivider: { height: 1, backgroundColor: Colors.border ?? '#F3F4F6', marginVertical: 2 },
+    sheetDivider: {
+        height: 1,
+        backgroundColor: Colors.border ?? '#F3F4F6',
+        marginVertical: 2,
+    },
     cancelBtn: {
         marginTop: Spacing.md,
         paddingVertical: Spacing.md,

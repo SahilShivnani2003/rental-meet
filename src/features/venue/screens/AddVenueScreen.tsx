@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
     View,
     Text,
@@ -8,27 +8,22 @@ import {
     KeyboardAvoidingView,
     Platform,
     ScrollView,
-    ActivityIndicator,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { Colors, Typography, Spacing, Radii, Shadows } from '../../theme/theme';
-
-import Step1BasicInfo from '../../features/venue/components/basic-info';
-import Step2Location from '../../features/venue/components/location-info';
-import Step3Amenities from '../../features/venue/components/amenities-info';
-import Step4Pricing from '../../features/venue/components/pricing-info';
-import Step5Photos from '../../features/venue/components/photos-upload';
-import Step6Documents from '../../features/venue/components/documents-info';
-import Step7Terms from '../../features/venue/components/terms-info';
-
-import { VenueFormData, initialVenueFormData } from '../../types/Venue';
-import { buildVenuePayload } from '../../features/venue/components/venuePayloadBuilder';
-
-import { useAlert } from '../../context/AlertContext';
-import { venueAPI } from '../../service/apis/venues';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../navigations/RootNavigation';
-import { mapVenueToFormData } from '../../features/venue/components/mapVenueFormData';
+import { useAlert } from '@/context/AlertContext';
+import { Colors, Radii, Spacing, Shadows, Typography } from '@/theme/theme';
+import { RootStackParamList } from '@/types/RootStackParamList';
+import Step3Amenities from '../components/amenities-info';
+import Step1BasicInfo from '../components/basic-info';
+import Step6Documents from '../components/documents-info';
+import Step2Location from '../components/location-info';
+import Step5Photos from '../components/photos-upload';
+import Step4Pricing from '../components/pricing-info';
+import Step7Terms from '../components/terms-info';
+import { useCreateVenue } from '../hooks/useCreateVenue';
+import { VenueFormData, initialVenueFormData } from '../types/VenueFormData';
+import { buildVenuePayload } from '../types/BuildVenuePlayload';
 
 const TOTAL_STEPS = 7;
 const STEP_LABELS = [
@@ -41,62 +36,15 @@ const STEP_LABELS = [
     'Terms',
 ];
 
-type UpdateVenueProps = NativeStackScreenProps<RootStackParamList, 'updateVenue'>;
+type RegisterVenueProps = NativeStackScreenProps<RootStackParamList, 'addVenue'>;
 
-export default function UpdateVenueScreen({ navigation, route }: UpdateVenueProps) {
+export default function RegisterVenueScreen({ navigation }: RegisterVenueProps) {
     const alert = useAlert();
-    const { venueId } = route.params;
-
-    const [loading, setLoading] = useState(true);
+    // FIX: was `useCreateVenue():` — colon instead of semicolon
+    const { mutate: createVenue, isPending } = useCreateVenue();
     const [step, setStep] = useState(1);
     const [successModal, setSuccessModal] = useState(false);
     const [form, setForm] = useState<VenueFormData>(initialVenueFormData);
-    const [venueTypeNames, setVenueTypeNames] = useState<Record<string, string>>({});
-    const [originalVenue, setOriginalVenue] = useState<any>(null);
-
-    // ── Fetch existing venue data ────────────────────────────────────────────
-    useEffect(() => {
-        fetchVenueData();
-    }, [venueId]);
-
-    const fetchVenueData = async () => {
-        setLoading(true);
-        try {
-            if (venueId) {
-                const response = await venueAPI.getById(venueId);
-
-                if (!response?.success || !response.venue) {
-                    alert.error('Error', 'Failed to load venue data');
-                    navigation.goBack();
-                    return;
-                }
-
-                const venue = response.venue;
-                setOriginalVenue(venue);
-
-                // Map venue data to form structure
-                const mappedFormData = mapVenueToFormData(venue);
-                setForm(mappedFormData);
-
-                // Build venueTypeNames map from venue data
-                if (venue.venueType && Array.isArray(venue.venueType)) {
-                    const typeMap: Record<string, string> = {};
-                    venue.venueType.forEach((type: string) => {
-                        typeMap[type] = type; // Assuming type is already the name
-                    });
-                    setVenueTypeNames(typeMap);
-                }
-            }else{
-                console.warn('Venue id not found '); 
-            }
-        } catch (error: any) {
-            console.error('FETCH VENUE ERROR:', error);
-            alert.error('Error', 'Failed to load venue data');
-            navigation.goBack();
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const patchForm = <K extends keyof VenueFormData>(key: K, value: VenueFormData[K]) =>
         setForm(prev => ({ ...prev, [key]: value }));
@@ -104,27 +52,20 @@ export default function UpdateVenueScreen({ navigation, route }: UpdateVenueProp
     const goNext = () => setStep(s => Math.min(s + 1, TOTAL_STEPS));
     const goPrev = () => setStep(s => Math.max(s - 1, 1));
 
-    // ── Submit Update ─────────────────────────────────────────────────────────
-    const handleSubmit = async () => {
-        try {
-            const payload = buildVenuePayload(form, venueTypeNames);
-            console.log('UPDATE VENUE PAYLOAD:', JSON.stringify(payload, null, 2));
-
-            if (venueId) {
-                const response = await venueAPI.updateVenue(venueId, payload);
-                if (!response?.success) {
-                    alert.error('Failed', response?.message || 'Something went wrong');
-                    return;
-                }
-
+    // ── Submit handler ────────────────────────────────────────────────────────
+    const handleSubmit = () => {
+        const payload = buildVenuePayload(form);
+        createVenue(payload, {
+            onSuccess: () => {
                 setSuccessModal(true);
-            } else {
-                console.warn('Venue id not found ');
-            }
-        } catch (error: any) {
-            console.error('VENUE UPDATE ERROR:', error);
-            alert.error('Failed', error?.description || 'Something went wrong');
-        }
+            },
+            onError: (err: any) => {
+                alert.error(
+                    'Submission Failed',
+                    err?.message ?? 'Something went wrong. Please try again.',
+                );
+            },
+        });
     };
 
     // ── Step renderer ─────────────────────────────────────────────────────────
@@ -190,22 +131,13 @@ export default function UpdateVenueScreen({ navigation, route }: UpdateVenueProp
                         onChange={v => patchForm('terms', v)}
                         onPrev={goPrev}
                         onSubmit={handleSubmit}
+                        isSubmitting={isPending}
                     />
                 );
             default:
                 return null;
         }
     };
-
-    // ── Loading state ─────────────────────────────────────────────────────────
-    if (loading) {
-        return (
-            <View style={s.loadingContainer}>
-                <ActivityIndicator size="large" color={Colors.primary} />
-                <Text style={s.loadingText}>Loading venue data...</Text>
-            </View>
-        );
-    }
 
     return (
         <KeyboardAvoidingView
@@ -217,10 +149,10 @@ export default function UpdateVenueScreen({ navigation, route }: UpdateVenueProp
                 <View style={s.headerAccentBar} />
                 <View style={s.headerContent}>
                     <View style={s.headerLeft}>
-                        <Text style={s.headerEyebrow}>UPDATE VENUE</Text>
+                        <Text style={s.headerEyebrow}>VENUE REGISTRATION</Text>
                         <Text style={s.headerTitle}>{STEP_LABELS[step - 1]}</Text>
                         <Text style={s.headerSub}>
-                            Step {step} of {TOTAL_STEPS} · Update your venue information
+                            Step {step} of {TOTAL_STEPS} · Complete all steps to list your venue
                         </Text>
                     </View>
                     <View style={s.stepPill}>
@@ -233,8 +165,8 @@ export default function UpdateVenueScreen({ navigation, route }: UpdateVenueProp
                         onPress={() => navigation.goBack()}
                         activeOpacity={0.75}
                     >
-                        <Text style={s.backBtnText}>Cancel</Text>
-                        <Ionicons name="close" size={16} color={Colors.charcoal} />
+                        <Text style={s.backBtnText}>Back</Text>
+                        <Ionicons name="arrow-forward" size={16} color={Colors.charcoal} />
                     </TouchableOpacity>
                 </View>
                 <View style={s.progressWrap}>
@@ -293,7 +225,10 @@ export default function UpdateVenueScreen({ navigation, route }: UpdateVenueProp
                                                 completed && s.stepNumTextDone,
                                             ]}
                                         >
-                                            {n}
+                                            {completed
+                                                ? // Show checkmark for completed steps
+                                                  '✓'
+                                                : n}
                                         </Text>
                                     </View>
                                     {showLabel && (
@@ -327,22 +262,23 @@ export default function UpdateVenueScreen({ navigation, route }: UpdateVenueProp
                                 <Ionicons name="checkmark" size={34} color={Colors.white} />
                             </View>
                         </View>
-                        <Text style={s.modalTitle}>Venue Updated!</Text>
+                        <Text style={s.modalTitle}>Venue Submitted!</Text>
                         <Text style={s.modalSub}>
-                            Your venue has been updated successfully. Changes are now live.
+                            Your venue has been submitted for review. We'll notify you within 24–48
+                            hours once approved.
                         </Text>
                         <View style={s.modalDivider} />
                         <View style={s.modalInfoRow}>
-                            <Ionicons
-                                name="checkmark-circle-outline"
-                                size={14}
-                                color={Colors.success}
-                            />
-                            <Text style={s.modalInfoText}>All changes saved</Text>
+                            <Ionicons name="time-outline" size={14} color={Colors.charcoalLight} />
+                            <Text style={s.modalInfoText}>Review takes 24–48 hours</Text>
                         </View>
                         <View style={s.modalInfoRow}>
-                            <Ionicons name="time-outline" size={14} color={Colors.charcoalLight} />
-                            <Text style={s.modalInfoText}>Updated just now</Text>
+                            <Ionicons
+                                name="notifications-outline"
+                                size={14}
+                                color={Colors.charcoalLight}
+                            />
+                            <Text style={s.modalInfoText}>You'll get notified on approval</Text>
                         </View>
                         <TouchableOpacity
                             style={s.modalBtn}
@@ -352,7 +288,7 @@ export default function UpdateVenueScreen({ navigation, route }: UpdateVenueProp
                             }}
                             activeOpacity={0.85}
                         >
-                            <Text style={s.modalBtnText}>Back to Venue</Text>
+                            <Text style={s.modalBtnText}>Back to Dashboard</Text>
                             <Ionicons name="arrow-forward" size={15} color={Colors.charcoal} />
                         </TouchableOpacity>
                     </View>
@@ -364,18 +300,6 @@ export default function UpdateVenueScreen({ navigation, route }: UpdateVenueProp
 
 const s = StyleSheet.create({
     root: { flex: 1, backgroundColor: Colors.background },
-    loadingContainer: {
-        flex: 1,
-        backgroundColor: Colors.background,
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: Spacing.md,
-    },
-    loadingText: {
-        fontSize: Typography.md,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.medium,
-    },
     header: {
         backgroundColor: Colors.surface,
         borderBottomLeftRadius: Radii.xxl,
@@ -383,7 +307,7 @@ const s = StyleSheet.create({
         paddingBottom: Spacing.lg,
         ...Shadows.header,
     },
-    headerAccentBar: { height: 4, backgroundColor: Colors.info },
+    headerAccentBar: { height: 4, backgroundColor: Colors.primary },
     headerContent: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -411,7 +335,7 @@ const s = StyleSheet.create({
     headerEyebrow: {
         fontSize: Typography.sm,
         fontWeight: Typography.bold,
-        color: Colors.info,
+        color: Colors.primary,
         letterSpacing: Typography.wider,
         marginBottom: Spacing.xxs,
     },
@@ -431,9 +355,9 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'baseline',
         gap: 1,
-        backgroundColor: Colors.infoLight,
+        backgroundColor: Colors.primaryLight,
         borderWidth: 1,
-        borderColor: Colors.info,
+        borderColor: Colors.primaryBorder,
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: Radii.full,
@@ -441,12 +365,12 @@ const s = StyleSheet.create({
     stepPillNum: {
         fontSize: 16,
         fontWeight: Typography.extraBold,
-        color: Colors.info,
+        color: Colors.primary,
         letterSpacing: -0.5,
     },
     stepPillSep: {
         fontSize: 11,
-        color: Colors.info,
+        color: Colors.primaryBorder,
         fontWeight: Typography.medium,
         marginHorizontal: 1,
     },
@@ -464,11 +388,11 @@ const s = StyleSheet.create({
         borderRadius: 3,
         overflow: 'hidden',
     },
-    progressFill: { height: '100%', backgroundColor: Colors.info, borderRadius: 3 },
+    progressFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 3 },
     progressPct: {
         fontSize: Typography.xs,
         fontWeight: Typography.bold,
-        color: Colors.info,
+        color: Colors.primaryDark,
         minWidth: 30,
         textAlign: 'right',
     },
@@ -497,8 +421,8 @@ const s = StyleSheet.create({
     },
     stepChipActive: {
         paddingRight: 12,
-        borderColor: Colors.info,
-        backgroundColor: Colors.infoLight,
+        borderColor: Colors.primary,
+        backgroundColor: Colors.primaryLight,
     },
     stepChipDone: {
         paddingRight: 10,
@@ -515,7 +439,7 @@ const s = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.border,
     },
-    stepNumActive: { backgroundColor: Colors.info, borderColor: Colors.info },
+    stepNumActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
     stepNumDone: { backgroundColor: Colors.success, borderColor: Colors.success },
     stepNumText: {
         fontSize: 11,
@@ -523,10 +447,10 @@ const s = StyleSheet.create({
         color: Colors.charcoalLight,
         lineHeight: 13,
     },
-    stepNumTextActive: { color: Colors.charcoal },
+    stepNumTextActive: { color: Colors.white },
     stepNumTextDone: { color: Colors.white },
     stepLabel: { fontSize: 12, fontWeight: Typography.bold, color: Colors.charcoalLight },
-    stepLabelActive: { color: Colors.info },
+    stepLabelActive: { color: Colors.primaryDark },
     stepLabelDone: { color: Colors.success, fontWeight: Typography.semiBold },
     content: { flex: 1, backgroundColor: Colors.background },
     overlay: {

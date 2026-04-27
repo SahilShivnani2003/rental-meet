@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavigationContainer, NavigatorScreenParams } from '@react-navigation/native';
+import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import LoginScreen from '@features/auth/screens/LoginScreen';
 import { ClientTabNavigation } from './tabNavigations/ClientTabNavigation';
@@ -7,19 +7,18 @@ import { OwnerTabNavigation } from './tabNavigations/OwnerTabNavigation';
 import { AlertProvider } from '../context/AlertContext';
 import OnboardingScreen from '../screens/OnBoarding';
 import SplashScreen from '../screens/splashScreen';
-import RegisterVenueScreen from '../screens/owner/AddVenue';
-import UpdateVenueScreen from '../screens/owner/UpdateVenue';
 import { RootStackParamList } from '@/types/RootStackParamList';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '@/service/queryClient';
 import ModifyBookingScreen from '@/features/booking/screens/ModifyBookingScreen';
 import RegisterScreen from '@/features/auth/screens/RegisterScreen';
 import BookingDetailScreen from '@/features/booking/screens/BookingDetailScreen';
-import BookingScreen from '@/features/booking/screens/BookingScreen';
 import VenueDetailScreen from '@/features/venue/screens/VenueDetailScreen';
 import BrowseCategoryScreen from '@/features/venueType/screens/VenueTypeScreen';
 import RegisterTypeScreen from '@/features/auth/screens/RoleTypeScreen';
 import VenueBookingScreen from '@/features/booking/screens/VenueBookingScreen';
+import RegisterVenueScreen from '@/features/venue/screens/AddVenueScreen';
+import UpdateVenueScreen from '@/features/venue/screens/UpdataVenueScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -53,7 +52,7 @@ export default function RootNavigator() {
                         <Stack.Screen name="onBoarding" component={OnboardingScreen} />
                         <Stack.Screen name="addVenue" component={RegisterVenueScreen} />
                         <Stack.Screen name="updateVenue" component={UpdateVenueScreen} />
-                        <Stack.Screen name="modifyBooking" component={ModifyBookingScreen}/>
+                        <Stack.Screen name="modifyBooking" component={ModifyBookingScreen} />
                     </Stack.Navigator>
                 </NavigationContainer>
             </AlertProvider>

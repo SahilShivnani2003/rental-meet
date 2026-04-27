@@ -3,16 +3,16 @@ import { SelectedAmenityItem } from "@/features/venue/models/BookingSheet";
 import { Venue } from "@/features/venue/types/Venue";
 import { ClientTabParamList } from "@/navigations/tabNavigations/ClientTabNavigation";
 import { OwnerTabParamList } from "@/navigations/tabNavigations/OwnerTabNavigation";
-import { tabParamList } from "@/navigations/tabNavigations/TabNavigation";
+import { VendorTabParamList } from "@/navigations/tabNavigations/VendorTabNavigation";
 import { NavigatorScreenParams } from "@react-navigation/native";
 
 export type RootStackParamList = {
     splash: undefined;
     login: undefined;
-    main: NavigatorScreenParams<tabParamList> | undefined;
     registerType: undefined;
     client: NavigatorScreenParams<ClientTabParamList> | undefined;
     owner: NavigatorScreenParams<OwnerTabParamList> | undefined;
+    vendor: NavigatorScreenParams<VendorTabParamList> | undefined;
     register: {
         role: string;
     };
@@ -33,7 +33,7 @@ export type RootStackParamList = {
     onBoarding: undefined;
     addVenue: undefined;
     updateVenue: {
-        venueId: string | undefined;
+        venueId: string ;
     };
     vDetail: {
         venueId: string;
