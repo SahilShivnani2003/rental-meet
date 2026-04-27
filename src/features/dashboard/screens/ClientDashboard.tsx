@@ -57,7 +57,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
         isLoading: venuesLoading,
         isRefetching: venuesRefetching,
         refetch: refetchVenues,
-    } = useGetAllVenue({limit: '6'});
+    } = useGetAllVenue({ limit: '6' });
 
     const {
         data: citiesData,
@@ -74,9 +74,9 @@ export default function ClientDashboard({ navigation }: landingProps) {
     } = useGetVenueType();
 
     // ── Derive data safely — no local mirror state needed ────────────────────
-    const venues: Venue[] = venueData?.venue ?? [];
+    const venues: Venue[] = venueData?.venues ?? [];
     const cities: string[] = citiesData?.cities ?? [];
-    const categories: VenueType[] = venueTypeData?.data ?? [];
+    const categories: VenueType[] = venueTypeData?.venueTypes ?? [];
 
     // ── Filter state ─────────────────────────────────────────────────────────
     const [openDropdown, setOpenDropdown] = useState<DropdownType>(null);
@@ -534,20 +534,29 @@ export default function ClientDashboard({ navigation }: landingProps) {
                         </TouchableOpacity>
                     </View>
                     <View style={s.catGrid}>
-                        {categories.slice(0, 6).map(cat => (
-                            <TouchableOpacity
-                                key={cat._id}
-                                style={s.catCard}
-                                onPress={goToVenues}
-                                activeOpacity={0.8}
-                            >
-                                <View style={s.catIconWrap}>
-                                    <Text style={s.catIconEmoji}>{cat.icon}</Text>
-                                </View>
-                                <Text style={s.catLabel}>{cat.name}</Text>
-                                <Text style={s.catCount}>{cat.description}</Text>
-                            </TouchableOpacity>
-                        ))}
+                        {categories.length === 0 ? (
+                            <View style={s.emptyState}>
+                                <Text style={s.emptyStateIcon}>🏷️</Text>
+                                <Text style={s.emptyStateTitle}>No categories yet</Text>
+                                <Text style={s.emptyStateSub}>
+                                    Check back soon — new venue types are on the way.
+                                </Text>
+                            </View>
+                        ) : (
+                            categories.slice(0, 9).map(cat => (
+                                <TouchableOpacity
+                                    key={cat._id}
+                                    style={s.catCard}
+                                    onPress={goToVenues}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={s.catIconWrap}>
+                                        <Text style={s.catIconEmoji}>{cat.icon}</Text>
+                                    </View>
+                                    <Text style={s.catLabel}>{cat.name}</Text>
+                                </TouchableOpacity>
+                            ))
+                        )}
                     </View>
                 </Animated.View>
 
@@ -564,9 +573,31 @@ export default function ClientDashboard({ navigation }: landingProps) {
                     </View>
                     <Text style={s.sectionSub}>Handpicked premium spaces for your events</Text>
                     <View style={s.hScroll}>
-                        {venues.map((v, i) => (
-                            <FeaturedCard key={v._id} v={v} index={i} onPress={goToVenueDetail} />
-                        ))}
+                        {venues.length === 0 ? (
+                            <View style={s.emptyState}>
+                                <Text style={s.emptyStateIcon}>🏛️</Text>
+                                <Text style={s.emptyStateTitle}>No venues available</Text>
+                                <Text style={s.emptyStateSub}>
+                                    We're adding new spaces soon. Browse all to stay updated.
+                                </Text>
+                                <TouchableOpacity
+                                    style={s.emptyStateBtn}
+                                    onPress={goToVenues}
+                                    activeOpacity={0.85}
+                                >
+                                    <Text style={s.emptyStateBtnText}>Browse All Venues</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            venues.map((v, i) => (
+                                <FeaturedCard
+                                    key={v._id}
+                                    v={v}
+                                    index={i}
+                                    onPress={goToVenueDetail}
+                                />
+                            ))
+                        )}
                     </View>
                     <TouchableOpacity
                         style={s.viewAllBtn}
@@ -879,7 +910,7 @@ const s = StyleSheet.create({
         width: CAT_W,
         backgroundColor: Colors.surface,
         borderRadius: Radii.xl,
-        padding: Spacing.md,
+        padding: Spacing.sm,
         alignItems: 'center',
         gap: Spacing.sm,
         ...Shadows.card,
@@ -915,4 +946,47 @@ const s = StyleSheet.create({
         marginTop: Spacing.lg,
     },
     viewAllBtnText: { fontSize: 14, fontWeight: Typography.extraBold, color: Colors.white },
+    emptyState: {
+        width: '100%',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: 36,
+        paddingHorizontal: Spacing.xl,
+        backgroundColor: Colors.surface,
+        borderRadius: Radii.xl,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        borderStyle: 'dashed',
+        gap: Spacing.sm,
+    },
+    emptyStateIcon: {
+        fontSize: 36,
+        marginBottom: 4,
+    },
+    emptyStateTitle: {
+        fontSize: 15,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal,
+        letterSpacing: -0.2,
+    },
+    emptyStateSub: {
+        fontSize: 12.5,
+        color: Colors.charcoalLight,
+        textAlign: 'center',
+        lineHeight: 18,
+        maxWidth: 220,
+    },
+    emptyStateBtn: {
+        marginTop: Spacing.sm,
+        paddingVertical: 10,
+        paddingHorizontal: Spacing.xl,
+        backgroundColor: Colors.primary,
+        borderRadius: Radii.full,
+        ...Shadows.primary,
+    },
+    emptyStateBtnText: {
+        fontSize: 13,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+    },
 });

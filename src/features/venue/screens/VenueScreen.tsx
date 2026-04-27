@@ -17,7 +17,6 @@ import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-naviga
 import VenueCard from '@/components/venues/venueCard';
 import { ClientTabParamList } from '@/navigations/tabNavigations/ClientTabNavigation';
 import { OwnerTabParamList } from '@/navigations/tabNavigations/OwnerTabNavigation';
-import { tabParamList } from '@/navigations/tabNavigations/TabNavigation';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Colors, Spacing, Radii, Shadows, Typography } from '@/theme/theme';
 import { RootStackParamList } from '@/types/RootStackParamList';
@@ -25,7 +24,6 @@ import { useGetVenueType } from '@/features/venueType/hooks/useGetVenueType';
 import { useGetAllVenue } from '../hooks/useGetAllVenue';
 import { useGetOwnerVenue } from '../hooks/useGetOwnerVenue';
 import { VenueType } from '@/features/venueType/types/VenueType';
-
 
 const ALL_CATEGORY: VenueType = {
     _id: 'all',
@@ -37,7 +35,7 @@ const ALL_CATEGORY: VenueType = {
     order: 0,
 };
 
-type appParamList = OwnerTabParamList & ClientTabParamList & tabParamList;
+type appParamList = OwnerTabParamList & ClientTabParamList;
 type venueProps = NativeStackScreenProps<appParamList, 'venues'>;
 
 // ── Owner stat card ───────────────────────────────────────────────────────────
@@ -176,7 +174,6 @@ function DropdownModal({
 export default function VenuesScreen({ navigation }: venueProps) {
     const { user } = useAuthStore();
     const isOwner = user?.role === 'owner';
-
     // ── Filter state ──────────────────────────────────────────────────────────
     const [searchQuery, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -206,14 +203,19 @@ export default function VenuesScreen({ navigation }: venueProps) {
         isLoading: isClientVenueLoading,
         isRefetching: isClientRefetching,
         refetch: refetchClientVenues,
-    } = useGetAllVenue({
-        search: debouncedSearch,
-        venueType: selectedVenueType,
-        city: selectedCity,
-        capacity: selectedCapacity,
-        minPrice: minPrice ? Number(minPrice) : undefined,
-        maxPrice: maxPrice ? Number(maxPrice) : undefined,
-    });
+    } = useGetAllVenue(
+        {
+            search: debouncedSearch,
+            venueType: selectedVenueType,
+            city: selectedCity,
+            capacity: selectedCapacity,
+            minPrice: minPrice ? Number(minPrice) : undefined,
+            maxPrice: maxPrice ? Number(maxPrice) : undefined,
+        },
+        {
+            enabled: !isOwner,
+        },
+    );
 
     // Owner venue hook
     const {
@@ -221,9 +223,9 @@ export default function VenuesScreen({ navigation }: venueProps) {
         isLoading: isOwnerVenueLoading,
         isRefetching: isOwnerRefetching,
         refetch: refetchOwnerVenues,
-    } = useGetOwnerVenue();
-
-    // ── Derived data ──────────────────────────────────────────────────────────
+    } = useGetOwnerVenue({
+        enabled: isOwner,
+    });
 
     // Pick the right venue list based on role
     const venues: any[] = isOwner ? ownerVenueData?.venues ?? [] : clientVenueData?.venues ?? [];
@@ -233,7 +235,7 @@ export default function VenuesScreen({ navigation }: venueProps) {
     const refetch = isOwner ? refetchOwnerVenues : refetchClientVenues;
 
     // Categories from venue type API, prepend "All"
-    const rawVenueTypes: VenueType[] = venueTypeData?.data ?? [];
+    const rawVenueTypes: VenueType[] = venueTypeData?.venueTypes ?? [];
     const categories: VenueType[] = [ALL_CATEGORY, ...rawVenueTypes];
 
     // ── Animate in when venues load ───────────────────────────────────────────
@@ -281,8 +283,6 @@ export default function VenuesScreen({ navigation }: venueProps) {
     // ── Apply inline filters (close panel + trigger re-fetch via param change) ─
     const handleApplyFilters = useCallback(() => {
         setFiltersExpanded(false);
-        // debouncedSearch and filter states already drive the hook params,
-        // so just close the panel — query re-runs automatically
         refetch();
     }, [refetch]);
 

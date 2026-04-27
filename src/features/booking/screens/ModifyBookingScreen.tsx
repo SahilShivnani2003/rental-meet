@@ -21,7 +21,7 @@ import { useAlert } from '@/context/AlertContext';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ModifyBookingScreenProps = NativeStackScreenProps<RootStackParamList, 'modifyBooking'>;
+type ModifyBookingScreenProps = NativeStackScreenProps<RootStackParamList, 'modifyVenueBooking'>;
 
 type BookingType = 'hourly' | 'halfday' | 'fullday';
 

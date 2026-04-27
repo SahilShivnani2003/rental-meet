@@ -53,16 +53,16 @@ export default function RootNavigator() {
                         <Stack.Screen name="vendor" component={VendorTabNavigation} />
                         <Stack.Screen name="venueDetail" component={VenueDetailScreen} />
                         <Stack.Screen name="category" component={BrowseCategoryScreen} />
-                        <Stack.Screen name="booking" component={VenueBookingScreen} />
-                        <Stack.Screen name="bookingDetail" component={BookingDetailScreen} />
+                        <Stack.Screen name='venueBooking' component={VenueBookingScreen} />
+                        <Stack.Screen name="venueBookingDetail" component={BookingDetailScreen} />
                         <Stack.Screen name="onBoarding" component={OnboardingScreen} />
                         <Stack.Screen name="addVenue" component={RegisterVenueScreen} />
                         <Stack.Screen name="updateVenue" component={UpdateVenueScreen} />
-                        <Stack.Screen name="modifyBooking" component={ModifyBookingScreen} />
+                        <Stack.Screen name="modifyVenueBooking" component={ModifyBookingScreen} />
                         <Stack.Screen name="addVendorService" component={AddServiceScreen} />
                         <Stack.Screen name='vendorDetail' component={VendorDetailScreen}/>
                         <Stack.Screen name='serviceBooking' component={ServiceBookingScreen}/>
-                        <Stack.Screen name='getQuotation' component={GetQuotationScreen}/>
+                        <Stack.Screen name='getServiceQuotation' component={GetQuotationScreen}/>
                     </Stack.Navigator>
                 </NavigationContainer>
             </AlertProvider>

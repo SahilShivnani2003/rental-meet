@@ -21,14 +21,14 @@ export type RootStackParamList = {
         venue: any;
     };
     category: undefined;
-    booking: {
+    venueBooking: {
         venue: Venue;
         selectedAmenities?: SelectedAmenityItem[];
         amenitiesTotal?: number;
         preselectedDurationHours?: number;
         preselectedDurationType?: string;
     };
-    bookingDetail: {
+    venueBookingDetail: {
         bookingId: string;
     };
     onBoarding: undefined;
@@ -36,10 +36,7 @@ export type RootStackParamList = {
     updateVenue: {
         venueId: string ;
     };
-    vDetail: {
-        venueId: string;
-    };
-    modifyBooking: {
+    modifyVenueBooking: {
         bookingId: string;
         booking: Booking;
     };
@@ -49,7 +46,7 @@ export type RootStackParamList = {
     serviceBooking: {
         service: any;
     };
-    getQuotation: {
+    getServiceQuotation: {
         service: any;
     };
     addVendorService: undefined;

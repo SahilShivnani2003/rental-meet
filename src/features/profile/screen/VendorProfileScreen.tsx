@@ -17,6 +17,8 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { Spacing, Colors, Radii, Shadows, Typography } from '@/theme/theme';
 import { VendorTabParamList } from '@/navigations/tabNavigations/VendorTabNavigation';
 import { VendorProfile } from '@/types/models';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '@/types/RootStackParamList';
 
 const { width: W } = Dimensions.get('window');
 
@@ -155,7 +157,7 @@ type Props = NativeBottomTabScreenProps<VendorTabParamList, 'profile'>;
 export default function VendorProfileScreen({ navigation }: Props) {
     const { user, logOut } = useAuthStore();
     const alert = useAlert();
-
+    const rootNav = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
     // TODO: replace with real hook
     const isRefetching = false;
     const profile: VendorProfile = STATIC_PROFILE;
@@ -185,8 +187,22 @@ export default function VendorProfileScreen({ navigation }: Props) {
     }, []);
 
     const handleLogout = useCallback(() => {
-        alert.info('Logout', 'Are you sure you want to logout?');
-        logOut();
+        alert.show({
+            type: 'confirm',
+            title: 'Log Out',
+            message: 'Are you sure you want to log out?',
+            buttons: [
+                { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },
+                {
+                    label: 'Log Out',
+                    onPress: async () => {
+                        rootNav.reset({ index: 0, routes: [{ name: 'login' }] });
+                        await logOut();
+                        alert.dismiss();
+                    },
+                },
+            ],
+        });
     }, []);
 
     const statusInfo = {

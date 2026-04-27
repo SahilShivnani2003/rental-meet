@@ -53,7 +53,14 @@ const EMPTY_DESC: Record<string, string> = {
 export default function BookingsScreen({ navigation }: BookingsProps) {
     const { user, isAuthenticated } = useAuthStore();
 
-    const { data: bookingData, isLoading, isRefetching, refetch } = useGetAllBookings();
+    const {
+        data: bookingData,
+        isLoading,
+        isRefetching,
+        refetch,
+    } = useGetAllBookings({
+        enabled: isAuthenticated,
+    });
     const bookings = bookingData?.bookings ?? [];
 
     const [refreshing, setRefreshing] = useState(false);
@@ -94,7 +101,7 @@ export default function BookingsScreen({ navigation }: BookingsProps) {
                 onPress={() =>
                     navigation
                         .getParent<NativeStackNavigationProp<RootStackParamList>>()
-                        .navigate('bookingDetail', { bookingId: item?._id })
+                        .navigate('venueBookingDetail', { bookingId: item?._id })
                 }
             >
                 <BookingCard

@@ -724,7 +724,7 @@ export default function OtherServicesScreen() {
         [navigation],
     );
     const goToQuotation = useCallback(
-        (sv: VendorService) => navigation.navigate('getQuotation', { service: sv }),
+        (sv: VendorService) => navigation.navigate('getServiceQuotation', { service: sv }),
         [navigation],
     );
 
@@ -886,34 +886,6 @@ export default function OtherServicesScreen() {
                         ))
                     )}
                 </Animated.View>
-
-                {/* ── Bottom CTA ── */}
-                {!isLoading && (
-                    <View style={s.ctaWrap}>
-                        <View style={s.ctaBanner}>
-                            <View style={s.ctaOrb1} />
-                            <View style={s.ctaOrb2} />
-                            <View style={s.ctaInner}>
-                                <View style={s.ctaIconCircle}>
-                                    <Ionicons name="sparkles" size={26} color={Colors.primary} />
-                                </View>
-                                <Text style={s.ctaTitle}>Can't find what{'\n'}you need?</Text>
-                                <Text style={s.ctaSub}>
-                                    Tell us your requirements and we'll connect you with the right
-                                    vendor.
-                                </Text>
-                                <TouchableOpacity style={s.ctaBtn} activeOpacity={0.88}>
-                                    <Ionicons
-                                        name="chatbubble-ellipses"
-                                        size={16}
-                                        color={Colors.charcoal}
-                                    />
-                                    <Text style={s.ctaBtnText}>Request a Custom Service</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </View>
-                )}
             </ScrollView>
 
             {/* ── Filter bottom sheet ── */}
@@ -965,20 +937,21 @@ const s = StyleSheet.create({
         paddingHorizontal: Spacing.xl,
         paddingTop: Spacing.lg,
         paddingBottom: Spacing.sm,
+        minHeight: 120
+    },
+    headerTitle: {
+        fontSize: 30, // was 26
+        fontWeight: Typography.extraBold,  
+        color: Colors.charcoal,
+        letterSpacing: -0.8, // was -0.6
+        lineHeight: 36, // was 32
+        marginBottom: 4, // was 6
     },
     headerEyebrow: {
         fontSize: Typography.sm,
         fontWeight: Typography.bold,
-        color: Colors.primary,
+        color: Colors.charcoalLight, // ← was Colors.primary, now muted so it reads as a sub-label
         letterSpacing: Typography.wider,
-        marginBottom: Spacing.xxs,
-    },
-    headerTitle: {
-        fontSize: 26,
-        fontWeight: Typography.extraBold,
-        color: Colors.charcoal,
-        letterSpacing: -0.6,
-        lineHeight: 32,
         marginBottom: 6,
     },
     headerSub: { fontSize: 13, color: Colors.charcoalLight, lineHeight: 20 },

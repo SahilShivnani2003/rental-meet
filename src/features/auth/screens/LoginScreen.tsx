@@ -135,6 +135,7 @@ export default function LoginScreen({ navigation }: LoginProps) {
 
     // ── Skip — navigates as a guest client ──────────────────────────────────────
     const handleSkip = () => {
+        console.log('Skip press')
         alert.show({
             title: 'Continue as Guest',
             message: 'You can browse venues without singing in. Some features will be limited',

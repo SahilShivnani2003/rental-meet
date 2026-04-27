@@ -62,7 +62,7 @@ const isPast = (d: Date) => {
     return d < t;
 };
 
-type Props = NativeBottomTabScreenProps<RootStackParamList, 'getQuotation'>;
+type Props = NativeBottomTabScreenProps<RootStackParamList, 'getServiceQuotation'>;
 
 export default function GetQuotationScreen({ navigation, route }: Props) {
     const { service } = route.params as { service: VendorService };

@@ -23,7 +23,7 @@ import { Colors, Spacing, Radii, Typography, Shadows, StatusConfig } from '@/the
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type statusIdType = 'confirm' | 'confirmSoon' | 'cancel';
-type BookingDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'bookingDetail'>;
+type BookingDetailScreenProps = NativeStackScreenProps<RootStackParamList, 'venueBookingDetail'>;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 

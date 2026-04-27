@@ -43,7 +43,7 @@ type DurationOption = {
 // FIX: define PlatformFeeType locally — was used but never imported
 type PlatformFeeType = 'fixed' | 'percentage';
 
-type BookingScreenProps = NativeStackScreenProps<RootStackParamList, 'booking'>;
+type BookingScreenProps = NativeStackScreenProps<RootStackParamList, 'venueBooking'>;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
