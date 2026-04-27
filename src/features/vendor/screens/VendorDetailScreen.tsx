@@ -15,10 +15,10 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Colors, Typography, Spacing, Radii, Shadows } from '@/theme/theme';
 import { RootStackParamList } from '@/types/RootStackParamList';
-import { useGetVendorProfile } from '@/features/services/hooks/useGetVendorProfile';
 import { useAlert } from '@/context/AlertContext';
 import { VendorService } from '@/features/otherService/types/VendorService';
 import { VendorProfile } from '../types/VendorProfile';
+import { useGetVendorProfile } from '../hooks/useVendorService';
 
 const { width: W, height: H } = Dimensions.get('window');
 const HERO_H = H * 0.38;
@@ -45,8 +45,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'vendorDetail'>;
 export default function VendorDetailScreen({ navigation, route }: Props) {
     const { service } = route.params as { service: VendorService };
     const alert = useAlert();
-
-    const { data: profileData, isLoading } = useGetVendorProfile(service.vendor);
+    const { data: profileData, isLoading } = useGetVendorProfile();
     const profile: Partial<VendorProfile> = profileData?.profile ?? {};
 
     const catColor = CAT_COLOR[service.category] ?? Colors.primary;
@@ -651,7 +650,9 @@ export default function VendorDetailScreen({ navigation, route }: Props) {
                 <Animated.View style={{ flex: 1, transform: [{ scale: btnScale }] }}>
                     <TouchableOpacity
                         style={[s.bookBtn, { backgroundColor: catColor }]}
-                        onPress={() => navigation.navigate('serviceBooking', { service })}
+                        onPress={() => navigation.navigate('serviceBooking', {
+                            service
+                        })}
                         onPressIn={pressBtnIn}
                         onPressOut={pressBtnOut}
                         activeOpacity={0.9}
@@ -707,7 +708,7 @@ const s = StyleSheet.create({
     heroPlaceholder: { alignItems: 'center', justifyContent: 'center' },
     heroOverlay: {
         ...StyleSheet.absoluteFillObject,
-        background: 'transparent',
+        backgroundColor: 'transparent',
         // gradient simulation with bottom-heavy opacity
     },
     heroBadges: { position: 'absolute', bottom: 14, left: 14, flexDirection: 'row', gap: 8 },

@@ -1,4 +1,5 @@
 import { Booking } from "@/features/booking/types/Booking";
+import { VendorService } from "@/features/otherService/types/VendorService";
 import { SelectedAmenityItem } from "@/features/venue/models/BookingSheet";
 import { Venue } from "@/features/venue/types/Venue";
 import { ClientTabParamList } from "@/navigations/tabNavigations/ClientTabNavigation";
@@ -43,12 +44,13 @@ export type RootStackParamList = {
         booking: Booking;
     };
     vendorDetail: {
-        service: any;
+        service: VendorService;
     };
     serviceBooking: {
         service: any;
     };
     getQuotation: {
         service: any;
-    }
+    };
+    addVendorService: undefined;
 };

@@ -1,7 +1,11 @@
-import ServiceBookingScreen from '@/features/booking/screens/ServiceBookingScreen';
-import OtherServicesScreen from '@/features/otherService/screens/OtherServiceScreen';
+import CustomTabBar from '@/components/bottomTab/custom-tabBar';
+import VendorBookingsScreen from '@/features/booking/screens/VendorBookingScreen';
+import VendorDashboardScreen from '@/features/dashboard/screens/VendorDashboardScreen';
 import { VendorService } from '@/features/otherService/types/VendorService';
+import VendorProfileScreen from '@/features/profile/screen/VendorProfileScreen';
 import GetQuotationScreen from '@/features/quotation/screens/GetQuotationScreen';
+import QuotationDownloadsScreen from '@/features/quotation/screens/QuotationDownloadScreen';
+import VendorServicesScreen from '@/features/vendor/screens/VendorServiceScreen';
 import { TabConfig } from '@/types/TabConfig';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
@@ -35,7 +39,7 @@ const vendorTabConfig: TabConfig[] = [
         label: 'Bookings',
         icon: 'calendar',
         iconOff: 'calendar-outline',
-        badge: true, // useful for showing new bookings
+        center: true, // useful for showing new bookings
     },
     {
         name: 'quotationDownload',
@@ -55,10 +59,15 @@ const Tab = createBottomTabNavigator<VendorTabParamList>();
 
 export function VendorTabNavigation() {
     return (
-        <Tab.Navigator>
-            <Tab.Screen name="myService" component={OtherServicesScreen} />
-            <Tab.Screen name="booking" component={ServiceBookingScreen} />
-            <Tab.Screen name="quotationDownload" component={GetQuotationScreen} />
+        <Tab.Navigator
+            screenOptions={{ headerShown: false }}
+            tabBar={props => <CustomTabBar {...props} tabs={vendorTabConfig} />}
+        >
+            <Tab.Screen name="dashboard" component={VendorDashboardScreen} />
+            <Tab.Screen name="myService" component={VendorServicesScreen} />
+            <Tab.Screen name="booking" component={VendorBookingsScreen} />
+            <Tab.Screen name="quotationDownload" component={QuotationDownloadsScreen} />
+            <Tab.Screen name="profile" component={VendorProfileScreen} />
         </Tab.Navigator>
     );
 }

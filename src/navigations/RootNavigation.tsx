@@ -19,6 +19,11 @@ import RegisterTypeScreen from '@/features/auth/screens/RoleTypeScreen';
 import VenueBookingScreen from '@/features/booking/screens/VenueBookingScreen';
 import RegisterVenueScreen from '@/features/venue/screens/AddVenueScreen';
 import UpdateVenueScreen from '@/features/venue/screens/UpdataVenueScreen';
+import { VendorTabNavigation } from './tabNavigations/VendorTabNavigation';
+import AddServiceScreen from '@/features/vendor/screens/AddServiceScreen';
+import VendorDetailScreen from '@/features/vendor/screens/VendorDetailScreen';
+import ServiceBookingScreen from '@/features/booking/screens/ServiceBookingScreen';
+import GetQuotationScreen from '@/features/quotation/screens/GetQuotationScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -45,6 +50,7 @@ export default function RootNavigator() {
                             component={OwnerTabNavigation}
                             options={{ animation: 'fade' }}
                         />
+                        <Stack.Screen name="vendor" component={VendorTabNavigation} />
                         <Stack.Screen name="venueDetail" component={VenueDetailScreen} />
                         <Stack.Screen name="category" component={BrowseCategoryScreen} />
                         <Stack.Screen name="booking" component={VenueBookingScreen} />
@@ -53,6 +59,10 @@ export default function RootNavigator() {
                         <Stack.Screen name="addVenue" component={RegisterVenueScreen} />
                         <Stack.Screen name="updateVenue" component={UpdateVenueScreen} />
                         <Stack.Screen name="modifyBooking" component={ModifyBookingScreen} />
+                        <Stack.Screen name="addVendorService" component={AddServiceScreen} />
+                        <Stack.Screen name='vendorDetail' component={VendorDetailScreen}/>
+                        <Stack.Screen name='serviceBooking' component={ServiceBookingScreen}/>
+                        <Stack.Screen name='getQuotation' component={GetQuotationScreen}/>
                     </Stack.Navigator>
                 </NavigationContainer>
             </AlertProvider>

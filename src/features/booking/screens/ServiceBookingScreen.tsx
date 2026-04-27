@@ -18,11 +18,11 @@ import { Colors, Typography, Spacing, Radii, Shadows } from '@/theme/theme';
 import { RootStackParamList } from '@/types/RootStackParamList';
 import LoadingDots from '@/components/UI/loading-dots';
 import { useAlert } from '@/context/AlertContext';
-import { useCreateServiceBooking } from '@/features/services/hooks/useCreateServiceBooking';
 import { ApiError } from '@/types/ApiError';
 import { VendorService } from '@/features/otherService/types/VendorService';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
 import { VendorTabParamList } from '@/navigations/tabNavigations/VendorTabNavigation';
+import { useCreateServiceBooking } from '../hooks/useVendorBooking';
 
 const { width: W } = Dimensions.get('window');
 
@@ -62,7 +62,7 @@ const isPast = (d: Date) => {
     return d < t;
 };
 
-type Props = NativeBottomTabScreenProps<VendorTabParamList, 'booking'>
+type Props = NativeBottomTabScreenProps<RootStackParamList, 'serviceBooking'>
 
 export default function ServiceBookingScreen({ navigation, route }: Props) {
     const { service } = route.params as { service: VendorService };

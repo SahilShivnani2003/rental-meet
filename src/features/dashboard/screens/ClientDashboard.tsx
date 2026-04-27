@@ -334,7 +334,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
             <View style={s.header}>
                 <View style={s.brand}>
                     <Image
-                        source={require('../../assets/NameLogo.png')}
+                        source={require('@assets/NameLogo.png')}
                         style={s.brandLogo}
                         resizeMode="contain"
                     />

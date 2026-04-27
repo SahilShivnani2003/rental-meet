@@ -16,11 +16,11 @@ import { Colors, Typography, Spacing, Radii, Shadows } from '@/theme/theme';
 import { RootStackParamList } from '@/types/RootStackParamList';
 import LoadingDots from '@/components/UI/loading-dots';
 import { useAlert } from '@/context/AlertContext';
-import { useSendQuotationRequest } from '@/features/services/hooks/useSendQuotationRequest';
 import { ApiError } from '@/types/ApiError';
 import { VendorService } from '@/features/otherService/types/VendorService';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
 import { VendorTabParamList } from '@/navigations/tabNavigations/VendorTabNavigation';
+import { useSendQuotationRequest } from '@/features/booking/hooks/useVendorBooking';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const CAT_COLOR: Record<string, string> = {
@@ -62,7 +62,7 @@ const isPast = (d: Date) => {
     return d < t;
 };
 
-type Props = NativeBottomTabScreenProps<VendorTabParamList, 'quotationDownload'>
+type Props = NativeBottomTabScreenProps<RootStackParamList, 'getQuotation'>;
 
 export default function GetQuotationScreen({ navigation, route }: Props) {
     const { service } = route.params as { service: VendorService };
@@ -247,7 +247,7 @@ export default function GetQuotationScreen({ navigation, route }: Props) {
                                     icon="person-outline"
                                     placeholder="Sara Patel"
                                     value={fullName}
-                                    onChangeText={t => {
+                                    onChangeText={(t: any) => {
                                         setFullName(t);
                                         clearError('fullName');
                                     }}
@@ -261,7 +261,7 @@ export default function GetQuotationScreen({ navigation, route }: Props) {
                                     icon="mail-outline"
                                     placeholder="you@example.com"
                                     value={email}
-                                    onChangeText={t => {
+                                    onChangeText={(t: any) => {
                                         setEmail(t);
                                         clearError('email');
                                     }}
@@ -276,7 +276,7 @@ export default function GetQuotationScreen({ navigation, route }: Props) {
                                     icon="call-outline"
                                     placeholder="+91 98765 43210"
                                     value={phone}
-                                    onChangeText={t => {
+                                    onChangeText={(t: any) => {
                                         setPhone(t.replace(/[^\d\s+\-()]/g, ''));
                                         clearError('phone');
                                     }}
@@ -467,7 +467,7 @@ export default function GetQuotationScreen({ navigation, route }: Props) {
                                     icon="people-outline"
                                     placeholder="e.g. 150"
                                     value={guestCount}
-                                    onChangeText={t => setGuestCount(t.replace(/\D/g, ''))}
+                                    onChangeText={(t: any) => setGuestCount(t.replace(/\D/g, ''))}
                                     keyboardType="numeric"
                                 />
                             </FormField>

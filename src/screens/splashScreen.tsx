@@ -8,15 +8,14 @@ import { RootStackParamList } from '@/types/RootStackParamList';
 
 const { width, height } = Dimensions.get('window');
 
-
 // ─── How many sunburst rays to draw ──────────────────────────────────────────
 const RAY_COUNT = 16;
 const RAY_LENGTH = width * 0.3; // how far each ray extends from icon centre
 const RAY_WIDTH = 1.8;
 
-type splashProps = NativeStackScreenProps<RootStackParamList, 'splash'>
-const SplashScreen = ({navigation}:splashProps) => {
-    const {loadUser} = useAuthStore();
+type splashProps = NativeStackScreenProps<RootStackParamList, 'splash'>;
+const SplashScreen = ({ navigation }: splashProps) => {
+    const { loadUser } = useAuthStore();
     // ─── Zoom-out: map + icon scale together ─────────────────────────────────
     const zoomScale = useRef(new Animated.Value(2.6)).current;
     const zoomOpacity = useRef(new Animated.Value(0)).current;
@@ -58,7 +57,15 @@ const SplashScreen = ({navigation}:splashProps) => {
 
         console.log(`User:${user} \n Authenticated: ${isAuthenticated} \n token: ${token}`);
         if (isAuthenticated) {
-            navigation.replace(user?.role === 'owner' ? 'owner' : 'client');
+            if (user?.role === 'owner') {
+                navigation.replace('owner');
+            } else if (user?.role === 'vendor') {
+                navigation.replace('vendor');
+            } else if (user?.role === 'customer') {
+                navigation.replace('client');
+            } else {
+                navigation.replace('onBoarding');
+            }
         } else {
             navigation.replace('onBoarding');
         }
