@@ -24,6 +24,7 @@ import { useGetVenueType } from '@/features/venueType/hooks/useGetVenueType';
 import { useGetAllVenue } from '../hooks/useGetAllVenue';
 import { useGetOwnerVenue } from '../hooks/useGetOwnerVenue';
 import { VenueType } from '@/features/venueType/types/VenueType';
+import FeaturedCard from '@/components/landing/featuredCard';
 
 const ALL_CATEGORY: VenueType = {
     _id: 'all',
@@ -172,6 +173,7 @@ function DropdownModal({
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 export default function VenuesScreen({ navigation }: venueProps) {
+    const rootNav = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
     const { user } = useAuthStore();
     const isOwner = user?.role === 'owner';
     // ── Filter state ──────────────────────────────────────────────────────────
@@ -812,8 +814,17 @@ export default function VenuesScreen({ navigation }: venueProps) {
                                 </View>
                             ) : (
                                 <Animated.View style={[styles.venuesGrid, { opacity: fadeAnim }]}>
-                                    {venues.map(v => (
-                                        <VenueCard key={v._id} venue={v} />
+                                    {venues.map((v, i) => (
+                                        <FeaturedCard
+                                            key={v._id}
+                                            v={v}
+                                            index={i}
+                                            onPress={() =>
+                                                rootNav.navigate('venueDetail', {
+                                                    venue: v,
+                                                })
+                                            }
+                                        />
                                     ))}
                                 </Animated.View>
                             )}
@@ -1138,8 +1149,6 @@ const styles = StyleSheet.create({
         fontWeight: Typography.medium,
     },
     venuesGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
         paddingHorizontal: Spacing.lg,
         gap: 14,
     },

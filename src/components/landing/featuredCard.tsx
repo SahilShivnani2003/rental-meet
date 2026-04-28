@@ -187,11 +187,11 @@ export default function FeaturedCard({ v, index, onPress, onBook }: Props) {
                         {/* Coupon tag */}
                         {(v?.activeCouponCount ?? 0) > 0 &&
                             v?.activeCoupons?.length > 0 &&
-                            v.activeCoupons.map((c:any, i:any) => (
+                            v.activeCoupons.map((c: any, i: any) => (
                                 <View key={c.code ?? i} style={fc.couponRow}>
                                     <Ionicons name="pricetag" size={10} color={Colors.success} />
                                     <Text style={fc.couponText}>
-                                        🏷️ {c.code} ·{' '}
+                                        {c.code} ·{' '}
                                         {c.discountType === 'percentage'
                                             ? `${c.discountValue}%${
                                                   c.maxDiscount ? ` (max ₹${c.maxDiscount})` : ''

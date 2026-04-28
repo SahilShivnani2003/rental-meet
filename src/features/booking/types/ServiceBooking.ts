@@ -67,7 +67,7 @@ export interface ServiceBooking {
     };
 
     downloadedAt?: Date;
-
+    serviceId?: string;
     createdAt?: Date;
     updatedAt?: Date;
 }

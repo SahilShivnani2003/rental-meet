@@ -8,6 +8,7 @@ import {
     Alert,
     Animated,
     Dimensions,
+    RefreshControl,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
@@ -160,20 +161,33 @@ type clientProfileProps = NativeBottomTabScreenProps<ClientTabParamList, 'profil
 
 export default function ClientProfile({ navigation }: clientProfileProps) {
     // ── Profile data ──────────────────────────────────────────────────────────
-    const { data: userData, isLoading: profileLoading } = useGetMyProfile();
+    const {
+        data: userData,
+        isLoading: profileLoading,
+        refetch: refetchProfile,
+    } = useGetMyProfile();
     const user: Partial<User> = userData?.user ?? {};
     const typeCfg = USER_TYPE_CONFIG[user.role ?? ''] ?? DEFAULT_TYPE_CFG;
     const initials = user.name?.trim().slice(0, 2).toUpperCase() ?? '??';
-
+    const { isAuthenticated } = useAuthStore();
     // ── Bookings data ─────────────────────────────────────────────────────────
     const {
         data: bookingData,
         isLoading: bookingsLoading,
         isRefetching: bookingsRefetching,
         refetch: refetchBookings,
-    } = useGetAllBookings();
+    } = useGetAllBookings({
+        enabled: isAuthenticated,
+    });
     const bookings: Booking[] = bookingData?.bookings ?? [];
 
+    const [isRefreshing, setIsRefreshing] = useState(false);
+
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        await Promise.all([refetchProfile(), refetchBookings()]);
+        setIsRefreshing(false);
+    };
     // ── Mutation hooks — passed down to modals ────────────────────────────────
     const { mutate: updateUser } = useUpdateProfile();
     const { mutate: changePassword } = useChangePassword();
@@ -324,15 +338,6 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
             subtitle: user.kyc?.verifiedAt ? 'Verified ✓' : 'Upload to verify',
             onPress: () => setKycVisible(true),
         },
-        {
-            id: 'payment',
-            icon: 'card-outline',
-            iconColor: Colors.info,
-            iconBg: Colors.infoLight,
-            title: 'Payment Methods',
-            subtitle: 'Cards & billing info',
-            onPress: () => Alert.alert('Coming Soon', 'Payment methods coming soon.'),
-        },
     ];
 
     const preferenceItems = [
@@ -389,6 +394,14 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                 style={styles.content}
                 contentContainerStyle={styles.contentPadding}
                 showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={isRefreshing}
+                        onRefresh={handleRefresh}
+                        colors={[Colors.primary]} // Android
+                        tintColor={Colors.primary} // iOS
+                    />
+                }
             >
                 {/* Profile card */}
                 <Animated.View style={[styles.profileCard, { opacity: headerFade }]}>

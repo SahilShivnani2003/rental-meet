@@ -1,14 +1,21 @@
-import { useMutation } from "@tanstack/react-query"
-import { dummyCall } from "../service/VendorServiceBooking"
+import { useMutation, useQuery } from "@tanstack/react-query"
+import { createServiceBooking, getServicePlatformSetting, updateQuotationDownloaded } from "../service/VendorServiceBooking"
 
 export const useCreateServiceBooking = () => {
     return useMutation({
-        mutationFn: dummyCall,
+        mutationFn: createServiceBooking,
     })
 }
 
 export const useSendQuotationRequest = () =>{
     return useMutation({
-        mutationFn: dummyCall
+        mutationFn: updateQuotationDownloaded
+    })
+}
+
+export const useServicePlatformSetting = () =>{
+    return useQuery({
+        queryKey: ['get-vendorPlatformSetting'],
+        queryFn: getServicePlatformSetting,
     })
 }

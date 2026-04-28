@@ -30,6 +30,7 @@ export interface User {
         idProofBack?: string | null;
         idProofType?: 'Aadhaar' | 'PAN' | 'Passport' | 'Voter ID' | 'Driving License' | null;
         selfie?: string | null;
+        addressProof?:string | null;
         verifiedAt?: Date | null;
     };
 

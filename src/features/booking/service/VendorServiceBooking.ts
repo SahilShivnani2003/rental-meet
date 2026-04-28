@@ -5,7 +5,7 @@ export const createServiceBooking = async (data: ServiceBooking) => {
     try {
         console.log('Creating vendor service booking.....');
 
-        const response = await privateClient.post('/servie-bookings', data);
+        const response = await privateClient.post('/service-bookings', data);
 
         console.log('Service booking response : ', response.data);
 
@@ -79,6 +79,21 @@ export const vendorServiceBookings = async() =>{
         return response.data;
     }catch(error){
         console.error('Error while fetching vendor bookings : ', error);
+        throw error;
+    }
+}
+
+export const getServicePlatformSetting = async() =>{
+    try{
+        console.log('Fetching service plat form setting.....');
+
+        const response = await publicClient.get('/service-platform-settings');
+
+        console.log('Service platform setting response : ', response.data);
+
+        return response.data;
+    }catch(error){
+        console.error('Error while fetching platform settings: ', error);
         throw error;
     }
 }

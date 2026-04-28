@@ -19,6 +19,7 @@ import { useAlert } from '@/context/AlertContext';
 import { VendorService } from '@/features/otherService/types/VendorService';
 import { VendorProfile } from '../types/VendorProfile';
 import { useGetVendorProfile } from '../hooks/useVendorService';
+import { useAuthStore } from '@/store/useAuthStore';
 
 const { width: W, height: H } = Dimensions.get('window');
 const HERO_H = H * 0.38;
@@ -44,8 +45,11 @@ type Props = NativeStackScreenProps<RootStackParamList, 'vendorDetail'>;
 
 export default function VendorDetailScreen({ navigation, route }: Props) {
     const { service } = route.params as { service: VendorService };
+    const { isAuthenticated } = useAuthStore();
     const alert = useAlert();
-    const { data: profileData, isLoading } = useGetVendorProfile();
+    const { data: profileData, isLoading } = useGetVendorProfile({
+        enabled: isAuthenticated,
+    });
     const profile: Partial<VendorProfile> = profileData?.profile ?? {};
 
     const catColor = CAT_COLOR[service.category] ?? Colors.primary;
@@ -93,6 +97,55 @@ export default function VendorDetailScreen({ navigation, route }: Props) {
         { key: 'availability', label: 'Availability', icon: 'calendar-outline' },
     ];
 
+    const handleGetQuotation = () => {
+        if (isAuthenticated) {
+            navigation.navigate('getServiceQuotation', { service });
+        } else {
+            alert.show({
+                type: 'confirm',
+                title: 'Login Required',
+                message: 'For booking login is required',
+                buttons: [
+                    {
+                        label: 'Login',
+                        onPress: () => navigation.navigate('login'),
+                        style: 'primary',
+                    },
+                    {
+                        label: 'Cancel',
+                        onPress: alert.dismiss,
+                        style: 'ghost',
+                    },
+                ],
+            });
+        }
+    };
+
+    const handleBooking = () => {
+        if (isAuthenticated) {
+            navigation.navigate('serviceBooking', {
+                service,
+            });
+        } else {
+            alert.show({
+                type: 'confirm',
+                title: 'Login Required',
+                message: 'For booking login is required',
+                buttons: [
+                    {
+                        label: 'Login',
+                        onPress: () => navigation.navigate('login'),
+                        style: 'primary',
+                    },
+                    {
+                        label: 'Cancel',
+                        onPress: alert.dismiss,
+                        style: 'ghost',
+                    },
+                ],
+            });
+        }
+    };
     // ── Availability helpers ──────────────────────────────────────────────────
     const avail = service.availability ?? profile.availability ?? [];
 
@@ -641,7 +694,7 @@ export default function VendorDetailScreen({ navigation, route }: Props) {
             <View style={s.stickyBar}>
                 <TouchableOpacity
                     style={s.quoteBtn}
-                    onPress={() => navigation.navigate('getQuotation', { service })}
+                    onPress={handleGetQuotation}
                     activeOpacity={0.85}
                 >
                     <Ionicons name="document-text-outline" size={16} color={Colors.charcoal} />
@@ -650,9 +703,7 @@ export default function VendorDetailScreen({ navigation, route }: Props) {
                 <Animated.View style={{ flex: 1, transform: [{ scale: btnScale }] }}>
                     <TouchableOpacity
                         style={[s.bookBtn, { backgroundColor: catColor }]}
-                        onPress={() => navigation.navigate('serviceBooking', {
-                            service
-                        })}
+                        onPress={handleBooking}
                         onPressIn={pressBtnIn}
                         onPressOut={pressBtnOut}
                         activeOpacity={0.9}

@@ -10,6 +10,7 @@ import {
     TextInput,
     Modal,
     Image,
+    RefreshControl,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
@@ -122,7 +123,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
     const cityLabel = selectedCity ?? 'All Cities';
     const capacityLabel = selectedCapacity?.label ?? 'Capacity';
     const dateLabel = selectedDate ? formatDate(selectedDate) : 'Date';
-
+    const [isRefreshing, setIsRefreshing] = useState(false);
     // ── Calendar helpers ──────────────────────────────────────────────────────
     const daysInMonth = getDaysInMonth(calYear, calMonth);
     const firstDayOfWeek = new Date(calYear, calMonth, 1).getDay();
@@ -157,6 +158,11 @@ export default function ClientDashboard({ navigation }: landingProps) {
         return d < t;
     };
 
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        await Promise.all([refetchCities, refetchTypes, refetchVenues]);
+        setIsRefreshing(false);
+    };
     const isSelectedDay = (day: number) =>
         !!selectedDate &&
         selectedDate.getFullYear() === calYear &&
@@ -360,7 +366,18 @@ export default function ClientDashboard({ navigation }: landingProps) {
                 </View>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+            <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={s.scroll}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={isRefreshing}
+                        onRefresh={handleRefresh}
+                        colors={[Colors.primary]} // Android
+                        tintColor={Colors.primary}
+                    />
+                }
+            >
                 {/* ── BROWSE BUTTON ── */}
                 <View style={s.browseRow}>
                     <TouchableOpacity style={s.browseBtn} onPress={goToVenues} activeOpacity={0.88}>

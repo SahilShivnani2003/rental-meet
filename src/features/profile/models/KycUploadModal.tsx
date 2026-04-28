@@ -8,7 +8,6 @@ import {
     Animated,
     ScrollView,
     Image,
-    ActivityIndicator,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import {
@@ -27,13 +26,6 @@ type IdProofType = 'Aadhaar' | 'PAN' | 'Passport' | 'Voter ID' | 'Driving Licens
 
 const ID_PROOF_TYPES: IdProofType[] = ['Aadhaar', 'PAN', 'Passport', 'Voter ID', 'Driving License'];
 
-interface KycPayload {
-    idProofType: IdProofType;
-    idProof: string; // base64 or URI — depends on your API
-    idProofBack?: string;
-    selfie?: string;
-}
-
 interface Props {
     visible: boolean;
     onClose: () => void;
@@ -44,22 +36,54 @@ interface Props {
     existingKyc?: User['kyc'];
 }
 
-type DocSlot = 'front' | 'back' | 'selfie';
+type DocSlot = 'front' | 'back' | 'selfie' | 'addressProof';
 
+// FIX 1: PickedFile represents a newly selected local file
 interface PickedFile {
     uri: string;
     name: string;
     type: string;
 }
 
+// FIX 2: FileValue can be a PickedFile (new pick) or a string URL (existing from server)
+type FileValue = PickedFile | string | null;
+
+// Helper: extract { uri, name, type } regardless of whether file is a PickedFile or string URL
+function resolveFile(file: FileValue): PickedFile | null {
+    if (!file) return null;
+    if (typeof file === 'string') {
+        // Existing server URL — build a minimal descriptor so FormData can use it
+        const fileName = file.split('/').pop() ?? 'existing_file.jpg';
+        return { uri: file, name: fileName, type: 'image/jpeg' };
+    }
+    return file;
+}
+
+// Helper: get the display URI for <Image> regardless of file type
+function getUri(file: FileValue): string | null {
+    if (!file) return null;
+    if (typeof file === 'string') return file;
+    return file.uri;
+}
+
+// Helper: get display name for the file info row
+function getName(file: FileValue): string {
+    if (!file) return '';
+    if (typeof file === 'string') return file.split('/').pop() ?? 'Uploaded file';
+    return file.name;
+}
+
 export default function KycUploadModal({ visible, onClose, mutate, existingKyc }: Props) {
+    // FIX 3: Removed stray `debugger` statement
     const alert = useAlert();
     const slideAnim = useRef(new Animated.Value(600)).current;
 
+    // Placeholders only — the useEffect below syncs from existingKyc on every open
     const [idProofType, setIdProofType] = useState<IdProofType>('Aadhaar');
-    const [frontFile, setFrontFile] = useState<PickedFile | null>(null);
-    const [backFile, setBackFile] = useState<PickedFile | null>(null);
-    const [selfieFile, setSelfieFile] = useState<PickedFile | null>(null);
+    const [frontFile, setFrontFile] = useState<FileValue>(null);
+    const [backFile, setBackFile] = useState<FileValue>(null);
+    const [selfieFile, setSelfieFile] = useState<FileValue>(null);
+    const [addressProofFile, setAddProofFile] = useState<FileValue>(null);
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -67,9 +91,15 @@ export default function KycUploadModal({ visible, onClose, mutate, existingKyc }
 
     useEffect(() => {
         if (visible) {
-            setFrontFile(null);
-            setBackFile(null);
-            setSelfieFile(null);
+            // Re-hydrate all file states from existingKyc every time the modal opens.
+            // This is necessary because useState only reads its initialiser once at
+            // mount — if existingKyc arrives after mount (data still loading) or the
+            // modal is re-opened, the state would otherwise stay stale / null.
+            setIdProofType(existingKyc?.idProofType ?? 'Aadhaar');
+            setFrontFile(existingKyc?.idProof ?? null);
+            setBackFile(existingKyc?.idProofBack ?? null);
+            setSelfieFile(existingKyc?.selfie ?? null);
+            setAddProofFile(existingKyc?.addressProof ?? null);
             setErrors({});
             slideAnim.setValue(600);
             Animated.spring(slideAnim, {
@@ -79,19 +109,35 @@ export default function KycUploadModal({ visible, onClose, mutate, existingKyc }
                 bounciness: 4,
             }).start();
         }
-    }, [visible]);
+    }, [visible, existingKyc]);
 
     const handleClose = () => {
-        Animated.timing(slideAnim, { toValue: 600, duration: 220, useNativeDriver: true }).start(
-            onClose,
-        );
+        Animated.timing(slideAnim, {
+            toValue: 600,
+            duration: 220,
+            useNativeDriver: true,
+        }).start(onClose);
+    };
+
+    // ── Slot → setter map ─────────────────────────────────────────────────────
+    // FIX 4: Centralised setter lookup so pickImage AND openCamera both handle
+    //         all four slots (previously addressProof fell through to setSelfieFile)
+    const getSetterForSlot = (slot: DocSlot) => {
+        switch (slot) {
+            case 'front':
+                return setFrontFile;
+            case 'back':
+                return setBackFile;
+            case 'selfie':
+                return setSelfieFile;
+            case 'addressProof':
+                return setAddProofFile;
+        }
     };
 
     // ── Image picking ─────────────────────────────────────────────────────────
     const pickImage = (slot: DocSlot) => {
-        const setter =
-            slot === 'front' ? setFrontFile : slot === 'back' ? setBackFile : setSelfieFile;
-
+        const setter = getSetterForSlot(slot);
         launchImageLibrary(
             { mediaType: 'photo', quality: 0.8, includeBase64: false },
             (response: ImagePickerResponse) => {
@@ -109,9 +155,7 @@ export default function KycUploadModal({ visible, onClose, mutate, existingKyc }
     };
 
     const openCamera = (slot: DocSlot) => {
-        const setter =
-            slot === 'front' ? setFrontFile : slot === 'back' ? setBackFile : setSelfieFile;
-
+        const setter = getSetterForSlot(slot);
         launchCamera(
             { mediaType: 'photo', quality: 0.8, saveToPhotos: false },
             (response: ImagePickerResponse) => {
@@ -157,7 +201,6 @@ export default function KycUploadModal({ visible, onClose, mutate, existingKyc }
     const validate = () => {
         const e: Record<string, string> = {};
         if (!frontFile) e.front = 'Front side of ID is required';
-        // Back not required for PAN — it has no back
         if (idProofType !== 'PAN' && !backFile) e.back = 'Back side of ID is required';
         if (!selfieFile) e.selfie = 'Selfie is required';
         return e;
@@ -169,25 +212,46 @@ export default function KycUploadModal({ visible, onClose, mutate, existingKyc }
         setErrors(e);
         if (Object.keys(e).length > 0) return;
 
+        // FIX 5: Resolve each FileValue safely — handles both PickedFile and string URLs
+        const front = resolveFile(frontFile);
+        const back = resolveFile(backFile);
+        const selfie = resolveFile(selfieFile);
+        const addressProof = resolveFile(addressProofFile);
+
+        // front and selfie are guaranteed by validate(), but guard to satisfy TS
+        if (!front || !selfie) return;
+
         const formData = new FormData();
         formData.append('idProofType', idProofType);
+
         formData.append('idProof', {
-            uri: frontFile!.uri,
-            name: frontFile!.name,
-            type: frontFile!.type,
+            uri: front.uri,
+            name: front.name,
+            type: front.type,
         } as any);
-        if (backFile) {
+
+        if (back) {
             formData.append('idProofBack', {
-                uri: backFile.uri,
-                name: backFile.name,
-                type: backFile.type,
+                uri: back.uri,
+                name: back.name,
+                type: back.type,
             } as any);
         }
+
         formData.append('selfie', {
-            uri: selfieFile!.uri,
-            name: selfieFile!.name,
-            type: selfieFile!.type,
+            uri: selfie.uri,
+            name: selfie.name,
+            type: selfie.type,
         } as any);
+
+        // FIX 6: Only append addressProof when it actually exists
+        if (addressProof) {
+            formData.append('addressProof', {
+                uri: addressProof.uri,
+                name: addressProof.name,
+                type: addressProof.type,
+            } as any);
+        }
 
         setLoading(true);
         mutate(formData, {
@@ -305,6 +369,20 @@ export default function KycUploadModal({ visible, onClose, mutate, existingKyc }
                             </>
                         )}
 
+                        {/* Address Proof */}
+                        <Text style={[s.sectionLabel, { marginTop: Spacing.lg }]}>
+                            ADDRESS PROOF
+                        </Text>
+                        <DocUploadCard
+                            label="Address Proof"
+                            icon="home-outline"
+                            file={addressProofFile}
+                            onPick={() => showPickerOptions('addressProof')}
+                            onRemove={() => setAddProofFile(null)}
+                            error={errors.addressProof}
+                            preferCamera
+                        />
+
                         {/* Selfie */}
                         <Text style={[s.sectionLabel, { marginTop: Spacing.lg }]}>SELFIE</Text>
                         <Text style={s.selfieHint}>
@@ -364,7 +442,8 @@ export default function KycUploadModal({ visible, onClose, mutate, existingKyc }
 interface DocCardProps {
     label: string;
     icon: string;
-    file: PickedFile | null;
+    // FIX 7: Accepts FileValue (PickedFile | string | null) to match parent state
+    file: FileValue;
     onPick: () => void;
     onRemove: () => void;
     error?: string;
@@ -372,16 +451,20 @@ interface DocCardProps {
 }
 
 function DocUploadCard({ label, icon, file, onPick, onRemove, error, preferCamera }: DocCardProps) {
+    // FIX 8: Derive uri/name safely regardless of whether file is a PickedFile or string URL
+    const uri = getUri(file);
+    const name = getName(file);
+
     return (
         <View>
             {file ? (
                 <View style={[dc.card, dc.cardFilled]}>
-                    <Image source={{ uri: file.uri }} style={dc.preview} resizeMode="cover" />
+                    {uri ? <Image source={{ uri }} style={dc.preview} resizeMode="cover" /> : null}
                     <View style={dc.filledOverlay}>
                         <View style={dc.fileInfo}>
                             <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
                             <Text style={dc.fileName} numberOfLines={1}>
-                                {file.name}
+                                {name}
                             </Text>
                         </View>
                         <TouchableOpacity style={dc.removeBtn} onPress={onRemove}>

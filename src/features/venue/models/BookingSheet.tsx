@@ -120,7 +120,7 @@ export default function BookingSheet({
     const handleReserve = () => {
         if (!selected) return;
         onClose();
-        navigation.navigate('booking', {
+        navigation.navigate('venueBooking', {
             venue,
             selectedAmenities: allAmenities,
             amenitiesTotal,

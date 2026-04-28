@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
     View,
     Text,
@@ -10,7 +10,7 @@ import {
     TextInput,
     KeyboardAvoidingView,
     Platform,
-    Image,
+    ActivityIndicator,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -20,9 +20,11 @@ import LoadingDots from '@/components/UI/loading-dots';
 import { useAlert } from '@/context/AlertContext';
 import { ApiError } from '@/types/ApiError';
 import { VendorService } from '@/features/otherService/types/VendorService';
-import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
-import { VendorTabParamList } from '@/navigations/tabNavigations/VendorTabNavigation';
-import { useCreateServiceBooking } from '../hooks/useVendorBooking';
+import { useCreateServiceBooking, useServicePlatformSetting } from '../hooks/useVendorBooking';
+import { ServiceBooking } from '../types/ServiceBooking';
+import { useCreatePaymentOrder, useVerifyPayment } from '../hooks/usePayment';
+import RazorpayCheckout from 'react-native-razorpay';
+import { useAuthStore } from '@/store/useAuthStore';
 
 const { width: W } = Dimensions.get('window');
 
@@ -30,6 +32,7 @@ const { width: W } = Dimensions.get('window');
 const fmtPrice = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 const fmtDate = (d: Date) =>
     d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+const pct = (n: number) => `${n}%`;
 
 const CAT_COLOR: Record<string, string> = {
     Catering: '#E67E22',
@@ -53,26 +56,30 @@ const EVENT_TYPES = [
     'Other',
 ];
 
-// Simple inline calendar helpers
+// ─── Calendar helpers ─────────────────────────────────────────────────────────
 const getDaysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
 const isPast = (d: Date) => {
     const t = new Date();
     t.setHours(0, 0, 0, 0);
-    d.setHours(0, 0, 0, 0);
-    return d < t;
+    const check = new Date(d);
+    check.setHours(0, 0, 0, 0);
+    return check < t;
 };
 
-type Props = NativeBottomTabScreenProps<RootStackParamList, 'serviceBooking'>
+type Props = NativeStackScreenProps<RootStackParamList, 'serviceBooking'>;
 
 export default function ServiceBookingScreen({ navigation, route }: Props) {
     const { service } = route.params as { service: VendorService };
     const alert = useAlert();
     const catColor = CAT_COLOR[service.category] ?? Colors.primary;
-
+    const { user } = useAuthStore();
     const { mutate: createBooking } = useCreateServiceBooking();
-
+    const { data: platformSettingData, isLoading: settingsLoading } = useServicePlatformSetting();
+    const { mutate: createPaymentOrder } = useCreatePaymentOrder();
+    const { mutate: verifyPaymentMutate } = useVerifyPayment();
     // ── Form state ────────────────────────────────────────────────────────────
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+    const [startTime, setStartTime] = useState('');
     const [selectedPkg, setSelectedPkg] = useState<number | null>(null);
     const [guestCount, setGuestCount] = useState('');
     const [eventType, setEventType] = useState('');
@@ -81,6 +88,10 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
     const [calMonth, setCalMonth] = useState(new Date().getMonth());
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [couponCode, setCouponCode] = useState('');
+
+    // Quantity state for service items (from Services & Rate List)
+    const [serviceQuantities, setServiceQuantities] = useState<Record<number, number>>({});
 
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(24)).current;
@@ -119,19 +130,71 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
         selectedDate?.getMonth() === calMonth &&
         selectedDate?.getDate() === day;
 
-    // ── Package selection ─────────────────────────────────────────────────────
+    // ── Packages ──────────────────────────────────────────────────────────────
     const packages = service.packages ?? [];
 
-    // ── Price breakdown ───────────────────────────────────────────────────────
+    // ── Price breakdown using PlatformSettings ────────────────────────────────
     const breakdown = useMemo(() => {
-        const base =
-            selectedPkg !== null
-                ? (packages[selectedPkg] as any)?.price ?? (packages[selectedPkg] as any)?.rate ?? 0
-                : service.startingPrice ?? 0;
-        const plat = Math.round(base * 0.05);
-        const gst = Math.round(base * 0.18);
-        return { base, plat, gst, total: base + plat + gst };
-    }, [selectedPkg, service.startingPrice, packages]);
+        // Calculate base from selected package OR service items with quantities
+        let base = 0;
+
+        if (selectedPkg !== null) {
+            // Package-based pricing
+            const pkg = packages[selectedPkg];
+            base = pkg?.price ?? (pkg as any)?.rate ?? 0;
+        } else if (Object.keys(serviceQuantities).length > 0) {
+            // Item-based pricing from Services & Rate List
+            base = Object.entries(serviceQuantities).reduce((sum, [idx, qty]) => {
+                const pkg = packages[parseInt(idx)];
+                const price = pkg?.price ?? (pkg as any)?.rate ?? 0;
+                return sum + price * qty;
+            }, 0);
+        } else {
+            // Default to starting price
+            base = service.startingPrice ?? 0;
+        }
+
+        const settings = platformSettingData;
+
+        // Category-specific overrides (most specific)
+        const catRate = settings?.serviceCategoryRates?.find(
+            (r: any) => r.category === service.category,
+        );
+
+        const cgstPct = catRate?.cgst ?? settings?.serviceCGST ?? 9;
+        const sgstPct = catRate?.sgst ?? settings?.serviceSGST ?? 9;
+        const platFeePct = catRate?.platformFee ?? settings?.servicePlatformFee ?? 5;
+        const platCgstPct = catRate?.platformCGST ?? settings?.platformCGST ?? 9;
+        const platSgstPct = catRate?.platformSGST ?? settings?.platformSGST ?? 9;
+
+        const serviceCGST = Math.round((base * cgstPct) / 100);
+        const serviceSGST = Math.round((base * sgstPct) / 100);
+        const platformFee = Math.round((base * platFeePct) / 100);
+        const platformFeeGST = Math.round((platformFee * (platCgstPct + platSgstPct)) / 100);
+
+        const total = base + serviceCGST + serviceSGST + platformFee + platformFeeGST;
+
+        return {
+            base,
+            cgstPct,
+            sgstPct,
+            platFeePct,
+            platCgstPct,
+            platSgstPct,
+            serviceCGST,
+            serviceSGST,
+            platformFee,
+            platformFeeGST,
+            total,
+        };
+    }, [
+        selectedPkg,
+        serviceQuantities,
+        packages,
+        service.startingPrice,
+        service.category,
+        platformSettingData,
+    ]);
 
     // ── Validation ────────────────────────────────────────────────────────────
     const validate = () => {
@@ -141,30 +204,222 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
         return e;
     };
 
+    // ── Quantity handlers ─────────────────────────────────────────────────────
+    const incrementQuantity = (index: number) => {
+        setServiceQuantities(prev => ({
+            ...prev,
+            [index]: (prev[index] || 0) + 1,
+        }));
+    };
+
+    const decrementQuantity = (index: number) => {
+        setServiceQuantities(prev => {
+            const newQty = Math.max(0, (prev[index] || 0) - 1);
+            if (newQty === 0) {
+                const { [index]: _, ...rest } = prev;
+                return rest;
+            }
+            return { ...prev, [index]: newQty };
+        });
+    };
+
+    const handlePayment = useCallback(
+        (bookingId: string): Promise<void> =>
+            new Promise((resolve, reject) => {
+                createPaymentOrder(
+                    {
+                        bookingId,
+                        amount: breakdown.total,
+                        bookingType: 'serivce',
+                    },
+                    {
+                        onSuccess: async (orderData: any) => {
+                            if (!orderData?.success) {
+                                reject(new Error('Failed to create payment order'));
+                                return;
+                            }
+                            try {
+                                const options = {
+                                    key: orderData.key ?? '',
+                                    amount: orderData.order.amount,
+                                    currency: orderData.order.currency ?? 'INR',
+                                    name: 'RentalMeet',
+                                    description: `Booking Payment - ${service.companyName}`,
+                                    order_id: orderData.order.id,
+                                    prefill: {
+                                        name: user?.name,
+                                        email: user?.email,
+                                        contact: user?.phone,
+                                    },
+                                    theme: { color: '#F59F0A' },
+                                };
+
+                                const razorpayResponse = await RazorpayCheckout.open(options);
+
+                                if (!razorpayResponse?.razorpay_payment_id) {
+                                    reject(new Error('Payment not completed'));
+                                    return;
+                                }
+
+                                // FIX 7: verifyPaymentMutate is the mutate fn — call it properly
+                                verifyPaymentMutate(
+                                    {
+                                        razorpay_order_id: razorpayResponse.razorpay_order_id,
+                                        razorpay_payment_id: razorpayResponse.razorpay_payment_id,
+                                        razorpay_signature: razorpayResponse.razorpay_signature,
+                                        bookingId,
+                                        paidAmount: breakdown.total,
+                                        bookingType: 'service',
+                                    },
+                                    {
+                                        onSuccess: (verifyData: any) => {
+                                            if (verifyData?.success) {
+                                                alert.success(
+                                                    'Payment Successful',
+                                                    'Booking confirmed!',
+                                                );
+                                                navigation.popToTop?.() ?? navigation.goBack();
+                                                resolve();
+                                            } else {
+                                                reject(new Error('Payment verification failed'));
+                                            }
+                                        },
+                                        onError: (err: any) => reject(err),
+                                    },
+                                );
+                            } catch (err) {
+                                reject(err);
+                            }
+                        },
+                        onError: (err: any) => reject(err),
+                    },
+                );
+            }),
+        [createPaymentOrder, verifyPaymentMutate, alert, breakdown, navigation],
+    );
+    // ── Submit ────────────────────────────────────────────────────────────────
     const handleBook = () => {
         const e = validate();
         setErrors(e);
         if (Object.keys(e).length > 0) return;
 
-        const payload = {
+        if (!service._id) {
+            alert.error('Missing Data', 'Service ID is missing.');
+            return;
+        }
+
+        // Build items array from selected services
+        const items: ServiceBooking['items'] = [];
+
+        if (selectedPkg !== null) {
+            // Single package selected
+            const activePkg = packages[selectedPkg];
+            const pkgName = activePkg?.name ?? (activePkg as any)?.serviceName ?? service.title;
+            const pkgPrice =
+                activePkg?.price ?? (activePkg as any)?.rate ?? service.startingPrice ?? 0;
+            const pkgUnit = activePkg?.unit;
+
+            items.push({
+                name: pkgName,
+                price: pkgPrice,
+                unit: pkgUnit,
+                quantity: 1,
+                amount: pkgPrice,
+            });
+        } else if (Object.keys(serviceQuantities).length > 0) {
+            // Multiple service items
+            Object.entries(serviceQuantities).forEach(([idx, qty]) => {
+                const pkg = packages[parseInt(idx)];
+                const pkgName =
+                    pkg?.name ?? (pkg as any)?.serviceName ?? `Service ${parseInt(idx) + 1}`;
+                const pkgPrice = pkg?.price ?? (pkg as any)?.rate ?? 0;
+                const pkgUnit = pkg?.unit;
+
+                items.push({
+                    name: pkgName,
+                    price: pkgPrice,
+                    unit: pkgUnit,
+                    quantity: qty,
+                    amount: pkgPrice * qty,
+                });
+            });
+        } else {
+            // Default single item
+            items.push({
+                name: service.title,
+                price: service.startingPrice ?? 0,
+                quantity: 1,
+                amount: service.startingPrice ?? 0,
+            });
+        }
+
+        const noteParts: string[] = [];
+        if (guestCount) noteParts.push(`Guests: ${guestCount}`);
+        if (startTime) noteParts.push(`Start Time: ${startTime}`);
+        if (specialReq) noteParts.push(specialReq);
+
+        const payload: ServiceBooking = {
+            service: service._id,
             serviceId: service._id,
             vendor: service.vendor,
-            bookingDate: selectedDate!.toISOString(),
-            selectedPackageIdx: selectedPkg ?? undefined,
-            guestCount: guestCount ? parseInt(guestCount, 10) : undefined,
-            eventType,
-            specialRequirements: specialReq || undefined,
+
+            eventDate: selectedDate!,
+
+            customerInfo: {
+                eventName: eventType,
+                notes: noteParts.join(' | ') || undefined,
+            },
+
+            serviceSnapshot: {
+                title: service.title,
+                category: service.category,
+                companyName: service.companyName,
+                city: service.city,
+                state: service.state,
+            },
+
+            items,
+
+            // All fee / tax values come from platform settings via `breakdown`
+            pricing: {
+                subtotal: breakdown.base,
+                serviceCGST: breakdown.serviceCGST,
+                serviceSGST: breakdown.serviceSGST,
+                cgstPct: breakdown.cgstPct,
+                sgstPct: breakdown.sgstPct,
+                platformFee: breakdown.platformFee,
+                platformFeePct: breakdown.platFeePct,
+                platformFeeGST: breakdown.platformFeeGST,
+                total: breakdown.total,
+            },
+
             amount: breakdown.total,
+
+            // Add coupon if entered
+            ...(couponCode && {
+                coupon: {
+                    code: couponCode,
+                },
+            }),
         };
 
         setLoading(true);
         createBooking(payload, {
-            onSuccess: () => {
+            onSuccess: async(response) => {
+                if (response?.success) {
+                    try {
+                        await handlePayment(response.booking._id);
+                    } catch (payErr: any) {
+                        console.error('PAYMENT ERROR:', payErr);
+                        alert.error(
+                            'Payment Failed',
+                            payErr?.message ?? 'Payment could not be processed.',
+                        );
+                    }
+                } else {
+                    alert.error('Booking Failed', response?.message ?? 'Something went wrong.');
+                }
                 setLoading(false);
-                alert.success(
-                    'Booking Requested!',
-                    'The vendor will confirm your booking shortly.',
-                );
                 navigation.goBack();
             },
             onError: (err: ApiError) => {
@@ -189,7 +444,7 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                             <Ionicons name="arrow-back" size={20} color={Colors.charcoal} />
                         </TouchableOpacity>
                         <View style={{ flex: 1 }}>
-                            <Text style={s.headerEyebrow}>BOOK SERVICE</Text>
+                            <Text style={s.headerEyebrow}>BOOK THIS SERVICE</Text>
                             <Text style={s.headerTitle} numberOfLines={1}>
                                 {service.title}
                             </Text>
@@ -205,17 +460,26 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                     <Animated.View
                         style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
                     >
-                        {/* Service summary */}
+                        {/* Service summary card */}
                         <View style={s.summaryCard}>
                             <View style={[s.summaryIcon, { backgroundColor: catColor + '18' }]}>
-                                <Ionicons name="business-outline" size={22} color={catColor} />
+                                <Ionicons name="restaurant-outline" size={22} color={catColor} />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={s.summaryTitle} numberOfLines={1}>
                                     {service.title}
                                 </Text>
-                                <Text style={s.summaryCategory}>{service.category}</Text>
-                                {service.city || service.state ? (
+                                <View style={s.categoryBadge}>
+                                    <Ionicons
+                                        name={getCategoryIcon(service.category)}
+                                        size={11}
+                                        color={catColor}
+                                    />
+                                    <Text style={[s.summaryCategory, { color: catColor }]}>
+                                        {service.category}
+                                    </Text>
+                                </View>
+                                {(service.city || service.state) && (
                                     <Text style={s.summaryLocation}>
                                         <Ionicons
                                             name="location-outline"
@@ -224,7 +488,17 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                         />{' '}
                                         {[service.city, service.state].filter(Boolean).join(', ')}
                                     </Text>
-                                ) : null}
+                                )}
+                                {service.companyName && (
+                                    <Text style={s.companyName}>
+                                        <Ionicons
+                                            name="business-outline"
+                                            size={11}
+                                            color={Colors.charcoalLight}
+                                        />{' '}
+                                        {service.companyName}
+                                    </Text>
+                                )}
                             </View>
                             {service.status === 'approved' && (
                                 <View style={s.verifiedChip}>
@@ -238,17 +512,26 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                             )}
                         </View>
 
-                        {/* ── Step 1: Date ── */}
+                        {/* Starting Price Badge */}
+                        <View style={s.priceBadge}>
+                            <Text style={s.priceBadgeLabel}>Starting from</Text>
+                            <Text style={[s.priceBadgeValue, { color: catColor }]}>
+                                {fmtPrice(service.startingPrice ?? 0)}
+                            </Text>
+                            <Text style={s.priceBadgeSuffix}>onwards</Text>
+                        </View>
+
+                        {/* ── Date & Time Selection ── */}
                         <SectionHeader
                             step={1}
-                            title="Select Date"
+                            title="Select Date & Time"
                             color={catColor}
                             icon="calendar-outline"
                         />
                         {!!errors.date && <ErrorMsg msg={errors.date} />}
 
                         <View style={s.card}>
-                            {/* Month nav */}
+                            {/* Month navigation */}
                             <View style={s.calNav}>
                                 <TouchableOpacity style={s.calNavBtn} onPress={prevMonth}>
                                     <Ionicons
@@ -266,6 +549,7 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                     />
                                 </TouchableOpacity>
                             </View>
+
                             {/* Day labels */}
                             <View style={s.calDayRow}>
                                 {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
@@ -274,12 +558,12 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                     </Text>
                                 ))}
                             </View>
-                            {/* Grid */}
+
+                            {/* Date grid */}
                             <View style={s.calGrid}>
                                 {calCells.map((day, idx) => {
                                     if (!day) return <View key={idx} style={s.calCell} />;
-                                    const d = new Date(calYear, calMonth, day);
-                                    const past = isPast(new Date(d));
+                                    const past = isPast(new Date(calYear, calMonth, day));
                                     const sel = isSelected(day);
                                     return (
                                         <TouchableOpacity
@@ -307,7 +591,7 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                                         color: Colors.white,
                                                         fontWeight: Typography.extraBold,
                                                     },
-                                                    past && { color: Colors.border },
+                                                    past && { color: Colors.charcoal },
                                                 ]}
                                             >
                                                 {day}
@@ -316,6 +600,7 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                     );
                                 })}
                             </View>
+
                             {selectedDate && (
                                 <View
                                     style={[
@@ -332,74 +617,128 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                     </Text>
                                 </View>
                             )}
+
+                            {/* Start Time */}
+                            <Text style={[s.fieldLabel, { marginTop: Spacing.md }]}>
+                                Start Time
+                            </Text>
+                            <View style={s.inputWrap}>
+                                <Ionicons
+                                    name="time-outline"
+                                    size={16}
+                                    color={Colors.charcoalLight}
+                                />
+                                <TextInput
+                                    style={s.input}
+                                    placeholder="Select date first"
+                                    placeholderTextColor={Colors.charcoalLight}
+                                    value={startTime}
+                                    onChangeText={setStartTime}
+                                    editable={!!selectedDate}
+                                />
+                            </View>
                         </View>
 
-                        {/* ── Step 2: Package ── */}
+                        {/* ── Services & Rate List ── */}
                         {packages.length > 0 && (
                             <>
                                 <SectionHeader
                                     step={2}
-                                    title="Select Package"
+                                    title="Services & Rate List"
                                     color={catColor}
-                                    icon="pricetag-outline"
+                                    icon="list-outline"
                                 />
-                                {packages.map((pkg, i) => {
-                                    const name =
-                                        (pkg as any).name ??
-                                        (pkg as any).serviceName ??
-                                        `Package ${i + 1}`;
-                                    const price = (pkg as any).price ?? (pkg as any).rate ?? 0;
-                                    const unit = (pkg as any).unit;
-                                    const active = selectedPkg === i;
-                                    return (
-                                        <TouchableOpacity
-                                            key={i}
+                                <View style={s.card}>
+                                    {/* Table Header */}
+                                    <View style={s.tableHeader}>
+                                        <Text style={[s.tableHeaderText, { flex: 2 }]}>
+                                            Service
+                                        </Text>
+                                        <Text style={[s.tableHeaderText, { flex: 1 }]}>Rate</Text>
+                                        <Text style={[s.tableHeaderText, { flex: 1 }]}>Unit</Text>
+                                        <Text style={[s.tableHeaderText, { flex: 1.2 }]}>Qty</Text>
+                                        <Text
                                             style={[
-                                                s.pkgCard,
-                                                active && {
-                                                    borderColor: catColor,
-                                                    backgroundColor: catColor + '08',
-                                                },
+                                                s.tableHeaderText,
+                                                { flex: 1, textAlign: 'right' },
                                             ]}
-                                            onPress={() => setSelectedPkg(active ? null : i)}
-                                            activeOpacity={0.8}
                                         >
-                                            <View
-                                                style={[
-                                                    s.pkgRadio,
-                                                    active && { borderColor: catColor },
-                                                ]}
-                                            >
-                                                {active && (
-                                                    <View
-                                                        style={[
-                                                            s.pkgRadioDot,
-                                                            { backgroundColor: catColor },
-                                                        ]}
-                                                    />
-                                                )}
-                                            </View>
-                                            <View style={{ flex: 1 }}>
+                                            Amount
+                                        </Text>
+                                    </View>
+
+                                    {/* Table Rows */}
+                                    {packages.map((pkg, i) => {
+                                        const name =
+                                            pkg.name ??
+                                            (pkg as any).serviceName ??
+                                            `Service ${i + 1}`;
+                                        const price = pkg.price ?? (pkg as any).rate ?? 0;
+                                        const unit = pkg.unit ?? 'Per Person';
+                                        const qty = serviceQuantities[i] || 0;
+                                        const amount = price * qty;
+
+                                        return (
+                                            <View key={i} style={s.tableRow}>
                                                 <Text
-                                                    style={[
-                                                        s.pkgName,
-                                                        active && { color: catColor },
-                                                    ]}
+                                                    style={[s.tableCellText, { flex: 2 }]}
+                                                    numberOfLines={2}
                                                 >
                                                     {name}
                                                 </Text>
-                                                {unit && <Text style={s.pkgUnit}>Per {unit}</Text>}
+                                                <Text style={[s.tableCellPrice, { flex: 1 }]}>
+                                                    {fmtPrice(price)}
+                                                </Text>
+                                                <Text
+                                                    style={[
+                                                        s.tableCellText,
+                                                        { flex: 1, fontSize: 11 },
+                                                    ]}
+                                                >
+                                                    {unit}
+                                                </Text>
+                                                <View style={[s.qtyControl, { flex: 1.2 }]}>
+                                                    <TouchableOpacity
+                                                        style={s.qtyBtn}
+                                                        onPress={() => decrementQuantity(i)}
+                                                        disabled={qty === 0}
+                                                    >
+                                                        <Ionicons
+                                                            name="remove"
+                                                            size={14}
+                                                            color={
+                                                                qty === 0 ? Colors.border : catColor
+                                                            }
+                                                        />
+                                                    </TouchableOpacity>
+                                                    <Text style={s.qtyText}>{qty}</Text>
+                                                    <TouchableOpacity
+                                                        style={s.qtyBtn}
+                                                        onPress={() => incrementQuantity(i)}
+                                                    >
+                                                        <Ionicons
+                                                            name="add"
+                                                            size={14}
+                                                            color={catColor}
+                                                        />
+                                                    </TouchableOpacity>
+                                                </View>
+                                                <Text
+                                                    style={[
+                                                        s.tableCellAmount,
+                                                        { flex: 1, textAlign: 'right' },
+                                                    ]}
+                                                >
+                                                    {qty > 0 ? fmtPrice(amount) : '—'}
+                                                </Text>
                                             </View>
-                                            <Text style={[s.pkgPrice, { color: catColor }]}>
-                                                {fmtPrice(price)}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
+                                        );
+                                    })}
+                                </View>
                             </>
                         )}
 
-                        {/* ── Step 3: Event details ── */}
+                        {/* ── Event Details ── */}
                         <SectionHeader
                             step={packages.length > 0 ? 3 : 2}
                             title="Event Details"
@@ -409,7 +748,6 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                         {!!errors.eventType && <ErrorMsg msg={errors.eventType} />}
 
                         <View style={s.card}>
-                            {/* Event type chips */}
                             <Text style={s.fieldLabel}>Event Type *</Text>
                             <View style={s.chipGrid}>
                                 {EVENT_TYPES.map(et => {
@@ -443,7 +781,6 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                 })}
                             </View>
 
-                            {/* Guest count */}
                             <Text style={[s.fieldLabel, { marginTop: Spacing.md }]}>
                                 Expected Guest Count
                             </Text>
@@ -463,7 +800,6 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                 />
                             </View>
 
-                            {/* Special requirements */}
                             <Text style={[s.fieldLabel, { marginTop: Spacing.md }]}>
                                 Special Requirements
                             </Text>
@@ -491,90 +827,150 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                             </View>
                         </View>
 
-                        {/* ── Price breakdown ── */}
+                        {/* ── Price Summary ── */}
                         <SectionHeader
                             step={packages.length > 0 ? 4 : 3}
-                            title="Price Summary"
+                            title="Pricing Summary"
                             color={catColor}
                             icon="receipt-outline"
                         />
 
                         <View style={s.card}>
-                            <View style={s.breakdownRow}>
-                                <Text style={s.breakdownLabel}>Base Price</Text>
-                                <Text style={s.breakdownValue}>{fmtPrice(breakdown.base)}</Text>
-                            </View>
-                            <View style={s.breakdownRow}>
-                                <Text style={s.breakdownLabel}>Platform Fee (5%)</Text>
-                                <Text style={s.breakdownValue}>{fmtPrice(breakdown.plat)}</Text>
-                            </View>
-                            <View style={s.breakdownRow}>
-                                <Text style={s.breakdownLabel}>GST (18%)</Text>
-                                <Text style={s.breakdownValue}>{fmtPrice(breakdown.gst)}</Text>
-                            </View>
-                            <View style={s.breakdownDivider} />
-                            <View style={s.breakdownRow}>
-                                <Text
-                                    style={[
-                                        s.breakdownLabel,
-                                        {
-                                            fontWeight: Typography.extraBold,
-                                            color: Colors.charcoal,
-                                            fontSize: 15,
-                                        },
-                                    ]}
-                                >
-                                    Total
-                                </Text>
-                                <Text
-                                    style={[
-                                        s.breakdownValue,
-                                        {
-                                            fontWeight: Typography.extraBold,
-                                            color: catColor,
-                                            fontSize: 18,
-                                        },
-                                    ]}
-                                >
-                                    {fmtPrice(breakdown.total)}
-                                </Text>
-                            </View>
-                            <View style={s.noteRow}>
-                                <Ionicons
-                                    name="information-circle-outline"
-                                    size={13}
-                                    color={Colors.charcoalLight}
-                                />
-                                <Text style={s.noteText}>
-                                    Payment will be collected after vendor confirmation.
-                                </Text>
-                            </View>
-                        </View>
-
-                        {/* Confirm */}
-                        <TouchableOpacity
-                            style={[
-                                s.confirmBtn,
-                                { backgroundColor: catColor },
-                                loading && { opacity: 0.7 },
-                            ]}
-                            onPress={handleBook}
-                            disabled={loading}
-                            activeOpacity={0.88}
-                        >
-                            {loading ? (
-                                <LoadingDots />
+                            {settingsLoading ? (
+                                <View style={s.settingsLoader}>
+                                    <ActivityIndicator size="small" color={catColor} />
+                                    <Text style={s.settingsLoaderText}>Loading rates…</Text>
+                                </View>
                             ) : (
                                 <>
-                                    <Ionicons
-                                        name="checkmark-circle"
-                                        size={18}
-                                        color={Colors.white}
+                                    <BreakdownRow
+                                        label="Base Price:"
+                                        value={fmtPrice(breakdown.base)}
                                     />
-                                    <Text style={s.confirmText}>Confirm Booking</Text>
+                                    <BreakdownRow
+                                        label={`CGST (${pct(breakdown.cgstPct)}):`}
+                                        value={fmtPrice(breakdown.serviceCGST)}
+                                    />
+                                    <BreakdownRow
+                                        label={`SGST (${pct(breakdown.sgstPct)}):`}
+                                        value={fmtPrice(breakdown.serviceSGST)}
+                                    />
+                                    <BreakdownRow
+                                        label={`Platform Fee (${pct(breakdown.platFeePct)}):`}
+                                        value={fmtPrice(breakdown.platformFee)}
+                                    />
+                                    <BreakdownRow
+                                        label={`Platform GST (${pct(
+                                            breakdown.platCgstPct + breakdown.platSgstPct,
+                                        )}):`}
+                                        value={fmtPrice(breakdown.platformFeeGST)}
+                                    />
+                                    <View style={s.breakdownDivider} />
+                                    <View style={s.breakdownRow}>
+                                        <Text style={[s.breakdownLabel, s.totalLabel]}>
+                                            Estimated Total:
+                                        </Text>
+                                        <Text
+                                            style={[
+                                                s.breakdownValue,
+                                                s.totalValue,
+                                                { color: catColor },
+                                            ]}
+                                        >
+                                            {fmtPrice(breakdown.total)}
+                                        </Text>
+                                    </View>
+
+                                    {/* Coupon Code */}
+                                    <View style={s.couponRow}>
+                                        <View style={[s.inputWrap, { flex: 1 }]}>
+                                            <Ionicons
+                                                name="ticket-outline"
+                                                size={16}
+                                                color={Colors.charcoalLight}
+                                            />
+                                            <TextInput
+                                                style={s.input}
+                                                placeholder="COUPON CODE"
+                                                placeholderTextColor={Colors.charcoalLight}
+                                                value={couponCode}
+                                                onChangeText={setCouponCode}
+                                                autoCapitalize="characters"
+                                            />
+                                        </View>
+                                        <TouchableOpacity
+                                            style={[
+                                                s.applyBtn,
+                                                { backgroundColor: catColor + '20' },
+                                            ]}
+                                            onPress={() => {
+                                                // Handle coupon validation
+                                                alert.info(
+                                                    'Coupon',
+                                                    'Coupon validation coming soon!',
+                                                );
+                                            }}
+                                        >
+                                            <Text style={[s.applyBtnText, { color: catColor }]}>
+                                                Apply
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    <Text style={s.minOrderNote}>Minimum order: ₹3,000</Text>
                                 </>
                             )}
-                        </TouchableOpacity>
+                        </View>
+
+                        {/* ── Action Buttons ── */}
+                        <View style={s.actionRow}>
+                            <TouchableOpacity
+                                style={[
+                                    s.confirmBtn,
+                                    { backgroundColor: catColor },
+                                    loading && { opacity: 0.7 },
+                                ]}
+                                onPress={handleBook}
+                                disabled={loading || settingsLoading}
+                                activeOpacity={0.88}
+                            >
+                                {loading ? (
+                                    <LoadingDots />
+                                ) : (
+                                    <Text style={s.confirmText}>Select a Date First</Text>
+                                )}
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={s.shareBtn} activeOpacity={0.8}>
+                                <Ionicons name="share-outline" size={18} color={catColor} />
+                                <Text style={[s.shareBtnText, { color: catColor }]}>
+                                    Share Service
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Available Coupons */}
+                        <View style={s.couponsCard}>
+                            <View style={s.couponsHeader}>
+                                <Ionicons name="pricetag" size={16} color={Colors.success} />
+                                <Text style={s.couponsTitle}>Available Coupons</Text>
+                            </View>
+                            <View style={s.couponItem}>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={s.couponCode}>ADMIN20</Text>
+                                    <Text style={s.couponDiscount}>20% off</Text>
+                                </View>
+                                <TouchableOpacity
+                                    style={s.copyBtn}
+                                    onPress={() => {
+                                        setCouponCode('ADMIN20');
+                                        alert.success('Copied!', 'Coupon code copied');
+                                    }}
+                                >
+                                    <Text style={s.copyBtnText}>Copy</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
 
                         <View style={{ height: 40 }} />
                     </Animated.View>
@@ -583,6 +979,23 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
         </KeyboardAvoidingView>
     );
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function getCategoryIcon(category: string): any {
+    const icons: Record<string, string> = {
+        Catering: 'restaurant',
+        'Makeup & Beauty': 'sparkles',
+        Photography: 'camera',
+        Entertainment: 'musical-notes',
+        'Decor & Floral': 'flower',
+        Security: 'shield-checkmark',
+        Celebrity: 'star',
+        'Logistics & Support': 'car',
+    };
+    return (icons[category] || 'briefcase') as any;
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
 
 function SectionHeader({
     step,
@@ -605,6 +1018,36 @@ function SectionHeader({
         </View>
     );
 }
+
+function ErrorMsg({ msg }: { msg: string }) {
+    return (
+        <View
+            style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                marginBottom: 6,
+                marginLeft: 2,
+            }}
+        >
+            <Ionicons name="alert-circle" size={13} color={Colors.danger} />
+            <Text style={{ fontSize: 12, color: Colors.danger, fontWeight: Typography.semiBold }}>
+                {msg}
+            </Text>
+        </View>
+    );
+}
+
+function BreakdownRow({ label, value }: { label: string; value: string }) {
+    return (
+        <View style={s.breakdownRow}>
+            <Text style={s.breakdownLabel}>{label}</Text>
+            <Text style={s.breakdownValue}>{value}</Text>
+        </View>
+    );
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
 const sh = StyleSheet.create({
     root: {
         flexDirection: 'row',
@@ -628,25 +1071,6 @@ const sh = StyleSheet.create({
         letterSpacing: -0.2,
     },
 });
-
-function ErrorMsg({ msg }: { msg: string }) {
-    return (
-        <View
-            style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 5,
-                marginBottom: 6,
-                marginLeft: 2,
-            }}
-        >
-            <Ionicons name="alert-circle" size={13} color={Colors.danger} />
-            <Text style={{ fontSize: 12, color: Colors.danger, fontWeight: Typography.semiBold }}>
-                {msg}
-            </Text>
-        </View>
-    );
-}
 
 const s = StyleSheet.create({
     root: { flex: 1, backgroundColor: Colors.background },
@@ -703,8 +1127,15 @@ const s = StyleSheet.create({
         flexShrink: 0,
     },
     summaryTitle: { fontSize: 15, fontWeight: Typography.extraBold, color: Colors.charcoal },
-    summaryCategory: { fontSize: 12, color: Colors.charcoalLight, marginTop: 1 },
-    summaryLocation: { fontSize: 11, color: Colors.charcoalLight, marginTop: 2 },
+    categoryBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginTop: 4,
+    },
+    summaryCategory: { fontSize: 11, fontWeight: Typography.semiBold },
+    summaryLocation: { fontSize: 11, color: Colors.charcoalLight, marginTop: 3 },
+    companyName: { fontSize: 11, color: Colors.charcoalLight, marginTop: 2 },
     verifiedChip: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -715,6 +1146,34 @@ const s = StyleSheet.create({
         borderRadius: Radii.full,
     },
     verifiedChipText: { fontSize: 10, fontWeight: Typography.bold, color: Colors.success },
+
+    priceBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: Colors.surface,
+        borderRadius: Radii.lg,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
+        marginTop: Spacing.md,
+        alignSelf: 'flex-start',
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
+    priceBadgeLabel: {
+        fontSize: 12,
+        color: Colors.charcoalLight,
+        fontWeight: Typography.medium,
+    },
+    priceBadgeValue: {
+        fontSize: 18,
+        fontWeight: Typography.extraBold,
+    },
+    priceBadgeSuffix: {
+        fontSize: 12,
+        color: Colors.charcoalLight,
+        fontWeight: Typography.medium,
+    },
 
     card: {
         backgroundColor: Colors.surface,
@@ -768,36 +1227,69 @@ const s = StyleSheet.create({
         paddingHorizontal: 12,
         paddingVertical: 8,
         borderWidth: 1,
-        marginTop: 12,
+        marginTop: 4,
     },
     selectedDateText: { fontSize: 13, fontWeight: Typography.bold },
 
-    pkgCard: {
+    // Table styles
+    tableHeader: {
+        flexDirection: 'row',
+        paddingVertical: 10,
+        borderBottomWidth: 2,
+        borderBottomColor: Colors.border,
+        marginBottom: 8,
+    },
+    tableHeaderText: {
+        fontSize: 11,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalLight,
+        letterSpacing: 0.5,
+        textTransform: 'uppercase',
+    },
+    tableRow: {
+        flexDirection: 'row',
+        paddingVertical: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.border + '50',
+        alignItems: 'center',
+    },
+    tableCellText: {
+        fontSize: 12,
+        color: Colors.charcoal,
+        fontWeight: Typography.medium,
+    },
+    tableCellPrice: {
+        fontSize: 13,
+        color: '#E67E22',
+        fontWeight: Typography.bold,
+    },
+    tableCellAmount: {
+        fontSize: 13,
+        color: Colors.charcoal,
+        fontWeight: Typography.bold,
+    },
+    qtyControl: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: Spacing.md,
-        backgroundColor: Colors.surface,
-        borderRadius: Radii.lg,
-        padding: Spacing.lg,
-        marginBottom: Spacing.sm,
-        borderWidth: 1.5,
-        borderColor: Colors.border,
-        ...Shadows.card,
+        gap: 8,
     },
-    pkgRadio: {
-        width: 20,
-        height: 20,
-        borderRadius: 10,
-        borderWidth: 2,
+    qtyBtn: {
+        width: 24,
+        height: 24,
+        borderRadius: 4,
+        backgroundColor: Colors.background,
+        borderWidth: 1,
         borderColor: Colors.border,
         alignItems: 'center',
         justifyContent: 'center',
-        flexShrink: 0,
     },
-    pkgRadioDot: { width: 10, height: 10, borderRadius: 5 },
-    pkgName: { fontSize: 14, fontWeight: Typography.bold, color: Colors.charcoal },
-    pkgUnit: { fontSize: 11, color: Colors.charcoalLight, marginTop: 2 },
-    pkgPrice: { fontSize: 16, fontWeight: Typography.extraBold },
+    qtyText: {
+        fontSize: 13,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal,
+        minWidth: 20,
+        textAlign: 'center',
+    },
 
     fieldLabel: {
         fontSize: 12,
@@ -829,26 +1321,53 @@ const s = StyleSheet.create({
     },
     input: { flex: 1, fontSize: 14, color: Colors.charcoal },
 
+    settingsLoader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        paddingVertical: Spacing.md,
+    },
+    settingsLoaderText: { fontSize: 13, color: Colors.charcoalLight },
+
     breakdownRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingVertical: 8,
+        paddingVertical: 7,
     },
     breakdownLabel: { fontSize: 13, color: Colors.charcoalLight, fontWeight: Typography.medium },
-    breakdownValue: { fontSize: 14, color: Colors.charcoal, fontWeight: Typography.semiBold },
-    breakdownDivider: { height: 1, backgroundColor: Colors.border, marginVertical: 6 },
-    noteRow: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: 6,
-        marginTop: 10,
-        paddingTop: 10,
-        borderTopWidth: 1,
-        borderTopColor: Colors.border,
-    },
-    noteText: { flex: 1, fontSize: 11.5, color: Colors.charcoalLight, lineHeight: 16 },
+    breakdownValue: { fontSize: 13, color: Colors.charcoal, fontWeight: Typography.semiBold },
+    totalLabel: { fontWeight: Typography.extraBold, color: Colors.charcoal, fontSize: 15 },
+    totalValue: { fontWeight: Typography.extraBold, fontSize: 18 },
+    breakdownDivider: { height: 1, backgroundColor: Colors.border, marginVertical: 8 },
 
+    couponRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginTop: 12,
+    },
+    applyBtn: {
+        paddingHorizontal: 20,
+        borderRadius: Radii.md,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    applyBtnText: {
+        fontSize: 14,
+        fontWeight: Typography.bold,
+    },
+    minOrderNote: {
+        fontSize: 11,
+        color: Colors.charcoalLight,
+        marginTop: 8,
+        textAlign: 'center',
+    },
+
+    actionRow: {
+        gap: Spacing.sm,
+        marginTop: Spacing.lg,
+    },
     confirmBtn: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -856,7 +1375,6 @@ const s = StyleSheet.create({
         gap: 10,
         borderRadius: Radii.md,
         height: 58,
-        marginTop: Spacing.xl,
         ...Shadows.primary,
     },
     confirmText: {
@@ -864,5 +1382,70 @@ const s = StyleSheet.create({
         fontWeight: Typography.extraBold,
         color: Colors.white,
         letterSpacing: 0.2,
+    },
+    shareBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        borderRadius: Radii.md,
+        height: 48,
+        backgroundColor: Colors.surface,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+    },
+    shareBtnText: {
+        fontSize: 14,
+        fontWeight: Typography.bold,
+    },
+
+    couponsCard: {
+        backgroundColor: Colors.successLight,
+        borderRadius: Radii.xl,
+        padding: Spacing.lg,
+        marginTop: Spacing.lg,
+        borderWidth: 1,
+        borderColor: Colors.success + '30',
+    },
+    couponsHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: Spacing.md,
+    },
+    couponsTitle: {
+        fontSize: 14,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal,
+    },
+    couponItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.md,
+        backgroundColor: Colors.surface,
+        borderRadius: Radii.lg,
+        padding: Spacing.md,
+    },
+    couponCode: {
+        fontSize: 14,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+    },
+    couponDiscount: {
+        fontSize: 12,
+        color: Colors.charcoalLight,
+        marginTop: 2,
+    },
+    copyBtn: {
+        paddingHorizontal: 16,
+        paddingVertical: 6,
+        borderRadius: Radii.sm,
+        borderWidth: 1.5,
+        borderColor: Colors.success,
+    },
+    copyBtnText: {
+        fontSize: 12,
+        fontWeight: Typography.bold,
+        color: Colors.success,
     },
 });

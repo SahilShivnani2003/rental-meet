@@ -931,7 +931,7 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
                 specialRequirements: specialRequirements.trim(),
             },
         };
-
+        debugger
         createBooking(bookingPayload, {
             // FIX 8: response is received here in onSuccess, not as a return value
             onSuccess: async (response: any) => {

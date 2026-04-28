@@ -20,6 +20,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { Colors, Typography, Spacing, Radii, Shadows } from '@/theme/theme';
 import { Venue } from '@/features/venue/types/Venue';
 import BookingSheet, { SelectedAmenityItem, formatTime } from '../models/BookingSheet';
+import { useAlert } from '@/context/AlertContext';
 
 const { width, height } = Dimensions.get('window');
 const HERO_HEIGHT = height * 0.38;
@@ -293,8 +294,9 @@ const bdg = StyleSheet.create({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function VenueDetailScreen({ route, navigation }: Props) {
     const { venue } = route.params as { venue: Venue };
-    const { user } = useAuthStore();
+    const { user, isAuthenticated } = useAuthStore();
     const isOwner = user?.role === 'owner';
+    const alert = useAlert();
 
     // ── Safe destructure — all fields optional on Venue ───────────────────────
     const { amenities, pricing, availability, images } = safeVenue(venue);
@@ -458,6 +460,23 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
         setActiveImageIndex(index);
     }, []);
 
+    const handleBookNow = () => {
+        if (!isAuthenticated) {
+            alert.show({
+                type: 'confirm',
+                title: 'Login Required',
+                message: 'For booking login is required',
+                buttons:[
+                    {label:'Login', onPress:()=>navigation.navigate('login'), style:'primary' },
+                    {label: 'Cancel', onPress:alert.dismiss, style:'ghost'}
+                ]
+            })
+        } else {
+            isOwner
+                ? navigation.navigate('updateVenue', { venueId: venue._id! })
+                : setBookingVisible(true);
+        }
+    };
     // ── Render ────────────────────────────────────────────────────────────────
     return (
         <View style={s.container}>
@@ -1187,15 +1206,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                         />
                     </View>
                 )}
-                <TouchableOpacity
-                    style={s.ctaButton}
-                    onPress={() =>
-                        isOwner
-                            ? navigation.navigate('updateVenue', { venueId: venue._id! })
-                            : setBookingVisible(true)
-                    }
-                    activeOpacity={0.85}
-                >
+                <TouchableOpacity style={s.ctaButton} onPress={handleBookNow} activeOpacity={0.85}>
                     <Ionicons
                         name={isOwner ? 'pencil' : 'calendar'}
                         size={18}
