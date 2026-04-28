@@ -19,7 +19,7 @@ export const updateProfile = async (data: UpdateUser) => {
     try {
         console.log('Updating user profile...');
 
-        const response = await privateClient.put('/auth/update-profile');
+        const response = await privateClient.put('/auth/update-profile', data);
 
         console.log('Update profile respose : ', response.data);
 

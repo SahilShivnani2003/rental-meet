@@ -25,6 +25,14 @@ import { useGetAllVenue } from '../hooks/useGetAllVenue';
 import { useGetOwnerVenue } from '../hooks/useGetOwnerVenue';
 import { VenueType } from '@/features/venueType/types/VenueType';
 import FeaturedCard from '@/components/landing/featuredCard';
+import { useDeleteVenue } from '../hooks/useDeleteVenue';
+import { useAlert } from '@/context/AlertContext';
+import { ApiError } from '@/types/ApiError';
+import { useResubmitVenue } from '../hooks/useResubmitVenue';
+import ManageAvailabilityModal from '../models/ManageAvailabilityModal';
+import { useToggleActive } from '../hooks/useToggleActive';
+import { Venue } from '../types/Venue';
+import { useCreateBlockDates } from '../hooks/useCreateBlockDates';
 
 const ALL_CATEGORY: VenueType = {
     _id: 'all',
@@ -176,6 +184,8 @@ export default function VenuesScreen({ navigation }: venueProps) {
     const rootNav = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
     const { user } = useAuthStore();
     const isOwner = user?.role === 'owner';
+    const alert = useAlert();
+    const [operationLoading, setOperationLoading] = useState<string | null>(null);
     // ── Filter state ──────────────────────────────────────────────────────────
     const [searchQuery, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -192,14 +202,19 @@ export default function VenuesScreen({ navigation }: venueProps) {
     const [cityModalVisible, setCityModalVisible] = useState(false);
     const [capacityModalVisible, setCapacityModalVisible] = useState(false);
 
+    // ── Availability modal state ───────────────────────────────────────────────
+    const [availabilityModalVisible, setAvailabilityModalVisible] = useState(false);
+    // Track which venue the modal is operating on
+    const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
+    const [blockDate, setBlockDate] = useState<Date | null>(null);
+    const [reason, setReason] = useState('');
+
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // ── Data hooks — FIX: renamed all destructured fields to avoid duplicates ──
+    // ── Data hooks ────────────────────────────────────────────────────────────
+    const { data: venueTypeData } = useGetVenueType();
 
-    const { data: venueTypeData, isLoading: isVenueTypeLoading } = useGetVenueType();
-
-    // Client venue hook — pass filters as params (adjust to match your hook's API)
     const {
         data: clientVenueData,
         isLoading: isClientVenueLoading,
@@ -214,29 +229,27 @@ export default function VenuesScreen({ navigation }: venueProps) {
             minPrice: minPrice ? Number(minPrice) : undefined,
             maxPrice: maxPrice ? Number(maxPrice) : undefined,
         },
-        {
-            enabled: !isOwner,
-        },
+        { enabled: !isOwner },
     );
 
-    // Owner venue hook
     const {
         data: ownerVenueData,
         isLoading: isOwnerVenueLoading,
         isRefetching: isOwnerRefetching,
         refetch: refetchOwnerVenues,
-    } = useGetOwnerVenue({
-        enabled: isOwner,
-    });
+    } = useGetOwnerVenue({ enabled: isOwner });
 
-    // Pick the right venue list based on role
-    const venues: any[] = isOwner ? ownerVenueData?.venues ?? [] : clientVenueData?.venues ?? [];
+    const { mutate: deleteVenue } = useDeleteVenue();
+    const { mutate: resubmitVenue } = useResubmitVenue();
+    const { mutate: toggleActive } = useToggleActive();
+    const { mutate: createBlockDates } = useCreateBlockDates();
+
+    const venues: Venue[] = isOwner ? ownerVenueData?.venues ?? [] : clientVenueData?.venues ?? [];
 
     const isLoading = isOwner ? isOwnerVenueLoading : isClientVenueLoading;
     const isRefetching = isOwner ? isOwnerRefetching : isClientRefetching;
     const refetch = isOwner ? refetchOwnerVenues : refetchClientVenues;
 
-    // Categories from venue type API, prepend "All"
     const rawVenueTypes: VenueType[] = venueTypeData?.venueTypes ?? [];
     const categories: VenueType[] = [ALL_CATEGORY, ...rawVenueTypes];
 
@@ -252,6 +265,124 @@ export default function VenuesScreen({ navigation }: venueProps) {
         }
     }, [isLoading, venues.length]);
 
+    // ── Handlers ──────────────────────────────────────────────────────────────
+
+    const handleDeleteVenue = useCallback(
+        (id: string) => {
+            if (!id) return;
+            setOperationLoading('Deleting venue…');
+            deleteVenue(id, {
+                onSuccess: () => {
+                    alert.success('Deleted', 'Venue deleted successfully');
+                    refetch();
+                },
+                onError: (error: ApiError) => {
+                    alert.error('Error', error?.message || 'Something went wrong');
+                },
+                onSettled: () => setOperationLoading(null),
+            });
+        },
+        [deleteVenue, refetch, alert],
+    );
+
+    const handleResubmitVenue = useCallback(
+        (id: string) => {
+            if (!id) return;
+            setOperationLoading('Re-submitting venue…');
+            resubmitVenue(id, {
+                onSuccess: () => {
+                    alert.success('Re-submitted', 'Venue re-submitted successfully');
+                    refetch();
+                },
+                onError: (error: ApiError) => {
+                    alert.error('Error', error?.message || 'Something went wrong');
+                },
+                onSettled: () => setOperationLoading(null),
+            });
+        },
+        [resubmitVenue, refetch, alert],
+    );
+
+    // Opens the availability modal for a specific venue
+    const handleOpenAvailabilityModal = useCallback((venue: Venue) => {
+        setSelectedVenue(venue);
+        setBlockDate(null); // reset form state for each new open
+        setReason('');
+        setAvailabilityModalVisible(true);
+    }, []);
+
+    const handleCloseAvailabilityModal = useCallback(() => {
+        setAvailabilityModalVisible(false);
+        // Delay clearing so the closing animation isn't jarring
+        setTimeout(() => {
+            setSelectedVenue(null);
+            setBlockDate(null);
+            setReason('');
+        }, 300);
+    }, []);
+
+    // Disable / re-enable a venue (toggle isActive)
+    const handleToggleActive = useCallback(() => {
+        console.log('press')
+        if (!selectedVenue?._id ){
+            return;
+        } 
+
+        setOperationLoading(selectedVenue.isActive ? 'Disabling venue…' : 'Enabling venue…');
+        toggleActive(
+            {
+                id: selectedVenue._id,
+                payload: { currentIsActive: selectedVenue.isActive },
+            },
+            {
+                onSuccess: () => {
+                    alert.success(
+                        'Success',
+                        `Venue ${selectedVenue.isActive ? 'disabled' : 'enabled'} successfully`,
+                    );
+                    refetch();
+                    handleCloseAvailabilityModal();
+                },
+                onError: (error: ApiError) => {
+                    alert.error('Error', error.message || 'Something went wrong');
+                },
+                onSettled: () => setOperationLoading(null),
+            },
+        );
+    }, [selectedVenue, toggleActive, refetch, alert, handleCloseAvailabilityModal]);
+
+    const handleCreateBlockDates = useCallback(() => {
+        if (!selectedVenue?._id || !blockDate || !reason) return;
+        setOperationLoading('Blocking dates…');
+        createBlockDates(
+            {
+                id: selectedVenue._id,
+                payload: {
+                    date: blockDate,
+                    reason: reason.trim(),
+                },
+            },
+            {
+                onSuccess: () => {
+                    alert.success('Success', 'Dates blocked successfully');
+                    refetch();
+                    handleCloseAvailabilityModal();
+                },
+                onError: (error: ApiError) => {
+                    alert.error('Error', error.message || 'Something went wrong');
+                },
+                onSettled: () => setOperationLoading(null),
+            },
+        );
+    }, [
+        selectedVenue,
+        blockDate,
+        reason,
+        createBlockDates,
+        refetch,
+        alert,
+        handleCloseAvailabilityModal,
+    ]);
     // ── Debounced search ──────────────────────────────────────────────────────
     const handleSearchChange = useCallback((text: string) => {
         setSearch(text);
@@ -264,12 +395,8 @@ export default function VenuesScreen({ navigation }: venueProps) {
         setDebouncedSearch(searchQuery);
     }, [searchQuery]);
 
-    // ── Refresh ───────────────────────────────────────────────────────────────
-    const handleRefresh = useCallback(() => {
-        refetch();
-    }, [refetch]);
+    const handleRefresh = useCallback(() => refetch(), [refetch]);
 
-    // ── Clear all filters ─────────────────────────────────────────────────────
     const handleClearFilters = useCallback(() => {
         setSearch('');
         setDebouncedSearch('');
@@ -279,21 +406,18 @@ export default function VenuesScreen({ navigation }: venueProps) {
         setMinPrice('');
         setMaxPrice('');
         setOwnerFilter('all');
-        // react-query will re-run the query automatically when params change
     }, []);
 
-    // ── Apply inline filters (close panel + trigger re-fetch via param change) ─
     const handleApplyFilters = useCallback(() => {
         setFiltersExpanded(false);
         refetch();
     }, [refetch]);
 
-    // ── Navigation ────────────────────────────────────────────────────────────
     const handleAddVenue = useCallback(() => {
         navigation.getParent<NativeStackNavigationProp<RootStackParamList>>()?.navigate('addVenue');
     }, [navigation]);
 
-    // ── Computed values ───────────────────────────────────────────────────────
+    // ── Computed ──────────────────────────────────────────────────────────────
     const activeFilterCount = [
         selectedVenueType,
         selectedCity,
@@ -335,11 +459,9 @@ export default function VenuesScreen({ navigation }: venueProps) {
 
     const ownerFilterKeys = ['all', 'approved', 'pending', 'rejected'];
 
-    // Owner tab filtering is client-side (data already fetched)
     const displayedVenues =
         isOwner && ownerFilter !== 'all' ? venues.filter(v => v.status === ownerFilter) : venues;
 
-    // Venue type dropdown options (from API)
     const venueTypeOptions = rawVenueTypes.map(c => ({ label: c.name, value: c.name }));
 
     const cityOptions = [
@@ -358,7 +480,7 @@ export default function VenuesScreen({ navigation }: venueProps) {
     const capacityOptions = [
         { label: '10–20', value: '10-20' },
         { label: '20–30', value: '20-30' },
-        { label: '30–50', value: '30-40' },
+        { label: '30–50', value: '30-50' },
         { label: '50–100', value: '50-100' },
         { label: '100–200', value: '100-200' },
         { label: '200–300', value: '200-300' },
@@ -408,7 +530,6 @@ export default function VenuesScreen({ navigation }: venueProps) {
                 {isOwner ? (
                     /* ══════════════ OWNER VIEW ══════════════ */
                     <>
-                        {/* Stat cards */}
                         <View style={styles.ownerStatsRow}>
                             {ownerStats.map((stat, i) => (
                                 <OwnerStatCard
@@ -420,7 +541,6 @@ export default function VenuesScreen({ navigation }: venueProps) {
                             ))}
                         </View>
 
-                        {/* Search */}
                         <View style={styles.ownerSearchWrap}>
                             <View style={styles.searchContainer}>
                                 <Ionicons
@@ -455,7 +575,6 @@ export default function VenuesScreen({ navigation }: venueProps) {
                             </View>
                         </View>
 
-                        {/* Venue list */}
                         <View style={styles.section}>
                             <View style={styles.sectionHeader}>
                                 <View style={styles.sectionTitleRow}>
@@ -514,8 +633,19 @@ export default function VenuesScreen({ navigation }: venueProps) {
                                 </View>
                             ) : (
                                 <Animated.View style={[styles.venuesGrid, { opacity: fadeAnim }]}>
-                                    {displayedVenues.map(v => (
-                                        <VenueCard key={v._id} venue={v} />
+                                    {displayedVenues.map((v, i) => (
+                                        <FeaturedCard
+                                            key={v._id}
+                                            v={v}
+                                            index={i}
+                                            role={user?.role}
+                                            onPress={() =>
+                                                rootNav.navigate('venueDetail', { venue: v })
+                                            }
+                                            onDelete={() => v._id && handleDeleteVenue(v._id)}
+                                            onResubmit={() => v._id && handleResubmitVenue(v._id)}
+                                            onDisable={() => handleOpenAvailabilityModal(v)}
+                                        />
                                     ))}
                                 </Animated.View>
                             )}
@@ -525,7 +655,6 @@ export default function VenuesScreen({ navigation }: venueProps) {
                 ) : (
                     /* ══════════════ CLIENT VIEW ══════════════ */
                     <>
-                        {/* Search */}
                         <View style={styles.clientSearchWrap}>
                             <View style={styles.searchContainer}>
                                 <Ionicons
@@ -560,7 +689,6 @@ export default function VenuesScreen({ navigation }: venueProps) {
                             </View>
                         </View>
 
-                        {/* Filters Toggle */}
                         <View style={styles.filtersToggleWrap}>
                             <TouchableOpacity
                                 style={[
@@ -613,10 +741,8 @@ export default function VenuesScreen({ navigation }: venueProps) {
                             )}
                         </View>
 
-                        {/* Expandable filters */}
                         {filtersExpanded && (
                             <View style={styles.filtersSection}>
-                                {/* Row 1: Venue Type + City */}
                                 <View style={styles.filterRow}>
                                     <View style={styles.filterCol}>
                                         <Text style={styles.filterLabel}>Venue Type</Text>
@@ -674,7 +800,6 @@ export default function VenuesScreen({ navigation }: venueProps) {
                                     </View>
                                 </View>
 
-                                {/* Row 2: Capacity */}
                                 <View style={styles.filterRowSingle}>
                                     <Text style={styles.filterLabel}>Capacity</Text>
                                     <TouchableOpacity
@@ -702,7 +827,6 @@ export default function VenuesScreen({ navigation }: venueProps) {
                                     </TouchableOpacity>
                                 </View>
 
-                                {/* Row 3: Price Range */}
                                 <View style={styles.filterRow}>
                                     <View style={styles.filterCol}>
                                         <Text style={styles.filterLabel}>Min Price (₹)</Text>
@@ -743,7 +867,6 @@ export default function VenuesScreen({ navigation }: venueProps) {
                                     </View>
                                 </View>
 
-                                {/* Apply */}
                                 <TouchableOpacity
                                     style={styles.applyFiltersBtn}
                                     onPress={handleApplyFilters}
@@ -759,7 +882,6 @@ export default function VenuesScreen({ navigation }: venueProps) {
                             </View>
                         )}
 
-                        {/* Active filter strip */}
                         {(activeFilterCount > 0 || searchQuery) && (
                             <View style={styles.activeFilterStrip}>
                                 <Ionicons name="funnel" size={13} color={Colors.primaryDark} />
@@ -781,7 +903,6 @@ export default function VenuesScreen({ navigation }: venueProps) {
                             </View>
                         )}
 
-                        {/* Venue list */}
                         <View style={[styles.section, { paddingBottom: 100 }]}>
                             <View style={styles.sectionHeader}>
                                 <View style={styles.sectionTitleRow}>
@@ -819,10 +940,9 @@ export default function VenuesScreen({ navigation }: venueProps) {
                                             key={v._id}
                                             v={v}
                                             index={i}
+                                            role={user?.role}
                                             onPress={() =>
-                                                rootNav.navigate('venueDetail', {
-                                                    venue: v,
-                                                })
+                                                rootNav.navigate('venueDetail', { venue: v })
                                             }
                                         />
                                     ))}
@@ -839,7 +959,7 @@ export default function VenuesScreen({ navigation }: venueProps) {
                 title="Select Venue Type"
                 options={venueTypeOptions}
                 selectedValue={selectedVenueType}
-                onSelect={value => setSelectedVenueType(value)}
+                onSelect={setSelectedVenueType}
                 onClose={() => setVenueTypeModalVisible(false)}
                 searchable
             />
@@ -848,7 +968,7 @@ export default function VenuesScreen({ navigation }: venueProps) {
                 title="Select City"
                 options={cityOptions}
                 selectedValue={selectedCity}
-                onSelect={value => setSelectedCity(value)}
+                onSelect={setSelectedCity}
                 onClose={() => setCityModalVisible(false)}
                 searchable
             />
@@ -857,9 +977,69 @@ export default function VenuesScreen({ navigation }: venueProps) {
                 title="Select Capacity"
                 options={capacityOptions}
                 selectedValue={selectedCapacity}
-                onSelect={value => setSelectedCapacity(value)}
+                onSelect={setSelectedCapacity}
                 onClose={() => setCapacityModalVisible(false)}
             />
+
+            {/* ── Availability Modal ── */}
+            <ManageAvailabilityModal
+                visible={availabilityModalVisible}
+                onClose={handleCloseAvailabilityModal}
+                title="Manage Availability"
+                // Show the actual venue name in the subtitle
+                subtitle={selectedVenue?.businessName}
+                sections={[
+                    {
+                        icon: selectedVenue?.isActive ? 'ban-outline' : 'checkmark-circle-outline',
+                        title: selectedVenue?.isActive
+                            ? 'Disable Until Re-enabled'
+                            : 'Enable Venue',
+                        subtitle: selectedVenue?.isActive
+                            ? 'Venue will be hidden from public listing until you manually enable it.'
+                            : 'Venue will become visible and bookable again.',
+                        variant: selectedVenue?.isActive ? 'danger' : 'primary',
+                        action: {
+                            ctaLabel: selectedVenue?.isActive ? 'Disable' : 'Enable',
+                            onPress: handleToggleActive,
+                        },
+                    },
+                    {
+                        icon: 'calendar-outline',
+                        title: 'Block Specific Dates',
+                        subtitle: 'Disable booking for selected dates',
+                        variant: 'info',
+                        form: {
+                            fields: [
+                                {
+                                    type: 'date',
+                                    placeholder: 'Click to pick date...',
+                                    value: blockDate,
+                                    onChange: setBlockDate,
+                                    minimumDate: new Date(),
+                                },
+                                {
+                                    type: 'text',
+                                    placeholder: 'Reason (optional) — e.g. External booking',
+                                    value: reason,
+                                    onChangeText: setReason,
+                                },
+                            ],
+                            submitLabel: 'Block Selected Dates',
+                            submitDisabled: !blockDate,
+                            onSubmit: handleCreateBlockDates,
+                        },
+                    },
+                ]}
+            />
+            {/* ── Operation loader overlay ── */}
+            {operationLoading !== null && (
+                <View style={styles.opLoaderBackdrop} pointerEvents="box-only">
+                    <View style={styles.opLoaderCard}>
+                        <ActivityIndicator size="large" color={Colors.primary} />
+                        <Text style={styles.opLoaderText}>{operationLoading}</Text>
+                    </View>
+                </View>
+            )}
         </View>
     );
 }
@@ -1071,41 +1251,6 @@ const styles = StyleSheet.create({
         fontWeight: Typography.extraBold,
         color: Colors.charcoal,
     },
-    categoriesContainer: {
-        paddingHorizontal: Spacing.xl,
-        gap: 10,
-        paddingVertical: Spacing.md,
-    },
-    categoryButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingRight: 14,
-        paddingLeft: 6,
-        paddingVertical: 6,
-        borderRadius: Radii.full,
-        backgroundColor: Colors.surface,
-        borderWidth: 1.5,
-        borderColor: Colors.border,
-        gap: Spacing.sm,
-    },
-    categoryButtonActive: { backgroundColor: Colors.charcoal, borderColor: Colors.charcoal },
-    categoryIconWrap: {
-        width: 34,
-        height: 34,
-        borderRadius: 17,
-        backgroundColor: Colors.primaryLight,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    categoryIconWrapActive: { backgroundColor: Colors.primary },
-    categoryEmoji: { fontSize: 16 },
-    categoryText: {
-        fontSize: Typography.base,
-        color: Colors.charcoalMid,
-        fontWeight: Typography.semiBold,
-        letterSpacing: Typography.normal,
-    },
-    categoryTextActive: { color: Colors.white },
     activeFilterStrip: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1148,10 +1293,7 @@ const styles = StyleSheet.create({
         color: Colors.charcoalLight,
         fontWeight: Typography.medium,
     },
-    venuesGrid: {
-        paddingHorizontal: Spacing.lg,
-        gap: 14,
-    },
+    venuesGrid: { paddingHorizontal: Spacing.lg, gap: 14 },
     loaderWrap: { alignItems: 'center', paddingVertical: 48, gap: 12 },
     loaderText: {
         fontSize: Typography.md,
@@ -1264,4 +1406,27 @@ const styles = StyleSheet.create({
         fontWeight: Typography.medium,
     },
     dropdownOptionTextActive: { color: Colors.primary, fontWeight: Typography.bold },
+    opLoaderBackdrop: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.38)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 999,
+    },
+    opLoaderCard: {
+        backgroundColor: Colors.surface,
+        borderRadius: Radii.xl,
+        paddingHorizontal: Spacing.xxl,
+        paddingVertical: Spacing.xl,
+        alignItems: 'center',
+        gap: Spacing.md,
+        minWidth: 180,
+        ...Shadows.floating,
+    },
+    opLoaderText: {
+        fontSize: Typography.base,
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoalMid,
+        letterSpacing: 0.2,
+    },
 });

@@ -12,6 +12,7 @@ import { Spacing, Colors, Radii, Shadows, Typography } from '../../theme/theme';
 import { useRef } from 'react';
 import useEntrance from '../../hooks/useEntrance';
 import { Venue } from '@/features/venue/types/Venue';
+import { User } from '@/features/profile/types/User';
 
 const { width: W } = Dimensions.get('window');
 
@@ -35,22 +36,66 @@ function getRatingLabel(rating: number) {
     return 'New';
 }
 
+// ── Status badge config ───────────────────────────────────────────────────────
+// Add to STATUS_META
+const STATUS_META: Record<string, { label: string; icon: string; bg: string; color: string }> = {
+    pending: { label: 'Pending Review', icon: 'time-outline', bg: '#FFF7E6', color: '#D97706' },
+    approved: {
+        label: 'Approved',
+        icon: 'checkmark-circle-outline',
+        bg: '#ECFDF5',
+        color: Colors.success,
+    },
+    rejected: {
+        label: 'Rejected',
+        icon: 'close-circle-outline',
+        bg: '#FEF2F2',
+        color: Colors.danger,
+    },
+    draft: {
+        label: 'Draft',
+        icon: 'document-outline',
+        bg: Colors.background,
+        color: Colors.charcoalLight,
+    },
+    inactive: {
+        label: 'Inactive',
+        icon: 'ban-outline',
+        bg: '#F3F4F6',
+        color: Colors.charcoalLight,
+    },
+};
+
 interface Props {
     v: Venue;
     index: number;
+    role: User['role'];
     onPress: (venue: Venue) => void;
     onBook?: (venue: Venue) => void;
+    onDelete?: (venue: Venue) => void;
+    onResubmit?: (venue: Venue) => void;
+    onDisable?: (venue: Venue) => void;
 }
 
-export default function FeaturedCard({ v, index, onPress, onBook }: Props) {
+export default function FeaturedCard({
+    v,
+    index,
+    role,
+    onPress,
+    onBook,
+    onDelete,
+    onResubmit,
+    onDisable,
+}: Props) {
     const { fade, slide } = useEntrance(160 + index * 70);
     const { scale, onIn, onOut } = usePressScale();
+    const isInactive = v.isActive === false;
 
     // ── Images ───────────────────────────────────────────────────────────────
     const allImages = v.images ?? [];
     const featured = allImages.find(img => img.isFeatured)?.url ?? allImages[0]?.url ?? null;
     const thumbs = allImages.filter(img => img.url !== featured).slice(0, 3);
-    const extraCount = allImages.length - 1 - thumbs.length; // images beyond shown thumbs
+    const extraCount = allImages.length - 1 - thumbs.length;
 
     // ── Price ────────────────────────────────────────────────────────────────
     const price =
@@ -76,6 +121,102 @@ export default function FeaturedCard({ v, index, onPress, onBook }: Props) {
     const isVerified = v.status === 'approved';
     const location = [v.location?.area, v.location?.city].filter(Boolean).join(', ');
 
+    const isOwner = role === 'owner';
+    const status = v.status ?? 'draft';
+    const statusMeta = STATUS_META[status] ?? STATUS_META.draft;
+    const displayStatusMeta = isInactive ? STATUS_META.inactive : statusMeta;
+
+    // ── Owner action button logic ─────────────────────────────────────────────
+    const renderActions = () => {
+        if (!isOwner) {
+            return (
+                <>
+                    <TouchableOpacity
+                        style={fc.btnOutline}
+                        onPress={() => onPress(v)}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={fc.btnOutlineText}>View Details</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={fc.btnBook}
+                        onPress={() => onBook?.(v) ?? onPress(v)}
+                        activeOpacity={0.85}
+                    >
+                        <Text style={fc.btnBookText}>Book Now</Text>
+                    </TouchableOpacity>
+                </>
+            );
+        }
+
+        // ── Shared owner base buttons (always visible) ──────────────────────────
+        const viewBtn = (
+            <TouchableOpacity style={fc.btnOutline} onPress={() => onPress(v)} activeOpacity={0.8}>
+                <Text style={fc.btnOutlineText}>View</Text>
+            </TouchableOpacity>
+        );
+
+        const editBtn = (
+            <TouchableOpacity
+                style={fc.btnEdit}
+                onPress={() => onPress(v)} // replace with onEdit?.(v) when wired
+                activeOpacity={0.8}
+            >
+                <Ionicons name="create-outline" size={13} color={Colors.primary} />
+                <Text style={fc.btnEditText}>Edit</Text>
+            </TouchableOpacity>
+        );
+
+        // ── Per-status tertiary icon button ─────────────────────────────────────
+        if (status === 'approved') {
+            return (
+                <>
+                    {viewBtn}
+                    {editBtn}
+                    <TouchableOpacity
+                        style={fc.btnIconWarning}
+                        onPress={() => onDisable?.(v)} // replace with onDisable?.(v) when wired
+                        activeOpacity={0.85}
+                    >
+                        <Ionicons name="ban-outline" size={15} color="#D97706" />
+                    </TouchableOpacity>
+                </>
+            );
+        }
+
+        // In renderActions — rejected branch only
+        if (status === 'rejected') {
+            return (
+                <>
+                    {viewBtn}
+                    {editBtn}
+                    <TouchableOpacity
+                        style={fc.btnIconResubmit}
+                        onPress={() => onResubmit?.(v)}
+                        activeOpacity={0.85}
+                    >
+                        <Ionicons name="refresh-outline" size={15} color="#D97706" />
+                    </TouchableOpacity>
+                </>
+            );
+        }
+
+        // pending / draft / any other → Delete icon button
+        return (
+            <>
+                {viewBtn}
+                {editBtn}
+                <TouchableOpacity
+                    style={fc.btnIconDanger}
+                    onPress={() => onDelete?.(v)}
+                    activeOpacity={0.85}
+                >
+                    <Ionicons name="trash-outline" size={15} color={Colors.danger} />
+                </TouchableOpacity>
+            </>
+        );
+    };
+
     return (
         <Animated.View style={[fc.wrapper, { opacity: fade, transform: [{ translateY: slide }] }]}>
             <TouchableOpacity
@@ -84,7 +225,9 @@ export default function FeaturedCard({ v, index, onPress, onBook }: Props) {
                 onPressIn={onIn}
                 onPressOut={onOut}
             >
-                <Animated.View style={[fc.card, { transform: [{ scale }] }]}>
+                <Animated.View
+                    style={[fc.card, { transform: [{ scale }] }, isInactive && fc.cardInactive]}
+                >
                     {/* ── Left: Featured image ── */}
                     <View style={fc.featuredWrap}>
                         {featured ? (
@@ -105,6 +248,36 @@ export default function FeaturedCard({ v, index, onPress, onBook }: Props) {
                         {isVerified && (
                             <View style={fc.verifiedBadge}>
                                 <Ionicons name="shield-checkmark" size={9} color="#fff" />
+                            </View>
+                        )}
+
+                        {/* Owner-only status badge on image */}
+                        {isOwner && (
+                            <View style={[fc.statusBadge, { backgroundColor: statusMeta.bg }]}>
+                                <Ionicons
+                                    name={statusMeta.icon as any}
+                                    size={9}
+                                    color={statusMeta.color}
+                                />
+                                <Text style={[fc.statusBadgeText, { color: statusMeta.color }]}>
+                                    {statusMeta.label}
+                                </Text>
+                            </View>
+                        )}
+                        {isOwner && (
+                            <View
+                                style={[fc.statusBadge, { backgroundColor: displayStatusMeta.bg }]}
+                            >
+                                <Ionicons
+                                    name={displayStatusMeta.icon as any}
+                                    size={9}
+                                    color={displayStatusMeta.color}
+                                />
+                                <Text
+                                    style={[fc.statusBadgeText, { color: displayStatusMeta.color }]}
+                                >
+                                    {displayStatusMeta.label}
+                                </Text>
                             </View>
                         )}
                     </View>
@@ -202,23 +375,8 @@ export default function FeaturedCard({ v, index, onPress, onBook }: Props) {
                                 </View>
                             ))}
 
-                        {/* Actions */}
-                        <View style={fc.actions}>
-                            <TouchableOpacity
-                                style={fc.btnOutline}
-                                onPress={() => onPress(v)}
-                                activeOpacity={0.8}
-                            >
-                                <Text style={fc.btnOutlineText}>View Details</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={fc.btnBook}
-                                onPress={() => onBook?.(v) ?? onPress(v)}
-                                activeOpacity={0.85}
-                            >
-                                <Text style={fc.btnBookText}>Book Now</Text>
-                            </TouchableOpacity>
-                        </View>
+                        {/* ── Actions ── */}
+                        <View style={fc.actions}>{renderActions()}</View>
                     </View>
                 </Animated.View>
             </TouchableOpacity>
@@ -240,7 +398,7 @@ const fc = StyleSheet.create({
         borderColor: Colors.border,
         ...Shadows.card,
     },
-
+    cardInactive: { opacity: 0.55 },
     // ── Featured image ───────────────────────────────────────────────────────
     featuredWrap: {
         width: W * 0.32,
@@ -266,34 +424,37 @@ const fc = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
+    statusBadge: {
+        position: 'absolute',
+        bottom: 8,
+        left: 6,
+        right: 6,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 3,
+        paddingHorizontal: 5,
+        paddingVertical: 3,
+        borderRadius: Radii.sm,
+    },
+    statusBadgeText: {
+        fontSize: 9,
+        fontWeight: Typography.bold,
+        letterSpacing: 0.2,
+    },
 
     // ── Thumbnails ───────────────────────────────────────────────────────────
-    thumbCol: {
-        width: THUMB_W,
-        gap: 2,
-    },
-    thumbWrap: {
-        flex: 1,
-        position: 'relative',
-    },
-    thumb: {
-        width: '100%',
-        height: '100%',
-    },
-    thumbEmpty: {
-        backgroundColor: Colors.background,
-    },
+    thumbCol: { width: THUMB_W, gap: 2 },
+    thumbWrap: { flex: 1, position: 'relative' },
+    thumb: { width: '100%', height: '100%' },
+    thumbEmpty: { backgroundColor: Colors.background },
     thumbOverlay: {
         ...StyleSheet.absoluteFillObject,
         backgroundColor: 'rgba(0,0,0,0.52)',
         alignItems: 'center',
         justifyContent: 'center',
     },
-    thumbOverlayText: {
-        color: '#fff',
-        fontSize: 15,
-        fontWeight: Typography.extraBold,
-    },
+    thumbOverlayText: { color: '#fff', fontSize: 15, fontWeight: Typography.extraBold },
 
     // ── Info panel ───────────────────────────────────────────────────────────
     info: {
@@ -308,11 +469,7 @@ const fc = StyleSheet.create({
         color: Colors.charcoal,
         letterSpacing: -0.3,
     },
-    row: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
+    row: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     locationText: {
         fontSize: 11.5,
         color: Colors.charcoalLight,
@@ -330,21 +487,9 @@ const fc = StyleSheet.create({
         paddingVertical: 2,
         borderRadius: Radii.sm,
     },
-    ratingNum: {
-        fontSize: 11,
-        fontWeight: Typography.extraBold,
-        color: '#fff',
-    },
-    reviewCount: {
-        fontSize: 11,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.medium,
-    },
-    ratingLabel: {
-        fontSize: 11,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.medium,
-    },
+    ratingNum: { fontSize: 11, fontWeight: Typography.extraBold, color: '#fff' },
+    reviewCount: { fontSize: 11, color: Colors.charcoalLight, fontWeight: Typography.medium },
+    ratingLabel: { fontSize: 11, color: Colors.charcoalLight, fontWeight: Typography.medium },
     newBadge: {
         backgroundColor: Colors.primaryLight,
         paddingHorizontal: 6,
@@ -361,32 +506,12 @@ const fc = StyleSheet.create({
     },
 
     // Capacity / amenity chips
-    chip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 3,
-    },
-    chipText: {
-        fontSize: 11,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.medium,
-    },
-    amenityText: {
-        fontSize: 11,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.medium,
-    },
-    amenityMore: {
-        fontSize: 11,
-        color: Colors.primary,
-        fontWeight: Typography.bold,
-    },
+    chip: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+    chipText: { fontSize: 11, color: Colors.charcoalLight, fontWeight: Typography.medium },
+    amenityText: { fontSize: 11, color: Colors.charcoalLight, fontWeight: Typography.medium },
+    amenityMore: { fontSize: 11, color: Colors.primary, fontWeight: Typography.bold },
 
-    divider: {
-        height: 1,
-        backgroundColor: Colors.border,
-        marginVertical: 4,
-    },
+    divider: { height: 1, backgroundColor: Colors.border, marginVertical: 4 },
 
     // Price
     priceAmount: {
@@ -402,30 +527,16 @@ const fc = StyleSheet.create({
         alignSelf: 'flex-end',
         marginBottom: 2,
     },
-    priceNego: {
-        fontSize: 13,
-        color: Colors.charcoalLight,
-        fontStyle: 'italic',
-    },
+    priceNego: { fontSize: 13, color: Colors.charcoalLight, fontStyle: 'italic' },
 
     // Coupon
-    couponRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-    },
-    couponText: {
-        fontSize: 10,
-        color: Colors.success,
-        fontWeight: Typography.semiBold,
-    },
+    couponRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    couponText: { fontSize: 10, color: Colors.success, fontWeight: Typography.semiBold },
 
-    // Buttons
-    actions: {
-        flexDirection: 'row',
-        gap: 6,
-        marginTop: 4,
-    },
+    // ── Action buttons ───────────────────────────────────────────────────────
+    actions: { flexDirection: 'row', gap: 6, marginTop: 4 },
+
+    // Shared outline
     btnOutline: {
         flex: 1,
         alignItems: 'center',
@@ -436,11 +547,9 @@ const fc = StyleSheet.create({
         borderColor: Colors.border,
         backgroundColor: Colors.surface,
     },
-    btnOutlineText: {
-        fontSize: 11.5,
-        fontWeight: Typography.bold,
-        color: Colors.charcoal,
-    },
+    btnOutlineText: { fontSize: 11.5, fontWeight: Typography.bold, color: Colors.charcoal },
+
+    // Book (customer)
     btnBook: {
         flex: 1,
         alignItems: 'center',
@@ -450,9 +559,116 @@ const fc = StyleSheet.create({
         backgroundColor: Colors.success,
         ...Shadows.card,
     },
-    btnBookText: {
+    btnBookText: { fontSize: 11.5, fontWeight: Typography.extraBold, color: '#fff' },
+
+    // Delete (owner + pending)
+    btnDelete: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        paddingVertical: 7,
+        borderRadius: Radii.md,
+        backgroundColor: Colors.danger,
+        shadowColor: Colors.danger,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.28,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    btnDeleteText: { fontSize: 11.5, fontWeight: Typography.extraBold, color: '#fff' },
+
+    // Re-submit (owner + rejected)
+    btnResubmit: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        paddingVertical: 7,
+        borderRadius: Radii.md,
+        backgroundColor: '#D97706',
+        shadowColor: '#D97706',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.28,
+        shadowRadius: 4,
+        elevation: 3,
+    },
+    btnResubmitText: { fontSize: 11.5, fontWeight: Typography.extraBold, color: '#fff' },
+
+    // Disabled / locked (owner + approved/draft)
+    btnDisabled: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        paddingVertical: 7,
+        borderRadius: Radii.md,
+        borderWidth: 1.5,
+        borderColor: Colors.divider,
+        backgroundColor: Colors.background,
+    },
+    btnDisabledText: {
         fontSize: 11.5,
-        fontWeight: Typography.extraBold,
-        color: '#fff',
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoalLight,
+    },
+    // Replace / add in fc = StyleSheet.create({ ... })
+
+    // Edit button (owner, always shown)
+    btnEdit: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        paddingVertical: 7,
+        borderRadius: Radii.md,
+        borderWidth: 1.5,
+        borderColor: Colors.primaryBorder,
+        backgroundColor: Colors.primaryLight,
+    },
+    btnEditText: {
+        fontSize: 11.5,
+        fontWeight: Typography.bold,
+        color: Colors.primary,
+    },
+
+    // Icon-only danger (trash) — pending / draft
+    btnIconDanger: {
+        width: 34,
+        height: 34,
+        borderRadius: Radii.md,
+        borderWidth: 1.5,
+        borderColor: Colors.dangerLight,
+        backgroundColor: Colors.dangerLight,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    // Icon-only warning (ban/disable) — approved
+    btnIconWarning: {
+        width: 34,
+        height: 34,
+        borderRadius: Radii.md,
+        borderWidth: 1.5,
+        borderColor: '#FEF3C7',
+        backgroundColor: '#FFF7E6',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
+    // Icon-only warning (refresh/resubmit) — rejected
+    btnIconResubmit: {
+        width: 34,
+        height: 34,
+        borderRadius: Radii.md,
+        borderWidth: 1.5,
+        borderColor: '#FEF3C7',
+        backgroundColor: '#FFF7E6',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
 });

@@ -50,8 +50,18 @@ const PAYMENT_STATUS_MAP: Record<string, { color: string; bg: string; label: str
 
 const fmtCurrency = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
-const fmtDate = (d: Date) =>
-    d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+const fmtDate = (d?: string | Date) => {
+    if (!d) return '—';
+
+    const date = new Date(d);
+    if (isNaN(date.getTime())) return '—';
+
+    return date.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+    });
+};
 
 const fmtDateTime = (d: Date) =>
     d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) +
@@ -155,7 +165,7 @@ function BookingCard({ booking, index, onPress }: BookingCardProps) {
                     <View style={s.cardFooter}>
                         <View>
                             <Text style={s.amountLabel}>Total Amount</Text>
-                            <Text style={s.amountValue}>{fmtCurrency(booking.amount || 0)}</Text>
+                            <Text style={s.amountValue}>{fmtCurrency(booking.amount || booking?.pricing?.total || 0)}</Text>
                         </View>
                         <View style={[s.paymentBadge, { backgroundColor: pst.bg }]}>
                             <Text style={[s.paymentText, { color: pst.color }]}>{pst.label}</Text>
@@ -219,13 +229,13 @@ export default function VendorBookingsScreen({ navigation }: Props) {
     const alert = useAlert();
     const [filter, setFilter] = useState<'all' | 'enquiry' | 'confirmed' | 'cancelled'>('all');
 
-    const{data:vendorBookingData, isLoading, refetch} = useGetVendorServiceBooking();
+    const { data: vendorBookingData, isLoading, refetch } = useGetVendorServiceBooking();
     // TODO: replace with real hook
     const isRefetching = false;
     const bookings: ServiceBooking[] = vendorBookingData?.bookings ?? [];
 
     const handleRefresh = useCallback(() => {
-         refetch();
+        refetch();
     }, []);
 
     // ── Animations ────────────────────────────────────────────────────────────
@@ -585,4 +595,3 @@ const s = StyleSheet.create({
         lineHeight: 19,
     },
 });
- 

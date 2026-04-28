@@ -366,6 +366,10 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
             eventDate: selectedDate!,
 
             customerInfo: {
+                name: user?.name,
+                email: user?.email,
+                phone: user?.phone,
+                company: user?.companyName,
                 eventName: eventType,
                 notes: noteParts.join(' | ') || undefined,
             },
@@ -392,7 +396,6 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                 platformFeeGST: breakdown.platformFeeGST,
                 total: breakdown.total,
             },
-
             amount: breakdown.total,
 
             // Add coupon if entered

@@ -93,7 +93,7 @@ export const resubmitVenue = async (id: string) => {
 
 export const createBlockedDates = async (data: {
     id: string,
-    payload: { data: string, reason: string }
+    payload: { date: Date, reason: string }
 }) => {
     try {
         console.log('Creting blocked dates...');

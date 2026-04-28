@@ -5,11 +5,13 @@ import OwnerDashboardScreen from '@/features/dashboard/screens/OwnerDashboardScr
 import BookingsScreen from '@/features/booking/screens/BookingScreen';
 import VenuesScreen from '@/features/venue/screens/VenueScreen';
 import ProfileScreen from '@/features/profile/screen/OwnerProfile';
+import QuotationDownloadsScreen from '@/features/quotation/screens/QuotationDownloadScreen';
 
 export type OwnerTabParamList = {
     dashboard: undefined;
     venues: undefined;
     bookings: undefined;
+    quotationDownload:undefined;
     profile: undefined;
 };
 
@@ -21,8 +23,15 @@ const ownerTabs = [
         label: 'My Venues',
         icon: 'search',
         iconOff: 'search-outline',
+        center:true
     },
     { name: 'bookings', label: 'My Bookings', icon: 'calendar', iconOff: 'calendar-outline' },
+    {
+        name: 'quotationDownload',
+        label: 'Quotations',
+        icon: 'download',
+        iconOff: 'download-outline',
+    },
     { name: 'profile', label: 'Profile', icon: 'person', iconOff: 'person-outline' },
 ];
 
@@ -38,6 +47,7 @@ export function OwnerTabNavigation() {
             <Tabs.Screen name="dashboard" component={OwnerDashboardScreen} />
             <Tabs.Screen name="bookings" component={BookingsScreen} />
             <Tabs.Screen name="venues" component={VenuesScreen} />
+            <Tabs.Screen name="quotationDownload" component={QuotationDownloadsScreen}/>
             <Tabs.Screen name="profile" component={ProfileScreen} />
         </Tabs.Navigator>
     );

@@ -12,52 +12,15 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Spacing, Colors, Radii, Shadows, Typography } from '@/theme/theme';
 import { useGetVendorQuationDownloads } from '../hooks/useVendorQuotaion';
-
-// ─── Types ─────────────────────────────────────────────────────────────────────
-export interface ServiceQuotationDownload {
-    _id?: string;
-    serviceBooking?: string;
-    service?: string;
-    vendor?: string;
-    customer?: string;
-    quotationNumber?: string;
-    action?: 'download' | 'print';
-    totalAmount?: number;
-    serviceSnapshot?: {
-        title?: string;
-        category?: string;
-        companyName?: string;
-        city?: string;
-        state?: string;
-    };
-    customerSnapshot?: {
-        name?: string;
-        email?: string;
-        phone?: string;
-        company?: string;
-        eventName?: string;
-    };
-    eventDate?: Date;
-    priceSnapshot?: {
-        subtotal?: number;
-        serviceCGST?: number;
-        serviceSGST?: number;
-        platformFee?: number;
-        platformFeeGST?: number;
-        discount?: number;
-        couponCode?: string;
-        total?: number;
-    };
-    downloadedAt?: Date;
-    createdAt?: Date;
-    updatedAt?: Date;
-}
-
+import { useAuthStore } from '@/store/useAuthStore';
+import { useGetVenueQuotations } from '../hooks/useVenueQuotations';
+import { ServiceQuotationDownload } from '../types/ServiceQuotationDownload';
+import { QuotationDownload } from '../types/QuotationDownload';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const fmtCurrency = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
-const fmtDate = (d?: Date) => {
+const fmtDate = (d?: Date | string) => {
     if (!d) return '—';
     return new Date(d).toLocaleDateString('en-IN', {
         day: 'numeric',
@@ -66,20 +29,139 @@ const fmtDate = (d?: Date) => {
     });
 };
 
-const fmtTime = (d?: Date) => {
+const fmtTime = (d?: Date | string) => {
     if (!d) return '';
-    return new Date(d).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+    return new Date(d).toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+    });
 };
+
+// ─── Normalised shape used by the card ────────────────────────────────────────
+// Lets one card component handle both service and venue quotations.
+interface NormalisedQuotation {
+    _id: string;
+    quotationNumber: string;
+    action: 'download' | 'print';
+    totalAmount: number;
+    downloadedAt?: Date | string;
+
+    // Subject (service title or venue name)
+    subjectTitle: string;
+    subjectMeta: string; // category / sku
+    subjectLocation: string; // "City, State"
+
+    // Customer
+    customerName: string;
+    customerEmail?: string;
+    customerPhone?: string;
+    customerCompany?: string; // service: company | venue: eventType
+    eventLabel: string; // service: eventName | venue: eventType
+
+    // Booking extras (venue only)
+    bookingDate?: string;
+    bookingTime?: string;
+    bookingDuration?: string;
+    bookingType?: string;
+    guestCount?: number;
+    specialRequirements?: string;
+
+    // Event date (service only)
+    eventDate?: Date;
+
+    // Price breakdown
+    price: {
+        baseOrSubtotal: number;
+        cgst?: number; // service
+        sgst?: number; // service
+        gst?: number; // venue (single GST line)
+        amenitiesTotal?: number; // venue
+        platformFee?: number;
+        platformFeeGST?: number;
+        discount?: number;
+        couponCode?: string;
+        total: number;
+    };
+}
+
+function normaliseService(q: ServiceQuotationDownload): NormalisedQuotation {
+    const p = q.priceSnapshot;
+    return {
+        _id: q._id ?? '',
+        quotationNumber: q.quotationNumber ?? '—',
+        action: q.action ?? 'download',
+        totalAmount: q.totalAmount ?? 0,
+        downloadedAt: q.downloadedAt,
+        subjectTitle: q.serviceSnapshot?.title ?? 'Service',
+        subjectMeta: q.serviceSnapshot?.category ?? '',
+        subjectLocation: [q.serviceSnapshot?.city, q.serviceSnapshot?.state]
+            .filter(Boolean)
+            .join(', '),
+        customerName: q.customerSnapshot?.name ?? 'Unknown Customer',
+        customerEmail: q.customerSnapshot?.email,
+        customerPhone: q.customerSnapshot?.phone,
+        customerCompany: q.customerSnapshot?.company,
+        eventLabel: q.customerSnapshot?.eventName ?? '',
+        eventDate: q.eventDate,
+        price: {
+            baseOrSubtotal: p?.subtotal ?? 0,
+            cgst: p?.serviceCGST,
+            sgst: p?.serviceSGST,
+            platformFee: p?.platformFee,
+            platformFeeGST: p?.platformFeeGST,
+            discount: p?.discount,
+            couponCode: p?.couponCode,
+            total: p?.total ?? q.totalAmount ?? 0,
+        },
+    };
+}
+
+function normaliseVenue(q: QuotationDownload): NormalisedQuotation {
+    const p = q.priceSnapshot;
+    return {
+        _id: q._id ?? '',
+        quotationNumber: q.quotationNumber ?? '—',
+        action: q.action ?? 'download',
+        totalAmount: q.totalAmount ?? 0,
+        downloadedAt: q.downloadedAt,
+        subjectTitle: q.venueSnapshot?.businessName ?? 'Venue',
+        subjectMeta: q.venueSnapshot?.sku ?? '',
+        subjectLocation: [q.venueSnapshot?.city, q.venueSnapshot?.state].filter(Boolean).join(', '),
+        customerName: q.customerSnapshot?.name ?? 'Unknown Customer',
+        customerEmail: q.customerSnapshot?.email,
+        customerPhone: q.customerSnapshot?.phone,
+        customerCompany: q.customerSnapshot?.eventType,
+        eventLabel: q.customerSnapshot?.eventType ?? '',
+        bookingDate: q.bookingSnapshot?.date,
+        bookingTime: [q.bookingSnapshot?.startTime, q.bookingSnapshot?.endTime]
+            .filter(Boolean)
+            .join(' – '),
+        bookingDuration: q.bookingSnapshot?.duration,
+        bookingType: q.bookingSnapshot?.bookingType,
+        guestCount: q.customerSnapshot?.guestCount,
+        specialRequirements: q.customerSnapshot?.specialRequirements,
+        price: {
+            baseOrSubtotal: p?.basePrice ?? p?.subtotal ?? 0,
+            gst: p?.gst,
+            amenitiesTotal: p?.amenitiesTotal,
+            platformFee: p?.platformFee,
+            platformFeeGST: p?.platformFeeGST,
+            discount: p?.discount,
+            total: p?.grandTotal ?? q.totalAmount ?? 0,
+        },
+    };
+}
 
 // ─── Expandable Quotation Card ─────────────────────────────────────────────────
 type QuotationCardProps = {
-    quotation: ServiceQuotationDownload;
+    quotation: NormalisedQuotation;
     index: number;
+    isVenue: boolean;
     onDownload: () => void;
     onShare: () => void;
 };
 
-function QuotationCard({ quotation, index, onDownload, onShare }: QuotationCardProps) {
+function QuotationCard({ quotation: q, index, isVenue, onDownload, onShare }: QuotationCardProps) {
     const fade = useRef(new Animated.Value(0)).current;
     const slide = useRef(new Animated.Value(20)).current;
     const [expanded, setExpanded] = useState(false);
@@ -111,19 +193,16 @@ function QuotationCard({ quotation, index, onDownload, onShare }: QuotationCardP
             bounciness: 4,
             useNativeDriver: false,
         }).start();
-        setExpanded(!expanded);
+        setExpanded(v => !v);
     };
 
-    const p = quotation.priceSnapshot;
-    const isDownload = quotation.action === 'download';
+    const isDownload = q.action === 'download';
 
     return (
         <Animated.View style={[s.card, { opacity: fade, transform: [{ translateY: slide }] }]}>
-            {/* Top accent strip */}
             <View style={[s.cardAccent, isDownload ? s.cardAccentDownload : s.cardAccentPrint]} />
 
             <TouchableOpacity onPress={toggleExpand} activeOpacity={0.85}>
-                {/* Main row */}
                 <View style={s.cardMain}>
                     {/* Icon */}
                     <View
@@ -139,10 +218,10 @@ function QuotationCard({ quotation, index, onDownload, onShare }: QuotationCardP
                         />
                     </View>
 
-                    {/* Middle info */}
+                    {/* Info */}
                     <View style={s.cardInfo}>
                         <View style={s.cardTopRow}>
-                            <Text style={s.quotationNumber}>{quotation.quotationNumber}</Text>
+                            <Text style={s.quotationNumber}>{q.quotationNumber}</Text>
                             <View
                                 style={[
                                     s.actionBadge,
@@ -161,13 +240,24 @@ function QuotationCard({ quotation, index, onDownload, onShare }: QuotationCardP
                                 </Text>
                             </View>
                         </View>
+
                         <Text style={s.customerName} numberOfLines={1}>
-                            {quotation.customerSnapshot?.name || 'Unknown Customer'}
+                            {q.customerName}
                         </Text>
-                        <Text style={s.eventName} numberOfLines={1}>
-                            {quotation.customerSnapshot?.eventName ||
-                                quotation.serviceSnapshot?.title}
-                        </Text>
+
+                        {/* Service title or venue name */}
+                        <View style={s.cardMetaItem}>
+                            <Ionicons
+                                name={isVenue ? 'business-outline' : 'briefcase-outline'}
+                                size={11}
+                                color={Colors.primary}
+                            />
+                            <Text style={s.eventName} numberOfLines={1}>
+                                {q.subjectTitle}
+                                {q.eventLabel ? ` · ${q.eventLabel}` : ''}
+                            </Text>
+                        </View>
+
                         <View style={s.cardMetaRow}>
                             <View style={s.cardMetaItem}>
                                 <Ionicons
@@ -175,9 +265,7 @@ function QuotationCard({ quotation, index, onDownload, onShare }: QuotationCardP
                                     size={11}
                                     color={Colors.charcoalLight}
                                 />
-                                <Text style={s.cardMetaText}>
-                                    {fmtDate(quotation.downloadedAt)}
-                                </Text>
+                                <Text style={s.cardMetaText}>{fmtDate(q.downloadedAt)}</Text>
                             </View>
                             <View style={s.metaDot} />
                             <View style={s.cardMetaItem}>
@@ -186,16 +274,14 @@ function QuotationCard({ quotation, index, onDownload, onShare }: QuotationCardP
                                     size={11}
                                     color={Colors.charcoalLight}
                                 />
-                                <Text style={s.cardMetaText}>
-                                    {fmtTime(quotation.downloadedAt)}
-                                </Text>
+                                <Text style={s.cardMetaText}>{fmtTime(q.downloadedAt)}</Text>
                             </View>
                         </View>
                     </View>
 
                     {/* Amount + chevron */}
                     <View style={s.cardRight}>
-                        <Text style={s.totalAmount}>{fmtCurrency(quotation.totalAmount || 0)}</Text>
+                        <Text style={s.totalAmount}>{fmtCurrency(q.totalAmount)}</Text>
                         <Animated.View
                             style={{
                                 transform: [
@@ -215,49 +301,96 @@ function QuotationCard({ quotation, index, onDownload, onShare }: QuotationCardP
                 </View>
             </TouchableOpacity>
 
-            {/* Expanded details */}
+            {/* ── Expanded details ── */}
             {expanded && (
                 <View style={s.expandedWrap}>
                     <View style={s.expandedDivider} />
 
-                    {/* Service & Event info */}
+                    {/* Subject (service / venue) */}
                     <View style={s.expandSection}>
-                        <Text style={s.expandSectionTitle}>SERVICE DETAILS</Text>
-                        <View style={s.expandRow}>
-                            <Ionicons name="briefcase-outline" size={13} color={Colors.primary} />
-                            <Text style={s.expandRowText}>{quotation.serviceSnapshot?.title}</Text>
-                        </View>
+                        <Text style={s.expandSectionTitle}>
+                            {isVenue ? 'VENUE DETAILS' : 'SERVICE DETAILS'}
+                        </Text>
                         <View style={s.expandRow}>
                             <Ionicons
-                                name="pricetag-outline"
+                                name={isVenue ? 'business-outline' : 'briefcase-outline'}
                                 size={13}
-                                color={Colors.charcoalLight}
+                                color={Colors.primary}
                             />
-                            <Text style={s.expandRowText}>
-                                {quotation.serviceSnapshot?.category}
-                            </Text>
+                            <Text style={s.expandRowText}>{q.subjectTitle}</Text>
                         </View>
-                        <View style={s.expandRow}>
-                            <Ionicons
-                                name="location-outline"
-                                size={13}
-                                color={Colors.charcoalLight}
-                            />
-                            <Text style={s.expandRowText}>
-                                {quotation.serviceSnapshot?.city},{' '}
-                                {quotation.serviceSnapshot?.state}
-                            </Text>
-                        </View>
-                        <View style={s.expandRow}>
-                            <Ionicons
-                                name="calendar-outline"
-                                size={13}
-                                color={Colors.charcoalLight}
-                            />
-                            <Text style={s.expandRowText}>
-                                Event Date: {fmtDate(quotation.eventDate)}
-                            </Text>
-                        </View>
+                        {!!q.subjectMeta && (
+                            <View style={s.expandRow}>
+                                <Ionicons
+                                    name="pricetag-outline"
+                                    size={13}
+                                    color={Colors.charcoalLight}
+                                />
+                                <Text style={s.expandRowText}>{q.subjectMeta}</Text>
+                            </View>
+                        )}
+                        {!!q.subjectLocation && (
+                            <View style={s.expandRow}>
+                                <Ionicons
+                                    name="location-outline"
+                                    size={13}
+                                    color={Colors.charcoalLight}
+                                />
+                                <Text style={s.expandRowText}>{q.subjectLocation}</Text>
+                            </View>
+                        )}
+
+                        {/* Venue: booking details */}
+                        {isVenue && q.bookingDate && (
+                            <View style={s.expandRow}>
+                                <Ionicons
+                                    name="calendar-outline"
+                                    size={13}
+                                    color={Colors.charcoalLight}
+                                />
+                                <Text style={s.expandRowText}>
+                                    Booking: {fmtDate(q.bookingDate)}
+                                    {q.bookingTime ? `  ${q.bookingTime}` : ''}
+                                </Text>
+                            </View>
+                        )}
+                        {isVenue && q.bookingType && (
+                            <View style={s.expandRow}>
+                                <Ionicons
+                                    name="layers-outline"
+                                    size={13}
+                                    color={Colors.charcoalLight}
+                                />
+                                <Text style={s.expandRowText}>
+                                    {q.bookingType}
+                                    {q.bookingDuration ? ` · ${q.bookingDuration}` : ''}
+                                </Text>
+                            </View>
+                        )}
+                        {isVenue && (q.guestCount ?? 0) > 0 && (
+                            <View style={s.expandRow}>
+                                <Ionicons
+                                    name="people-outline"
+                                    size={13}
+                                    color={Colors.charcoalLight}
+                                />
+                                <Text style={s.expandRowText}>{q.guestCount} Guests</Text>
+                            </View>
+                        )}
+
+                        {/* Service: event date */}
+                        {!isVenue && q.eventDate && (
+                            <View style={s.expandRow}>
+                                <Ionicons
+                                    name="calendar-outline"
+                                    size={13}
+                                    color={Colors.charcoalLight}
+                                />
+                                <Text style={s.expandRowText}>
+                                    Event Date: {fmtDate(q.eventDate)}
+                                </Text>
+                            </View>
+                        )}
                     </View>
 
                     {/* Customer info */}
@@ -265,102 +398,124 @@ function QuotationCard({ quotation, index, onDownload, onShare }: QuotationCardP
                         <Text style={s.expandSectionTitle}>CUSTOMER INFO</Text>
                         <View style={s.expandRow}>
                             <Ionicons name="person-outline" size={13} color={Colors.primary} />
-                            <Text style={s.expandRowText}>{quotation.customerSnapshot?.name}</Text>
+                            <Text style={s.expandRowText}>{q.customerName}</Text>
                         </View>
-                        {quotation.customerSnapshot?.phone && (
+                        {!!q.customerPhone && (
                             <View style={s.expandRow}>
                                 <Ionicons
                                     name="call-outline"
                                     size={13}
                                     color={Colors.charcoalLight}
                                 />
-                                <Text style={s.expandRowText}>
-                                    {quotation.customerSnapshot.phone}
-                                </Text>
+                                <Text style={s.expandRowText}>{q.customerPhone}</Text>
                             </View>
                         )}
-                        {quotation.customerSnapshot?.email && (
+                        {!!q.customerEmail && (
                             <View style={s.expandRow}>
                                 <Ionicons
                                     name="mail-outline"
                                     size={13}
                                     color={Colors.charcoalLight}
                                 />
-                                <Text style={s.expandRowText}>
-                                    {quotation.customerSnapshot.email}
-                                </Text>
+                                <Text style={s.expandRowText}>{q.customerEmail}</Text>
                             </View>
                         )}
-                        {quotation.customerSnapshot?.company && (
+                        {!!q.customerCompany && (
                             <View style={s.expandRow}>
                                 <Ionicons
                                     name="business-outline"
                                     size={13}
                                     color={Colors.charcoalLight}
                                 />
-                                <Text style={s.expandRowText}>
-                                    {quotation.customerSnapshot.company}
-                                </Text>
+                                <Text style={s.expandRowText}>{q.customerCompany}</Text>
+                            </View>
+                        )}
+                        {isVenue && !!q.specialRequirements && (
+                            <View style={s.expandRow}>
+                                <Ionicons
+                                    name="chatbubble-outline"
+                                    size={13}
+                                    color={Colors.charcoalLight}
+                                />
+                                <Text style={s.expandRowText}>{q.specialRequirements}</Text>
                             </View>
                         )}
                     </View>
 
                     {/* Price breakdown */}
-                    {p && (
-                        <View style={s.priceBreakdown}>
-                            <Text style={s.expandSectionTitle}>PRICE BREAKDOWN</Text>
-                            <View style={s.priceRow}>
-                                <Text style={s.priceLabel}>Subtotal</Text>
-                                <Text style={s.priceValue}>{fmtCurrency(p.subtotal || 0)}</Text>
-                            </View>
-                            {(p.serviceCGST || 0) > 0 && (
-                                <View style={s.priceRow}>
-                                    <Text style={s.priceLabel}>CGST (9%)</Text>
-                                    <Text style={s.priceValue}>
-                                        {fmtCurrency(p.serviceCGST || 0)}
-                                    </Text>
-                                </View>
-                            )}
-                            {(p.serviceSGST || 0) > 0 && (
-                                <View style={s.priceRow}>
-                                    <Text style={s.priceLabel}>SGST (9%)</Text>
-                                    <Text style={s.priceValue}>
-                                        {fmtCurrency(p.serviceSGST || 0)}
-                                    </Text>
-                                </View>
-                            )}
-                            {(p.platformFee || 0) > 0 && (
-                                <View style={s.priceRow}>
-                                    <Text style={s.priceLabel}>Platform Fee</Text>
-                                    <Text style={s.priceValue}>
-                                        {fmtCurrency(p.platformFee || 0)}
-                                    </Text>
-                                </View>
-                            )}
-                            {(p.platformFeeGST || 0) > 0 && (
-                                <View style={s.priceRow}>
-                                    <Text style={s.priceLabel}>Platform GST</Text>
-                                    <Text style={s.priceValue}>
-                                        {fmtCurrency(p.platformFeeGST || 0)}
-                                    </Text>
-                                </View>
-                            )}
-                            {(p.discount || 0) > 0 && (
-                                <View style={s.priceRow}>
-                                    <Text style={[s.priceLabel, { color: Colors.success }]}>
-                                        Discount{p.couponCode ? ` (${p.couponCode})` : ''}
-                                    </Text>
-                                    <Text style={[s.priceValue, { color: Colors.success }]}>
-                                        -{fmtCurrency(p.discount || 0)}
-                                    </Text>
-                                </View>
-                            )}
-                            <View style={s.priceTotalRow}>
-                                <Text style={s.priceTotalLabel}>Total</Text>
-                                <Text style={s.priceTotalValue}>{fmtCurrency(p.total || 0)}</Text>
-                            </View>
+                    <View style={s.priceBreakdown}>
+                        <Text style={s.expandSectionTitle}>PRICE BREAKDOWN</Text>
+
+                        <View style={s.priceRow}>
+                            <Text style={s.priceLabel}>{isVenue ? 'Base Price' : 'Subtotal'}</Text>
+                            <Text style={s.priceValue}>{fmtCurrency(q.price.baseOrSubtotal)}</Text>
                         </View>
-                    )}
+
+                        {/* Venue: amenities */}
+                        {isVenue && (q.price.amenitiesTotal ?? 0) > 0 && (
+                            <View style={s.priceRow}>
+                                <Text style={s.priceLabel}>Amenities</Text>
+                                <Text style={s.priceValue}>
+                                    {fmtCurrency(q.price.amenitiesTotal!)}
+                                </Text>
+                            </View>
+                        )}
+
+                        {/* Venue: single GST */}
+                        {isVenue && (q.price.gst ?? 0) > 0 && (
+                            <View style={s.priceRow}>
+                                <Text style={s.priceLabel}>GST</Text>
+                                <Text style={s.priceValue}>{fmtCurrency(q.price.gst!)}</Text>
+                            </View>
+                        )}
+
+                        {/* Service: split CGST / SGST */}
+                        {!isVenue && (q.price.cgst ?? 0) > 0 && (
+                            <View style={s.priceRow}>
+                                <Text style={s.priceLabel}>CGST (9%)</Text>
+                                <Text style={s.priceValue}>{fmtCurrency(q.price.cgst!)}</Text>
+                            </View>
+                        )}
+                        {!isVenue && (q.price.sgst ?? 0) > 0 && (
+                            <View style={s.priceRow}>
+                                <Text style={s.priceLabel}>SGST (9%)</Text>
+                                <Text style={s.priceValue}>{fmtCurrency(q.price.sgst!)}</Text>
+                            </View>
+                        )}
+
+                        {(q.price.platformFee ?? 0) > 0 && (
+                            <View style={s.priceRow}>
+                                <Text style={s.priceLabel}>Platform Fee</Text>
+                                <Text style={s.priceValue}>
+                                    {fmtCurrency(q.price.platformFee!)}
+                                </Text>
+                            </View>
+                        )}
+                        {(q.price.platformFeeGST ?? 0) > 0 && (
+                            <View style={s.priceRow}>
+                                <Text style={s.priceLabel}>Platform GST</Text>
+                                <Text style={s.priceValue}>
+                                    {fmtCurrency(q.price.platformFeeGST!)}
+                                </Text>
+                            </View>
+                        )}
+                        {(q.price.discount ?? 0) > 0 && (
+                            <View style={s.priceRow}>
+                                <Text style={[s.priceLabel, { color: Colors.success }]}>
+                                    Discount
+                                    {q.price.couponCode ? ` (${q.price.couponCode})` : ''}
+                                </Text>
+                                <Text style={[s.priceValue, { color: Colors.success }]}>
+                                    -{fmtCurrency(q.price.discount!)}
+                                </Text>
+                            </View>
+                        )}
+
+                        <View style={s.priceTotalRow}>
+                            <Text style={s.priceTotalLabel}>Total</Text>
+                            <Text style={s.priceTotalValue}>{fmtCurrency(q.price.total)}</Text>
+                        </View>
+                    </View>
 
                     {/* Action buttons */}
                     <View style={s.cardActions}>
@@ -392,10 +547,10 @@ function QuotationCard({ quotation, index, onDownload, onShare }: QuotationCardP
 }
 
 // ─── Header Summary ────────────────────────────────────────────────────────────
-function HeaderSummary({ quotations }: { quotations: ServiceQuotationDownload[] }) {
+function HeaderSummary({ quotations }: { quotations: NormalisedQuotation[] }) {
     const downloads = quotations.filter(q => q.action === 'download').length;
     const prints = quotations.filter(q => q.action === 'print').length;
-    const totalRevenue = quotations.reduce((acc, q) => acc + (q.totalAmount || 0), 0);
+    const totalRevenue = quotations.reduce((acc, q) => acc + q.totalAmount, 0);
 
     return (
         <View style={s.headerStats}>
@@ -426,10 +581,47 @@ function HeaderSummary({ quotations }: { quotations: ServiceQuotationDownload[] 
 
 // ─── Screen ────────────────────────────────────────────────────────────────────
 export default function QuotationDownloadsScreen() {
+    const { user } = useAuthStore();
+    const isVendor = user?.role === 'vendor';
+    const isVenue = user?.role === 'owner'; // venue owner
+
     const [filter, setFilter] = useState<'all' | 'download' | 'print'>('all');
-    const {data, isLoading, isRefetching, refetch} = useGetVendorQuationDownloads();
+
     const headerFade = useRef(new Animated.Value(0)).current;
     const headerSlide = useRef(new Animated.Value(-14)).current;
+
+    // ── Service (vendor) quotations ───────────────────────────────────────────
+    const {
+        data: vendorData,
+        isLoading: vendorLoading,
+        isRefetching: vendorRefetching,
+        refetch: refetchVendor,
+    } = useGetVendorQuationDownloads({ enabled: isVendor });
+
+    // ── Venue (owner) quotations ──────────────────────────────────────────────
+    const {
+        data: venueData,
+        isLoading: venueLoading,
+        isRefetching: venueRefetching,
+        refetch: refetchVenue,
+    } = useGetVenueQuotations({ enabled: isVenue });
+
+    // ── Normalise into one array ──────────────────────────────────────────────
+    const quotations: NormalisedQuotation[] = useMemo(() => {
+        if (isVendor) {
+            return (vendorData?.records ?? ([] as ServiceQuotationDownload[])).map(
+                normaliseService,
+            );
+        }
+        if (isVenue) {
+            return (venueData?.records ?? ([] as QuotationDownload[])).map(normaliseVenue);
+        }
+        return [];
+    }, [isVendor, isVenue, vendorData, venueData]);
+
+    const isLoading = isVendor ? vendorLoading : venueLoading;
+    const isRefetching = isVendor ? vendorRefetching : venueRefetching;
+    const refetch = isVendor ? refetchVendor : refetchVenue;
 
     useEffect(() => {
         Animated.parallel([
@@ -443,28 +635,24 @@ export default function QuotationDownloadsScreen() {
         ]).start();
     }, []);
 
-    const quotations: ServiceQuotationDownload[] = data?.records?? [];
-
     const filtered = useMemo(() => {
         if (filter === 'all') return quotations;
         return quotations.filter(q => q.action === filter);
     }, [filter, quotations]);
 
-    const handleDownload = useCallback((q: ServiceQuotationDownload) => {
+    const handleDownload = useCallback((q: NormalisedQuotation) => {
         console.log('Re-download quotation:', q.quotationNumber);
     }, []);
 
-    const handleShare = useCallback((q: ServiceQuotationDownload) => {
+    const handleShare = useCallback((q: NormalisedQuotation) => {
         console.log('Share quotation:', q.quotationNumber);
     }, []);
 
-    const handleRefresh = useCallback(() => {
-        refetch();
-    }, [quotations]);
+    const handleRefresh = useCallback(() => refetch(), [refetch]);
 
     return (
         <View style={s.root}>
-            {/* Header */}
+            {/* ── Header ── */}
             <Animated.View
                 style={[
                     s.header,
@@ -524,7 +712,23 @@ export default function QuotationDownloadsScreen() {
                     />
                 }
             >
-                {filtered.length === 0 ? (
+                {isLoading ? (
+                    // Skeleton placeholder rows while loading
+                    Array.from({ length: 4 }).map((_, i) => (
+                        <View key={i} style={[s.card, s.skeletonCard]}>
+                            <View style={[s.cardAccent, { backgroundColor: Colors.border }]} />
+                            <View style={s.skeletonRow}>
+                                <View style={s.skeletonIcon} />
+                                <View style={{ flex: 1, gap: 8 }}>
+                                    <View style={[s.skeletonLine, { width: '60%' }]} />
+                                    <View style={[s.skeletonLine, { width: '40%' }]} />
+                                    <View style={[s.skeletonLine, { width: '50%' }]} />
+                                </View>
+                                <View style={s.skeletonAmount} />
+                            </View>
+                        </View>
+                    ))
+                ) : filtered.length === 0 ? (
                     <View style={s.emptyWrap}>
                         <View style={s.emptyIconWrap}>
                             <Ionicons
@@ -535,16 +739,18 @@ export default function QuotationDownloadsScreen() {
                         </View>
                         <Text style={s.emptyTitle}>No quotations found</Text>
                         <Text style={s.emptySub}>
-                            Quotations will appear here once customers download or print them from
-                            their bookings.
+                            {filter !== 'all'
+                                ? `No ${filter}ed quotations yet.`
+                                : 'Quotations will appear here once customers download or print them from their bookings.'}
                         </Text>
                     </View>
                 ) : (
                     filtered.map((q, i) => (
                         <QuotationCard
-                            key={q._id}
+                            key={q._id || i}
                             quotation={q}
                             index={i}
+                            isVenue={isVenue}
                             onDownload={() => handleDownload(q)}
                             onShare={() => handleShare(q)}
                         />
@@ -600,7 +806,6 @@ const s = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.border,
     },
-
     headerStats: {
         flexDirection: 'row',
         paddingHorizontal: Spacing.xl,
@@ -620,12 +825,7 @@ const s = StyleSheet.create({
         marginTop: 2,
     },
     headerStatDivider: { width: 1, height: 32, backgroundColor: Colors.divider, marginTop: 4 },
-
-    filterRow: {
-        flexDirection: 'row',
-        paddingHorizontal: Spacing.xl,
-        gap: Spacing.sm,
-    },
+    filterRow: { flexDirection: 'row', paddingHorizontal: Spacing.xl, gap: Spacing.sm },
     filterTab: {
         flex: 1,
         flexDirection: 'row',
@@ -638,19 +838,9 @@ const s = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.border,
     },
-    filterTabActive: {
-        backgroundColor: Colors.primaryLight,
-        borderColor: Colors.primaryBorder,
-    },
-    filterTabText: {
-        fontSize: 11,
-        fontWeight: Typography.semiBold,
-        color: Colors.charcoalMid,
-    },
-    filterTabTextActive: {
-        color: Colors.primaryDark,
-        fontWeight: Typography.bold,
-    },
+    filterTabActive: { backgroundColor: Colors.primaryLight, borderColor: Colors.primaryBorder },
+    filterTabText: { fontSize: 11, fontWeight: Typography.semiBold, color: Colors.charcoalMid },
+    filterTabTextActive: { color: Colors.primaryDark, fontWeight: Typography.bold },
 
     // Scroll
     scroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: 100 },
@@ -666,7 +856,6 @@ const s = StyleSheet.create({
     cardAccent: { height: 3 },
     cardAccentDownload: { backgroundColor: Colors.info },
     cardAccentPrint: { backgroundColor: Colors.charcoalLight },
-
     cardMain: {
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -683,7 +872,6 @@ const s = StyleSheet.create({
     },
     actionIconDownload: { backgroundColor: Colors.infoLight },
     actionIconPrint: { backgroundColor: Colors.background },
-
     cardInfo: { flex: 1 },
     cardTopRow: {
         flexDirection: 'row',
@@ -697,11 +885,7 @@ const s = StyleSheet.create({
         color: Colors.charcoalMid,
         letterSpacing: 0.4,
     },
-    actionBadge: {
-        paddingHorizontal: 7,
-        paddingVertical: 2,
-        borderRadius: Radii.full,
-    },
+    actionBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: Radii.full },
     actionBadgeDownload: { backgroundColor: Colors.infoLight },
     actionBadgePrint: {
         backgroundColor: Colors.background,
@@ -711,7 +895,6 @@ const s = StyleSheet.create({
     actionBadgeText: { fontSize: 9, fontWeight: Typography.bold, letterSpacing: 0.3 },
     actionBadgeTextDownload: { color: Colors.info },
     actionBadgeTextPrint: { color: Colors.charcoalMid },
-
     customerName: {
         fontSize: 15,
         fontWeight: Typography.extraBold,
@@ -724,12 +907,12 @@ const s = StyleSheet.create({
         color: Colors.charcoalMid,
         fontWeight: Typography.medium,
         marginBottom: Spacing.xs,
+        flex: 1,
     },
     cardMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     cardMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 3 },
     cardMetaText: { fontSize: 10, color: Colors.charcoalLight, fontWeight: Typography.medium },
     metaDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: Colors.border },
-
     cardRight: { alignItems: 'flex-end' },
     totalAmount: {
         fontSize: 15,
@@ -738,13 +921,9 @@ const s = StyleSheet.create({
         letterSpacing: -0.3,
     },
 
-    // Expanded section
+    // Expanded
     expandedWrap: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.lg },
-    expandedDivider: {
-        height: 1,
-        backgroundColor: Colors.divider,
-        marginBottom: Spacing.md,
-    },
+    expandedDivider: { height: 1, backgroundColor: Colors.divider, marginBottom: Spacing.md },
     expandSection: { marginBottom: Spacing.md },
     expandSectionTitle: {
         fontSize: 9,
@@ -753,12 +932,7 @@ const s = StyleSheet.create({
         letterSpacing: Typography.wider,
         marginBottom: Spacing.sm,
     },
-    expandRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 7,
-        marginBottom: 5,
-    },
+    expandRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 5 },
     expandRowText: {
         fontSize: 12,
         color: Colors.charcoalMid,
@@ -781,16 +955,8 @@ const s = StyleSheet.create({
         alignItems: 'center',
         paddingVertical: 4,
     },
-    priceLabel: {
-        fontSize: 12,
-        color: Colors.charcoalMid,
-        fontWeight: Typography.medium,
-    },
-    priceValue: {
-        fontSize: 12,
-        color: Colors.charcoal,
-        fontWeight: Typography.semiBold,
-    },
+    priceLabel: { fontSize: 12, color: Colors.charcoalMid, fontWeight: Typography.medium },
+    priceValue: { fontSize: 12, color: Colors.charcoal, fontWeight: Typography.semiBold },
     priceTotalRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
@@ -813,10 +979,7 @@ const s = StyleSheet.create({
     },
 
     // Card actions
-    cardActions: {
-        flexDirection: 'row',
-        gap: Spacing.sm,
-    },
+    cardActions: { flexDirection: 'row', gap: Spacing.sm },
     shareBtn: {
         flex: 1,
         flexDirection: 'row',
@@ -829,11 +992,7 @@ const s = StyleSheet.create({
         borderWidth: 1,
         borderColor: Colors.primaryBorder,
     },
-    shareBtnText: {
-        fontSize: 13,
-        fontWeight: Typography.bold,
-        color: Colors.primary,
-    },
+    shareBtnText: { fontSize: 13, fontWeight: Typography.bold, color: Colors.primary },
     downloadBtn: {
         flex: 2,
         flexDirection: 'row',
@@ -845,10 +1004,32 @@ const s = StyleSheet.create({
         backgroundColor: Colors.primary,
         ...Shadows.primary,
     },
-    downloadBtnText: {
-        fontSize: 13,
-        fontWeight: Typography.bold,
-        color: Colors.surface,
+    downloadBtnText: { fontSize: 13, fontWeight: Typography.bold, color: Colors.surface },
+
+    // Skeleton
+    skeletonCard: { opacity: 0.55 },
+    skeletonRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        padding: Spacing.lg,
+        gap: Spacing.md,
+    },
+    skeletonIcon: {
+        width: 44,
+        height: 44,
+        borderRadius: Radii.md,
+        backgroundColor: Colors.border,
+    },
+    skeletonLine: {
+        height: 12,
+        borderRadius: 6,
+        backgroundColor: Colors.border,
+    },
+    skeletonAmount: {
+        width: 60,
+        height: 18,
+        borderRadius: 6,
+        backgroundColor: Colors.border,
     },
 
     // Empty state

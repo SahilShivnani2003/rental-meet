@@ -24,6 +24,8 @@ import Step8Availability from '../components/Step8Availability';
 import { useUpdateVendorService, useGetVendorServiceById } from '../hooks/useVendorService';
 import { useAlert } from '@/context/AlertContext';
 import { ApiError } from '@/types/ApiError';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { RootStackParamList } from '@/types/RootStackParamList';
 
 // ─── Step Config ──────────────────────────────────────────────────────────────
 type StepMeta = {
@@ -195,9 +197,9 @@ const ts = StyleSheet.create({
     },
     connectorDone: { backgroundColor: Colors.success },
 });
-
+type updateScreeenProps = NativeStackScreenProps<RootStackParamList, 'updateVendorService'>
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export default function UpdateServiceScreen({ navigation, route }: any) {
+export default function UpdateServiceScreen({ navigation, route }: updateScreeenProps) {
     const { serviceId, initialData } = route?.params ?? {};
 
     const [step, setStep] = useState(0);

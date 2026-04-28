@@ -213,14 +213,12 @@ function HeaderStats({ services }: { services: VendorService[] }) {
     );
 }
 
-
-
 // ─── Screen ───────────────────────────────────────────────────────────────────
 type Props = NativeBottomTabScreenProps<VendorTabParamList, 'myService'>;
 
 export default function VendorServicesScreen({ navigation }: Props) {
     const alert = useAlert();
-    const {data, isLoading, isRefetching, refetch} = useGetVendorServices();
+    const { data, isLoading, isRefetching, refetch } = useGetVendorServices();
     const [filter, setFilter] = useState<'all' | 'approved' | 'pending'>('all');
     const rootNav = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
     const services: VendorService[] = data?.services ?? [];
@@ -253,12 +251,19 @@ export default function VendorServicesScreen({ navigation }: Props) {
 
     const handleServicePress = useCallback((service: VendorService) => {
         rootNav.navigate('vendorDetail', {
-            service: service
-        })
+            service: service,
+        });
     }, []);
 
     const handleEditService = useCallback((service: VendorService) => {
-        rootNav.navigate('addVendorService')
+        if (!service?._id) {
+            alert.error('Missing', 'Service Id missing');
+            return;
+        }
+        rootNav.navigate('updateVendorService', {
+            serviceId: service._id,
+            initialData: service,
+        });
     }, []);
 
     const handleToggleActive = useCallback((service: VendorService) => {
@@ -269,7 +274,7 @@ export default function VendorServicesScreen({ navigation }: Props) {
     }, []);
 
     const handleAddService = useCallback(() => {
-        rootNav.navigate('addVendorService')
+        rootNav.navigate('addVendorService');
     }, []);
 
     // ── Render ────────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useState } from 'react';
 import {
     View,
     Text,
@@ -21,6 +21,10 @@ import { useGetMyProfile } from '../hooks/useGetMyProfile';
 import { useGetAllBookings } from '@/features/booking/hooks/useGetAllbookings';
 import Loader from '@/components/UI/loader';
 import { Booking } from '@/features/booking/types/Booking';
+import { useChangePassword } from '../hooks/useChangePassword';
+import { useUpdateProfile } from '../hooks/useUpdateProfile';
+import ChangePasswordModal from '../models/ChangePasswordModal';
+import EditProfileModal from '../models/EditProfileModal';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -121,13 +125,18 @@ export default function ProfileScreen({ navigation }: ProfileProps) {
         isLoading: isBookingsLoading,
         isRefetching: isBookingsRefetching,
         refetch: refetchBookings,
-    } = useGetAllBookings();
+    } = useGetAllBookings({
+        enabled: true,
+    });
+    const { mutate: updateUser } = useUpdateProfile();
+    const { mutate: changePassword } = useChangePassword();
 
     const { user, logOut } = useAuthStore();
 
-    const profile: User | undefined = userData?.user;
+    const profile: Partial<User> = userData?.user;
     const bookings = bookingData?.bookings ?? [];
-
+    const [editProfileVisible, setEditProfileVisible] = useState(false);
+    const [changePasswordVisible, setChangePasswordVisible] = useState(false);
     // True on the very first load (no data yet)
     const isInitialLoading = (isProfileLoading && !userData) || (isBookingsLoading && !bookingData);
 
@@ -144,9 +153,9 @@ export default function ProfileScreen({ navigation }: ProfileProps) {
 
     // ── Stats ─────────────────────────────────────────────────────────────────
     const totalBookings = bookings.length;
-    const completedCount = bookings.filter((b:Booking) => b.status === 'completed').length;
+    const completedCount = bookings.filter((b: Booking) => b.status === 'completed').length;
     const pendingCount = bookings.filter(
-        (b:Booking) => b.status === 'pending' || b.status === 'confirmed',
+        (b: Booking) => b.status === 'pending' || b.status === 'confirmed',
     ).length;
 
     // ── Display values ────────────────────────────────────────────────────────
@@ -206,16 +215,16 @@ export default function ProfileScreen({ navigation }: ProfileProps) {
             iconBg: Colors.primaryLight,
             title: 'Edit Profile',
             subtitle: 'Update your personal info',
-            onPress: () => alert.info('Coming Soon', 'Edit profile coming soon'),
+            onPress: () => setEditProfileVisible(true),
         },
         {
-            id: 'payment',
-            icon: 'card-outline',
-            iconColor: Colors.info,
-            iconBg: Colors.infoLight,
-            title: 'Payment Methods',
-            subtitle: 'Cards & billing info',
-            onPress: () => alert.info('Coming Soon', 'Payment methods coming soon.'),
+            id: 'change-password',
+            icon: 'lock-closed-outline',
+            iconColor: Colors.warning,
+            iconBg: Colors.warningLight,
+            title: 'Change Password',
+            subtitle: 'Update your password',
+            onPress: () => setChangePasswordVisible(true),
         },
     ].filter(Boolean) as any[];
 
@@ -389,6 +398,17 @@ export default function ProfileScreen({ navigation }: ProfileProps) {
 
                 <Text style={styles.versionText}>RentalMeet v1.0.0</Text>
             </ScrollView>
+            <EditProfileModal
+                visible={editProfileVisible}
+                onClose={() => setEditProfileVisible(false)}
+                user={profile}
+                mutate={updateUser}
+            />
+            <ChangePasswordModal
+                visible={changePasswordVisible}
+                onClose={() => setChangePasswordVisible(false)}
+                mutate={changePassword}
+            />
         </View>
     );
 }

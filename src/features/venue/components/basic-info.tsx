@@ -18,7 +18,7 @@ import {
     Textarea,
 } from '../../../components/UI/shared-components';
 import Field from '../../../components/UI/InputField';
-import { VenueFormData, CAPACITY_RANGES } from '../types/VenueFormData'; 
+import { VenueFormData, CAPACITY_RANGES } from '../types/VenueFormData';
 import { useGetVenueType } from '@/features/venueType/hooks/useGetVenueType';
 
 interface VenueType {
@@ -36,17 +36,16 @@ interface Props {
 
 export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
     const set = (patch: Partial<VenueFormData['basic']>) => onChange({ ...data, ...patch });
-    const {data:venueTypeData, isLoading} = useGetVenueType();
+
     const [errors, setErrors] = useState<Record<string, string>>({});
-    const [venueTypes, setVenueTypes] = useState<VenueType[]>(venueTypeData?.data);
-    const [loadingTypes, setLoadingTypes] = useState(false);
+    const { data: venueTypeData, isLoading: loadingTypes } = useGetVenueType();
+    const venueTypes: VenueType[] = venueTypeData?.venueTypes ?? []; 
     const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
     const [typeSearch, setTypeSearch] = useState('');
     const [capOpen, setCapOpen] = useState(false);
 
     const wordCount =
         data.description.trim() === '' ? 0 : data.description.trim().split(/\s+/).length;
-
 
     const filteredTypes = venueTypes.filter(t =>
         t.name.toLowerCase().includes(typeSearch.toLowerCase()),

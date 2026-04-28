@@ -50,4 +50,8 @@ export type RootStackParamList = {
         service: any;
     };
     addVendorService: undefined;
+    updateVendorService:{
+        serviceId: string;
+        initialData: VendorService;
+    }
 };
