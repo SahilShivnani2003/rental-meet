@@ -213,6 +213,8 @@ function HeaderStats({ services }: { services: VendorService[] }) {
     );
 }
 
+
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 type Props = NativeBottomTabScreenProps<VendorTabParamList, 'myService'>;
 

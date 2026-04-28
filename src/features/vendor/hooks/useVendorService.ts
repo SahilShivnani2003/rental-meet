@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { createVendorService, getVendorProfile, getVendorServices, updateVendorProfile } from "../service/vendorService"
+import { createVendorService, getVendorProfile, getVendorServiceById, getVendorServices, updateVendorProfile } from "../service/vendorService"
 
 export const useGetVendorProfile = (options?: { enabled: boolean }) => {
     return useQuery({
@@ -16,14 +16,22 @@ export const useGetVendorServices = () => {
     })
 }
 
-export const useCreateVendorService = () =>{
+export const useCreateVendorService = () => {
     return useMutation({
         mutationFn: createVendorService,
     })
 }
 
-export const useUpdateVendorService = () =>{
+export const useUpdateVendorService = () => {
     return useMutation({
         mutationFn: updateVendorProfile
+    })
+}
+
+export const useGetVendorServiceById = (id: string) => {
+    return useQuery({
+        queryKey: ['get-vendorServiceById'],
+        queryFn: () => getVendorServiceById(id),
+        enabled: !!id
     })
 }
