@@ -196,7 +196,8 @@ export interface Venue {
     totalEarnings?: number;
     rating?: number;
     reviewCount?: number;
-
+    activeCoupons?:any;
+    activeCouponCount?:number;
     createdAt?: Date;
     updatedAt?: Date;
 }

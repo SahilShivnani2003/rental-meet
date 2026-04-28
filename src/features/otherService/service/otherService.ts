@@ -14,3 +14,18 @@ export const getOtherService = async () => {
         throw error;
     }
 }
+
+export const getOtherServiceById = async (id: string) => {
+    try {
+        console.log('Fetching other service by id....');
+
+        const response = await publicClient.get(`/vendor-services/${id}`);
+
+        console.log('Other service by Id resposne : ', response.data);
+
+        return response.data;
+    } catch (error) {
+        console.error('Error while fetching other service by Id : ', error);
+        throw error;
+    }
+}
