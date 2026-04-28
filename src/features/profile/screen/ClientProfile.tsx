@@ -348,7 +348,7 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
             iconBg: Colors.warningLight,
             title: 'Notifications',
             subtitle: 'Alerts & reminders',
-            onPress: () => Alert.alert('Coming Soon', 'Notifications coming soon.'),
+            onPress: () => alert.info('Comming soon', 'Notification feature comming soon.'),
         },
         {
             id: 'help',
@@ -357,7 +357,7 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
             iconBg: Colors.border,
             title: 'Help & Support',
             subtitle: 'support@rentalmeet.com',
-            onPress: () => Alert.alert('Help', 'Contact us at support@rentalmeet.com'),
+            onPress: () => alert.info('Help', 'Contact us at support@rentalmeet.com'),
         },
         {
             id: 'about',
@@ -367,7 +367,7 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
             title: 'About RentalMeet',
             subtitle: 'Version 1.0.0',
             onPress: () =>
-                Alert.alert('RentalMeet', 'Version 1.0.0\n\nBook your perfect space with ease.'),
+                alert.info('RentalMeet', 'Version 1.0.0\n\nBook your perfect space with ease.'),
         },
     ];
 

@@ -16,192 +16,9 @@ import { useAlert } from '@/context/AlertContext';
 import { Spacing, Colors, Radii, Shadows, Typography } from '@/theme/theme';
 import { VendorTabParamList } from '@/navigations/tabNavigations/VendorTabNavigation';
 import { ServiceBooking } from '../types/ServiceBooking';
+import { useGetVendorServiceBooking } from '../hooks/useVendorBooking';
 
 const { width: W } = Dimensions.get('window');
-
-// ─── Static Data ──────────────────────────────────────────────────────────────
-const STATIC_BOOKINGS: ServiceBooking[] = [
-    {
-        _id: '1',
-        service: 'srv1',
-        vendor: 'vendor123',
-        quotationNumber: 'QT-2026-0012',
-        bookingNumber: 'SVC-2026-0012',
-        eventDate: new Date('2026-04-30T00:00:00.000Z'),
-        customerInfo: {
-            name: 'Rahul Sharma',
-            email: 'rahul.sharma@example.com',
-            phone: '+91 98765 43210',
-            company: '',
-            eventName: 'Wedding',
-            notes: 'Need outdoor shoot at sunset',
-        },
-        serviceSnapshot: {
-            title: 'Wedding Photography Package',
-            category: 'Photography',
-            companyName: 'Moments Studio',
-            city: 'Itarsi',
-            state: 'Madhya Pradesh',
-        },
-        items: [
-            { name: 'Full Day Photography', price: 25000, unit: 'day', quantity: 1, amount: 25000 },
-            { name: 'Album (50 pages)', price: 5000, unit: 'unit', quantity: 1, amount: 5000 },
-            { name: 'Pre-wedding Shoot', price: 8000, unit: 'session', quantity: 1, amount: 8000 },
-        ],
-        pricing: {
-            subtotal: 38000,
-            serviceCGST: 1710,
-            serviceSGST: 1710,
-            cgstPct: 9,
-            sgstPct: 9,
-            platformFee: 760,
-            platformFeePct: 2,
-            platformFeeGST: 137,
-            total: 42317,
-        },
-        status: 'enquiry',
-        paymentStatus: 'pending',
-        amount: 42317,
-        createdAt: new Date('2026-04-15T10:30:00.000Z'),
-    },
-    {
-        _id: '2',
-        service: 'srv2',
-        vendor: 'vendor123',
-        quotationNumber: 'QT-2026-0011',
-        bookingNumber: 'SVC-2026-0011',
-        eventDate: new Date('2026-05-03T00:00:00.000Z'),
-        customerInfo: {
-            name: 'TechCorp Pvt Ltd',
-            email: 'events@techcorp.com',
-            phone: '+91 98765 11111',
-            company: 'TechCorp',
-            eventName: 'Annual Conference',
-            notes: 'Multi-camera setup needed',
-        },
-        serviceSnapshot: {
-            title: 'Corporate Event Videography',
-            category: 'Videography',
-            companyName: 'Moments Studio',
-            city: 'Itarsi',
-            state: 'Madhya Pradesh',
-        },
-        items: [
-            { name: 'Full Event Coverage', price: 15000, unit: 'day', quantity: 1, amount: 15000 },
-            { name: 'Drone Footage', price: 5000, unit: 'hour', quantity: 1, amount: 5000 },
-        ],
-        pricing: {
-            subtotal: 20000,
-            serviceCGST: 900,
-            serviceSGST: 900,
-            cgstPct: 9,
-            sgstPct: 9,
-            platformFee: 400,
-            platformFeePct: 2,
-            platformFeeGST: 72,
-            total: 22272,
-        },
-        status: 'confirmed',
-        paymentStatus: 'paid',
-        amount: 22272,
-        paymentDetails: {
-            razorpay_order_id: 'order_123',
-            razorpay_payment_id: 'pay_456',
-            paidAt: new Date('2026-04-18T14:22:00.000Z'),
-        },
-        createdAt: new Date('2026-04-18T09:15:00.000Z'),
-    },
-    {
-        _id: '3',
-        service: 'srv3',
-        vendor: 'vendor123',
-        quotationNumber: 'QT-2026-0010',
-        bookingNumber: 'SVC-2026-0010',
-        eventDate: new Date('2026-05-08T00:00:00.000Z'),
-        customerInfo: {
-            name: 'Priya Singh',
-            email: 'priya.singh@example.com',
-            phone: '+91 98765 22222',
-            eventName: 'Professional Portfolio',
-        },
-        serviceSnapshot: {
-            title: 'Portrait Photography Session',
-            category: 'Photography',
-            companyName: 'Moments Studio',
-            city: 'Itarsi',
-            state: 'Madhya Pradesh',
-        },
-        items: [
-            {
-                name: 'Studio Session (2 hours)',
-                price: 6000,
-                unit: 'session',
-                quantity: 1,
-                amount: 6000,
-            },
-            { name: 'Edited Photos (20)', price: 2000, unit: 'set', quantity: 1, amount: 2000 },
-        ],
-        pricing: {
-            subtotal: 8000,
-            serviceCGST: 360,
-            serviceSGST: 360,
-            cgstPct: 9,
-            sgstPct: 9,
-            platformFee: 160,
-            platformFeePct: 2,
-            platformFeeGST: 29,
-            total: 8909,
-        },
-        status: 'confirmed',
-        paymentStatus: 'paid',
-        amount: 8909,
-        paymentDetails: {
-            razorpay_order_id: 'order_789',
-            razorpay_payment_id: 'pay_012',
-            paidAt: new Date('2026-04-20T11:00:00.000Z'),
-        },
-        createdAt: new Date('2026-04-20T08:45:00.000Z'),
-    },
-    {
-        _id: '4',
-        service: 'srv1',
-        vendor: 'vendor123',
-        quotationNumber: 'QT-2026-0009',
-        bookingNumber: 'SVC-2026-0009',
-        eventDate: new Date('2026-04-28T00:00:00.000Z'),
-        customerInfo: {
-            name: 'Amit Verma',
-            email: 'amit.v@example.com',
-            phone: '+91 98765 33333',
-            eventName: 'Engagement',
-        },
-        serviceSnapshot: {
-            title: 'Wedding Photography Package',
-            category: 'Photography',
-            companyName: 'Moments Studio',
-            city: 'Itarsi',
-            state: 'Madhya Pradesh',
-        },
-        items: [
-            { name: 'Half Day Photography', price: 18000, unit: 'day', quantity: 1, amount: 18000 },
-        ],
-        pricing: {
-            subtotal: 18000,
-            serviceCGST: 810,
-            serviceSGST: 810,
-            cgstPct: 9,
-            sgstPct: 9,
-            platformFee: 360,
-            platformFeePct: 2,
-            platformFeeGST: 65,
-            total: 20045,
-        },
-        status: 'cancelled',
-        paymentStatus: 'pending',
-        amount: 20045,
-        createdAt: new Date('2026-04-12T16:20:00.000Z'),
-    },
-];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const STATUS_MAP: Record<string, { color: string; bg: string; label: string; icon: string }> = {
@@ -402,12 +219,13 @@ export default function VendorBookingsScreen({ navigation }: Props) {
     const alert = useAlert();
     const [filter, setFilter] = useState<'all' | 'enquiry' | 'confirmed' | 'cancelled'>('all');
 
+    const{data:vendorBookingData, isLoading, refetch} = useGetVendorServiceBooking();
     // TODO: replace with real hook
     const isRefetching = false;
-    const bookings: ServiceBooking[] = STATIC_BOOKINGS;
+    const bookings: ServiceBooking[] = vendorBookingData?.bookings ?? [];
 
     const handleRefresh = useCallback(() => {
-        // refetch();
+         refetch();
     }, []);
 
     // ── Animations ────────────────────────────────────────────────────────────

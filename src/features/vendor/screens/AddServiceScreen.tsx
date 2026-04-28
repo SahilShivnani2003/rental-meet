@@ -20,6 +20,9 @@ import Step5Portfolio from '../components/Step5Portfolio';
 import Step6Documents from '../components/Step6Documents';
 import Step7Bank from '../components/Step7Bank';
 import Step8Availability from '../components/Step8Availability';
+import { useCreateVendorService } from '../hooks/useVendorService';
+import { useAlert } from '@/context/AlertContext';
+import { ApiError } from '@/types/ApiError';
 
 // ─── Step Config ──────────────────────────────────────────────────────────────
 type StepMeta = {
@@ -39,7 +42,7 @@ const STEPS: StepMeta[] = [
     { key: 'availability', label: 'Availability', icon: 'calendar-outline' },
 ];
 
-const INITIAL_DATA: Partial<VendorService> = {
+const INITIAL_DATA: VendorService = {
     vendor: 'vendor123',
     contactInfo: {},
     title: '',
@@ -229,8 +232,10 @@ const ts = StyleSheet.create({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function AddServiceScreen({ navigation }: any) {
     const [step, setStep] = useState(0);
-    const [formData, setFormData] = useState<Partial<VendorService>>(INITIAL_DATA);
+    const alert = useAlert();
+    const [formData, setFormData] = useState<VendorService>(INITIAL_DATA);
     const contentFade = useRef(new Animated.Value(1)).current;
+    const { mutate: createService } = useCreateVendorService();
 
     const handleChange = useCallback((key: keyof VendorService, value: any) => {
         setFormData(prev => ({ ...prev, [key]: value }));
@@ -262,8 +267,35 @@ export default function AddServiceScreen({ navigation }: any) {
     };
 
     const handleSubmit = () => {
-        console.log('Submit service:', formData);
-        // TODO: call API
+        // 🔥 Clean deeply
+        const cleanData = JSON.parse(
+            JSON.stringify(formData, (key, value) => {
+                if (
+                    value === undefined ||
+                    value === null ||
+                    value === '' ||
+                    (Array.isArray(value) && value.length === 0) ||
+                    (typeof value === 'object' &&
+                        !Array.isArray(value) &&
+                        Object.keys(value).length === 0)
+                ) {
+                    return undefined;
+                }
+                return value;
+            }),
+        );
+
+        console.log('Clean Submit service:', cleanData);
+
+        createService(cleanData, {
+            onSuccess: () => {
+                alert.success('Success', 'Service created successfully');
+                navigation.goBack();  
+            },
+            onError: (error: ApiError) => {
+                alert.error('Failed', error.message || 'Something went wrong');
+            },
+        });
     };
 
     const handleTabPress = (idx: number) => {

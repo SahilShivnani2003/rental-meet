@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Spacing, Colors, Radii, Shadows, Typography } from '@/theme/theme';
+import { useGetVendorQuationDownloads } from '../hooks/useVendorQuotaion';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 export interface ServiceQuotationDownload {
@@ -52,189 +53,6 @@ export interface ServiceQuotationDownload {
     updatedAt?: Date;
 }
 
-// ─── Static Data ───────────────────────────────────────────────────────────────
-const STATIC_QUOTATIONS: ServiceQuotationDownload[] = [
-    {
-        _id: 'q1',
-        serviceBooking: 'bk001',
-        service: '1',
-        vendor: 'vendor123',
-        customer: 'cust001',
-        quotationNumber: 'QT-2026-00142',
-        action: 'download',
-        totalAmount: 42500,
-        serviceSnapshot: {
-            title: 'Wedding Photography Package',
-            category: 'Photography',
-            companyName: 'Moments Studio',
-            city: 'Itarsi',
-            state: 'Madhya Pradesh',
-        },
-        customerSnapshot: {
-            name: 'Rahul Sharma',
-            email: 'rahul.sharma@email.com',
-            phone: '+91 98765 43210',
-            company: 'Sharma Enterprises',
-            eventName: 'Rahul & Priya Wedding',
-        },
-        eventDate: new Date('2026-06-15'),
-        priceSnapshot: {
-            subtotal: 35000,
-            serviceCGST: 3150,
-            serviceSGST: 3150,
-            platformFee: 500,
-            platformFeeGST: 90,
-            discount: 1390,
-            couponCode: 'SUMMER10',
-            total: 42500,
-        },
-        downloadedAt: new Date('2026-04-25T10:32:00'),
-        createdAt: new Date('2026-04-24'),
-    },
-    {
-        _id: 'q2',
-        serviceBooking: 'bk002',
-        service: '2',
-        vendor: 'vendor123',
-        customer: 'cust002',
-        quotationNumber: 'QT-2026-00138',
-        action: 'print',
-        totalAmount: 21240,
-        serviceSnapshot: {
-            title: 'Corporate Event Videography',
-            category: 'Videography',
-            companyName: 'Moments Studio',
-            city: 'Itarsi',
-            state: 'Madhya Pradesh',
-        },
-        customerSnapshot: {
-            name: 'Anita Verma',
-            email: 'anita.verma@corp.in',
-            phone: '+91 91234 56789',
-            company: 'TechCorp Solutions',
-            eventName: 'Annual Tech Summit 2026',
-        },
-        eventDate: new Date('2026-05-20'),
-        priceSnapshot: {
-            subtotal: 18000,
-            serviceCGST: 1620,
-            serviceSGST: 1620,
-            platformFee: 500,
-            platformFeeGST: 90,
-            discount: 590,
-            total: 21240,
-        },
-        downloadedAt: new Date('2026-04-22T14:15:00'),
-        createdAt: new Date('2026-04-21'),
-    },
-    {
-        _id: 'q3',
-        serviceBooking: 'bk003',
-        service: '1',
-        vendor: 'vendor123',
-        customer: 'cust003',
-        quotationNumber: 'QT-2026-00131',
-        action: 'download',
-        totalAmount: 38900,
-        serviceSnapshot: {
-            title: 'Wedding Photography Package',
-            category: 'Photography',
-            companyName: 'Moments Studio',
-            city: 'Itarsi',
-            state: 'Madhya Pradesh',
-        },
-        customerSnapshot: {
-            name: 'Vikram Patel',
-            email: 'vikram.patel@gmail.com',
-            phone: '+91 87654 32109',
-            eventName: 'Vikram & Meera Engagement',
-        },
-        eventDate: new Date('2026-07-08'),
-        priceSnapshot: {
-            subtotal: 33000,
-            serviceCGST: 2970,
-            serviceSGST: 2970,
-            platformFee: 500,
-            platformFeeGST: 90,
-            discount: 630,
-            total: 38900,
-        },
-        downloadedAt: new Date('2026-04-18T09:05:00'),
-        createdAt: new Date('2026-04-17'),
-    },
-    {
-        _id: 'q4',
-        serviceBooking: 'bk004',
-        service: '3',
-        vendor: 'vendor123',
-        customer: 'cust004',
-        quotationNumber: 'QT-2026-00124',
-        action: 'print',
-        totalAmount: 9440,
-        serviceSnapshot: {
-            title: 'Portrait Photography Session',
-            category: 'Photography',
-            companyName: 'Moments Studio',
-            city: 'Itarsi',
-            state: 'Madhya Pradesh',
-        },
-        customerSnapshot: {
-            name: 'Sneha Gupta',
-            email: 'sneha.g@outlook.com',
-            phone: '+91 76543 21098',
-            eventName: 'Professional Headshots',
-        },
-        eventDate: new Date('2026-05-05'),
-        priceSnapshot: {
-            subtotal: 8000,
-            serviceCGST: 720,
-            serviceSGST: 720,
-            platformFee: 500,
-            platformFeeGST: 90,
-            discount: 590,
-            total: 9440,
-        },
-        downloadedAt: new Date('2026-04-10T16:48:00'),
-        createdAt: new Date('2026-04-09'),
-    },
-    {
-        _id: 'q5',
-        serviceBooking: 'bk005',
-        service: '2',
-        vendor: 'vendor123',
-        customer: 'cust005',
-        quotationNumber: 'QT-2026-00115',
-        action: 'download',
-        totalAmount: 26780,
-        serviceSnapshot: {
-            title: 'Corporate Event Videography',
-            category: 'Videography',
-            companyName: 'Moments Studio',
-            city: 'Itarsi',
-            state: 'Madhya Pradesh',
-        },
-        customerSnapshot: {
-            name: 'Manish Agarwal',
-            email: 'm.agarwal@business.com',
-            phone: '+91 65432 10987',
-            company: 'Agarwal & Sons Ltd.',
-            eventName: 'Product Launch Event',
-        },
-        eventDate: new Date('2026-05-30'),
-        priceSnapshot: {
-            subtotal: 22500,
-            serviceCGST: 2025,
-            serviceSGST: 2025,
-            platformFee: 500,
-            platformFeeGST: 90,
-            discount: 360,
-            couponCode: 'CORP5',
-            total: 26780,
-        },
-        downloadedAt: new Date('2026-04-02T11:20:00'),
-        createdAt: new Date('2026-04-01'),
-    },
-];
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 const fmtCurrency = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
@@ -609,8 +427,7 @@ function HeaderSummary({ quotations }: { quotations: ServiceQuotationDownload[] 
 // ─── Screen ────────────────────────────────────────────────────────────────────
 export default function QuotationDownloadsScreen() {
     const [filter, setFilter] = useState<'all' | 'download' | 'print'>('all');
-    const isRefetching = false;
-
+    const {data, isLoading, isRefetching, refetch} = useGetVendorQuationDownloads();
     const headerFade = useRef(new Animated.Value(0)).current;
     const headerSlide = useRef(new Animated.Value(-14)).current;
 
@@ -626,7 +443,7 @@ export default function QuotationDownloadsScreen() {
         ]).start();
     }, []);
 
-    const quotations: ServiceQuotationDownload[] = STATIC_QUOTATIONS;
+    const quotations: ServiceQuotationDownload[] = data?.records?? [];
 
     const filtered = useMemo(() => {
         if (filter === 'all') return quotations;
@@ -641,7 +458,9 @@ export default function QuotationDownloadsScreen() {
         console.log('Share quotation:', q.quotationNumber);
     }, []);
 
-    const handleRefresh = useCallback(() => {}, []);
+    const handleRefresh = useCallback(() => {
+        refetch();
+    }, [quotations]);
 
     return (
         <View style={s.root}>

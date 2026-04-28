@@ -16,88 +16,14 @@ import { useAlert } from '@/context/AlertContext';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Spacing, Colors, Radii, Shadows, Typography } from '@/theme/theme';
 import { VendorTabParamList } from '@/navigations/tabNavigations/VendorTabNavigation';
-import { VendorProfile } from '@/types/models';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '@/types/RootStackParamList';
+import { useGetVendorProfile } from '@/features/vendor/hooks/useVendorService';
+import { VendorProfile } from '@/features/vendor/types/VendorProfile';
 
 const { width: W } = Dimensions.get('window');
 
 // ─── Static Data ──────────────────────────────────────────────────────────────
-const STATIC_PROFILE: VendorProfile = {
-    _id: 'profile123',
-    user: 'user123',
-    basicInfo: {
-        fullName: 'Rajesh Kumar',
-        primaryMobile: '+91 98765 43210',
-        secondaryMobile: '+91 98765 11111',
-        role: 'owner',
-    },
-    businessInfo: {
-        companyName: 'Moments Studio Photography',
-        brandName: 'Moments',
-        experienceYears: 8,
-        category: 'Photography & Videography',
-        description:
-            'Professional photography and videography services for weddings, corporate events, and portraits. We specialize in candid wedding photography and cinematic videography.',
-        specialization: 'Weddings, Corporate Events, Candid Photography',
-    },
-    address: {
-        officeAddress: 'Shop 12, Civil Lines Market, Near Railway Station',
-        state: 'Madhya Pradesh',
-        city: 'Itarsi',
-        area: 'Civil Lines',
-        pincode: '461111',
-        serviceableAreas: ['Itarsi', 'Hoshangabad', 'Pipariya', 'Bhopal'],
-    },
-    online: {
-        website: 'https://momentsstudio.in',
-        instagram: '@moments_studio_itarsi',
-        facebook: 'MomentsStudioItarsi',
-    },
-    pricing: {
-        startingPrice: 8000,
-        minimumOrderPrice: 5000,
-        packages: [
-            {
-                serviceName: 'Wedding Photography (Full Day)',
-                rate: 35000,
-                unit: 'day',
-                quantity: 1,
-            },
-            { serviceName: 'Corporate Event Video', rate: 18000, unit: 'event', quantity: 1 },
-            { serviceName: 'Portrait Session', rate: 8000, unit: 'session', quantity: 1 },
-        ],
-    },
-    bankDetails: {
-        accountHolderName: 'Rajesh Kumar',
-        accountNumber: '1234567890',
-        ifsc: 'SBIN0001234',
-        bankName: 'State Bank of India',
-        branchName: 'Itarsi Main Branch',
-        accountType: 'current',
-        upiId: 'rajesh@paytm',
-    },
-    availability: [
-        { day: 'Monday', isAvailable: true, startTime: '09:00', endTime: '18:00' },
-        { day: 'Tuesday', isAvailable: true, startTime: '09:00', endTime: '18:00' },
-        { day: 'Wednesday', isAvailable: true, startTime: '09:00', endTime: '18:00' },
-        { day: 'Thursday', isAvailable: true, startTime: '09:00', endTime: '18:00' },
-        { day: 'Friday', isAvailable: true, startTime: '09:00', endTime: '18:00' },
-        { day: 'Saturday', isAvailable: true, startTime: '10:00', endTime: '20:00' },
-        { day: 'Sunday', isAvailable: true, startTime: '10:00', endTime: '20:00' },
-    ],
-    publicHoliday: {
-        isAvailable: false,
-    },
-    bookingPolicy: {
-        advanceBooking: '48h',
-    },
-    termsAccepted: true,
-    status: 'approved',
-    onboardingStep: 10,
-    createdAt: new Date('2025-12-15'),
-    updatedAt: new Date('2026-04-20'),
-};
 
 // ─── Section Header ───────────────────────────────────────────────────────────
 type SectionHeaderProps = {
@@ -155,12 +81,12 @@ function InfoRow({ icon, label, value, last }: InfoRowProps) {
 type Props = NativeBottomTabScreenProps<VendorTabParamList, 'profile'>;
 
 export default function VendorProfileScreen({ navigation }: Props) {
-    const { user, logOut } = useAuthStore();
+    const { logOut } = useAuthStore();
     const alert = useAlert();
+    const { data, isLoading, refetch, isRefetching } = useGetVendorProfile();
     const rootNav = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
     // TODO: replace with real hook
-    const isRefetching = false;
-    const profile: VendorProfile = STATIC_PROFILE;
+    const profile: VendorProfile = data?.profile ?? {};
 
     const handleRefresh = useCallback(() => {
         // refetch();
@@ -232,8 +158,10 @@ export default function VendorProfileScreen({ navigation }: Props) {
         },
     };
 
-    const currentStatus = statusInfo[profile.status || 'incomplete'];
-
+    const currentStatus = statusInfo[profile?.status || 'incomplete'];
+    const role = profile?.basicInfo?.role
+        ? profile.basicInfo.role.charAt(0).toUpperCase() + profile.basicInfo.role.slice(1)
+        : ' ';
     // ── Render ────────────────────────────────────────────────────────────────
     return (
         <View style={s.root}>
@@ -315,10 +243,7 @@ export default function VendorProfileScreen({ navigation }: Props) {
                     <InfoRow
                         icon="briefcase-outline"
                         label="Role"
-                        value={
-                            profile?.basicInfo?.role?.charAt(0).toUpperCase() +
-                                profile?.basicInfo?.role?.slice(1) ?? '—'
-                        }
+                        value={role}
                         last
                     />
                 </View>

@@ -22,6 +22,7 @@ import { ClientTabParamList } from '@/navigations/tabNavigations/ClientTabNaviga
 import { StatusConfig, Colors, Radii, Shadows, Spacing, Typography } from '@/theme/theme';
 import { RootStackParamList } from '@/types/RootStackParamList';
 import { Booking } from '../types/Booking';
+import { useGetCustomerServicebookings } from '../hooks/useVendorBooking';
 
 // ─── Layout constant (must be before component for getItemLayout) ─────────────
 const BOOKING_CARD_HEIGHT = 148;
@@ -62,7 +63,8 @@ export default function BookingsScreen({ navigation }: BookingsProps) {
         enabled: isAuthenticated,
     });
     const bookings = bookingData?.bookings ?? [];
-
+    const { data: serviceBookingData , refetch:serviceBookingRefetch} = useGetCustomerServicebookings();
+    const serviceBookings = serviceBookingData?.bookings ?? [];
     const [refreshing, setRefreshing] = useState(false);
     const [activeTab, setActiveTab] = useState<string>('all');
 
@@ -78,16 +80,26 @@ export default function BookingsScreen({ navigation }: BookingsProps) {
     const handleRefresh = useCallback(() => {
         setRefreshing(true);
         refetch();
+        serviceBookingRefetch();
     }, [refetch]);
 
     // ── Derived data ───────────────────────────────────────────────────────────
 
+    const [bookingType, setBookingType] = useState<'venue' | 'service'>('venue');
+
+    // ─── Switch active data source based on bookingType ──────────────────────────
+    const activeBookings = bookingType === 'venue' ? bookings : serviceBookings;
+
     const filtered =
-        activeTab === 'all' ? bookings : bookings.filter((b: Booking) => b.status === activeTab);
+        activeTab === 'all'
+            ? activeBookings
+            : activeBookings.filter((b: Booking) => b.status === activeTab);
 
     const counts = TABS.reduce<Record<string, number>>((acc, t) => {
         acc[t] =
-            t === 'all' ? bookings.length : bookings.filter((b: Booking) => b.status === t).length;
+            t === 'all'
+                ? activeBookings.length
+                : activeBookings.filter((b: Booking) => b.status === t).length;
         return acc;
     }, {});
 
@@ -174,6 +186,43 @@ export default function BookingsScreen({ navigation }: BookingsProps) {
                         </View>
                     ))}
                 </ScrollView>
+                {/* ── Booking type tabs (customer only) ── */}
+                {user?.role === 'customer' && (
+                    <View style={styles.typeTabsWrapper}>
+                        {(['venue', 'service'] as const).map(type => {
+                            const isActive = bookingType === type;
+                            return (
+                                <TouchableOpacity
+                                    key={type}
+                                    style={[styles.typeTab, isActive && styles.typeTabActive]}
+                                    onPress={() => {
+                                        setBookingType(type);
+                                        setActiveTab('all'); // reset status filter on switch
+                                    }}
+                                    activeOpacity={0.75}
+                                >
+                                    <Ionicons
+                                        name={
+                                            type === 'venue'
+                                                ? 'business-outline'
+                                                : 'construct-outline'
+                                        }
+                                        size={14}
+                                        color={isActive ? Colors.white : Colors.charcoalMid}
+                                    />
+                                    <Text
+                                        style={[
+                                            styles.typeTabText,
+                                            isActive && styles.typeTabTextActive,
+                                        ]}
+                                    >
+                                        {type === 'venue' ? 'Venue' : 'Service'}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+                )}
             </View>
 
             {/* ── Filter tabs ── */}
@@ -334,6 +383,36 @@ const styles = StyleSheet.create({
         letterSpacing: Typography.normal,
     },
 
+    // ── Type tabs ──────────────────────────────────────────────────────────────
+    typeTabsWrapper: {
+        flexDirection: 'row',
+        paddingHorizontal: Spacing.xl,
+        paddingTop: Spacing.md,
+        gap: Spacing.sm,
+    },
+    typeTab: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: Radii.full,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        backgroundColor: Colors.surface,
+    },
+    typeTabActive: {
+        backgroundColor: Colors.charcoal,
+        borderColor: Colors.charcoal,
+    },
+    typeTabText: {
+        fontSize: Typography.base,
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoalMid,
+    },
+    typeTabTextActive: {
+        color: Colors.white,
+    },
     // Filter tabs
     tabsWrapper: { paddingVertical: 14 },
     tabsContainer: { paddingHorizontal: Spacing.xl, gap: Spacing.sm },

@@ -19,84 +19,9 @@ import { VendorTabParamList } from '@/navigations/tabNavigations/VendorTabNaviga
 import { VendorService } from '@/features/otherService/types/VendorService';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '@/types/RootStackParamList';
+import { useGetVendorServices } from '../hooks/useVendorService';
 
 const { width: W } = Dimensions.get('window');
-
-// ─── Static Data ──────────────────────────────────────────────────────────────
-const STATIC_SERVICES: VendorService[] = [
-    {
-        _id: '1',
-        vendor: 'vendor123',
-        title: 'Wedding Photography Package',
-        category: 'Photography',
-        companyName: 'Moments Studio',
-        brandName: 'Moments',
-        experienceYears: 8,
-        description:
-            'Professional wedding photography with candid shots, pre-wedding shoot, and album.',
-        specialization: 'Weddings, Pre-wedding, Candid',
-        tags: ['wedding', 'candid', 'album', 'pre-wedding'],
-        city: 'Itarsi',
-        state: 'Madhya Pradesh',
-        area: 'Civil Lines',
-        startingPrice: 35000,
-        minimumOrderPrice: 25000,
-        featuredImage: 'https://images.unsplash.com/photo-1519741497674-611481863552',
-        status: 'approved',
-        totalEnquiries: 24,
-        totalBookings: 12,
-        isActive: true,
-        createdAt: new Date('2026-01-15'),
-    },
-    {
-        _id: '2',
-        vendor: 'vendor123',
-        title: 'Corporate Event Videography',
-        category: 'Videography',
-        companyName: 'Moments Studio',
-        brandName: 'Moments',
-        experienceYears: 8,
-        description:
-            'Professional corporate event coverage with drone shots and same-day highlights.',
-        specialization: 'Corporate Events, Conferences',
-        tags: ['corporate', 'drone', 'highlights'],
-        city: 'Itarsi',
-        state: 'Madhya Pradesh',
-        area: 'Station Road',
-        startingPrice: 18000,
-        minimumOrderPrice: 15000,
-        featuredImage: 'https://images.unsplash.com/photo-1511578314322-379afb476865',
-        status: 'approved',
-        totalEnquiries: 15,
-        totalBookings: 8,
-        isActive: true,
-        createdAt: new Date('2026-02-10'),
-    },
-    {
-        _id: '3',
-        vendor: 'vendor123',
-        title: 'Portrait Photography Session',
-        category: 'Photography',
-        companyName: 'Moments Studio',
-        brandName: 'Moments',
-        experienceYears: 8,
-        description: 'Professional portrait sessions for individuals, families, and professionals.',
-        specialization: 'Portraits, Headshots',
-        tags: ['portrait', 'headshot', 'professional'],
-        city: 'Itarsi',
-        state: 'Madhya Pradesh',
-        area: 'Civil Lines',
-        startingPrice: 8000,
-        minimumOrderPrice: 5000,
-        featuredImage: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04',
-        status: 'pending',
-        totalEnquiries: 8,
-        totalBookings: 3,
-        isActive: false,
-        createdAt: new Date('2026-04-20'),
-    },
-];
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const STATUS_MAP: Record<string, { color: string; bg: string; label: string; icon: string }> = {
     approved: {
@@ -293,14 +218,13 @@ type Props = NativeBottomTabScreenProps<VendorTabParamList, 'myService'>;
 
 export default function VendorServicesScreen({ navigation }: Props) {
     const alert = useAlert();
+    const {data, isLoading, isRefetching, refetch} = useGetVendorServices();
     const [filter, setFilter] = useState<'all' | 'approved' | 'pending'>('all');
     const rootNav = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
-    // TODO: replace with real hook
-    const isRefetching = false;
-    const services: VendorService[] = STATIC_SERVICES;
+    const services: VendorService[] = data?.services ?? [];
 
     const handleRefresh = useCallback(() => {
-        // refetch();
+        refetch();
     }, []);
 
     // ── Animations ────────────────────────────────────────────────────────────

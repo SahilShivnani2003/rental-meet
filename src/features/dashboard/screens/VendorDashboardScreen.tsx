@@ -12,79 +12,32 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAlert } from '@/context/AlertContext';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Spacing, Colors, Radii, Shadows, Typography } from '@/theme/theme';
-import { RootStackParamList } from '@/types/RootStackParamList';
 import { VendorTabParamList } from '@/navigations/tabNavigations/VendorTabNavigation';
+import { ServiceBooking } from '@/features/booking/types/ServiceBooking';
+import { useVendorStats } from '../hooks/useVendorDashboard';
+import { useGetVendorServiceBooking } from '@/features/booking/hooks/useVendorBooking';
 
 const { width: W } = Dimensions.get('window');
 const STAT_W = (W - Spacing.lg * 2 - Spacing.md) / 2;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
+// Matches API: { success: true, stats: { total, approved, pending, draft } }
 type DashboardStats = {
-    totalServices: number;
-    approvedServices: number;
-    pendingServices: number;
-    totalBookings: number;
-    confirmedBookings: number;
-    enquiries: number;
-    totalQuotations: number;
-    totalEarnings: number;
+    total: number;
+    approved: number;
+    pending: number;
+    draft: number;
 };
 
-type RecentBooking = {
-    _id: string;
-    bookingNumber?: string;
-    eventDate: string;
-    status: 'enquiry' | 'confirmed' | 'cancelled';
-    amount?: number;
-    customerInfo?: { name?: string; eventName?: string };
-    serviceSnapshot?: { title?: string; category?: string };
+// Matches vendorBookings shape: { bookings: ServiceBooking[], stats: { total, enquiry, confirmed } }
+type BookingStats = {
+    total: number;
+    enquiry: number;
+    confirmed: number;
 };
-
-// ─── Static fallback data ─────────────────────────────────────────────────────
-const STATIC_STATS: DashboardStats = {
-    totalServices: 3,
-    approvedServices: 2,
-    pendingServices: 1,
-    totalBookings: 12,
-    confirmedBookings: 5,
-    enquiries: 28,
-    totalQuotations: 7,
-    totalEarnings: 161000,
-};
-
-const STATIC_BOOKINGS: RecentBooking[] = [
-    {
-        _id: '1',
-        bookingNumber: 'SVC-2026-0012',
-        eventDate: '2026-04-30T00:00:00.000Z',
-        status: 'enquiry',
-        amount: 35000,
-        customerInfo: { name: 'Rahul Sharma', eventName: 'Wedding' },
-        serviceSnapshot: { title: 'Wedding Photography', category: 'Photography' },
-    },
-    {
-        _id: '2',
-        bookingNumber: 'SVC-2026-0011',
-        eventDate: '2026-05-03T00:00:00.000Z',
-        status: 'confirmed',
-        amount: 18000,
-        customerInfo: { name: 'TechCorp Pvt Ltd', eventName: 'Corporate Event' },
-        serviceSnapshot: { title: 'Corporate Event Video', category: 'Videography' },
-    },
-    {
-        _id: '3',
-        bookingNumber: 'SVC-2026-0010',
-        eventDate: '2026-05-08T00:00:00.000Z',
-        status: 'confirmed',
-        amount: 8000,
-        customerInfo: { name: 'Priya Singh', eventName: 'Portrait' },
-        serviceSnapshot: { title: 'Portrait Session', category: 'Photography' },
-    },
-];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const STATUS_MAP: Record<string, { color: string; bg: string; label: string }> = {
@@ -93,11 +46,14 @@ const STATUS_MAP: Record<string, { color: string; bg: string; label: string }> =
     cancelled: { color: Colors.danger, bg: Colors.dangerLight, label: 'Cancelled' },
 };
 
-const fmtCurrency = (n: number) =>
-    '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+const fmtCurrency = (n: number) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 
-const fmtDate = (s: string) =>
-    new Date(s).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+const fmtDate = (s: Date) =>
+    new Date(s).toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+    });
 
 // ─── Stat card ────────────────────────────────────────────────────────────────
 type StatCardProps = {
@@ -129,6 +85,7 @@ function StatCard({ icon, label, value, color, bg, index }: StatCardProps) {
                 useNativeDriver: true,
             }),
         ]).start();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     return (
@@ -191,11 +148,11 @@ function BookingRow({
     last,
     onPress,
 }: {
-    booking: RecentBooking;
+    booking: ServiceBooking;
     last: boolean;
     onPress: () => void;
 }) {
-    const st = STATUS_MAP[booking.status] ?? STATUS_MAP.enquiry;
+    const st = STATUS_MAP[booking?.status ?? ''] ?? STATUS_MAP.enquiry;
 
     return (
         <>
@@ -208,13 +165,13 @@ function BookingRow({
                         {booking.serviceSnapshot?.title ?? '—'}
                     </Text>
                     <Text style={s.rowMetaText}>
-                        {booking.customerInfo?.name ?? '—'} · {fmtDate(booking.eventDate)}
+                        {booking.customerInfo?.name ?? '—'} · {fmtDate(booking?.eventDate)}
                     </Text>
                 </View>
                 <View style={s.rowRight}>
-                    {booking.amount ? (
+                    {booking.amount != null && (
                         <Text style={s.rowAmount}>{fmtCurrency(booking.amount)}</Text>
-                    ) : null}
+                    )}
                     <View style={[s.statusTag, { backgroundColor: st.bg }]}>
                         <Text style={[s.statusTagText, { color: st.color }]}>{st.label}</Text>
                     </View>
@@ -232,15 +189,43 @@ export default function VendorDashboardScreen({ navigation }: Props) {
     const { user } = useAuthStore();
     const alert = useAlert();
 
-    // TODO: replace static data with real hook
-    // const { data, isLoading, isRefetching, refetch } = useGetVendorDashboard();
-    const isRefetching = false;
-    const stats: DashboardStats = STATIC_STATS;
-    const recentBookings: RecentBooking[] = STATIC_BOOKINGS;
+    const {
+        data: statsData,
+        isLoading: statsLoading,
+        isRefetching: statsRefetching,
+        refetch: statsRefetch,
+    } = useVendorStats();
+
+    const {
+        data: vendorBookings,
+        isLoading: bookingLoading,
+        isRefetching: bookingRefetching,
+        refetch: bookingRefetch,
+    } = useGetVendorServiceBooking();
+
+    // ── Derived data ──────────────────────────────────────────────────────────
+    // API shape: { success: true, stats: { total, approved, pending, draft } }
+    const stats: DashboardStats = statsData?.stats ?? {
+        total: 0,
+        approved: 0,
+        pending: 0,
+        draft: 0,
+    };
+
+    const recentBookings: ServiceBooking[] = vendorBookings?.bookings ?? [];
+
+    const bookingStats: BookingStats = vendorBookings?.stats ?? {
+        total: 0,
+        enquiry: 0,
+        confirmed: 0,
+    };
+
+    const isRefetching = statsRefetching || bookingRefetching;
 
     const handleRefresh = useCallback(() => {
-        // refetch();
-    }, []);
+        statsRefetch();
+        bookingRefetch();
+    }, [statsRefetch, bookingRefetch]);
 
     // ── Animations ────────────────────────────────────────────────────────────
     const headerFade = useRef(new Animated.Value(0)).current;
@@ -256,15 +241,16 @@ export default function VendorDashboardScreen({ navigation }: Props) {
                 useNativeDriver: true,
             }),
         ]).start();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // ── Stat cards ────────────────────────────────────────────────────────────
+    // ── Stat cards — mapped to actual API fields ───────────────────────────────
     const statCards = useMemo(
         () => [
             {
                 id: 'services',
                 label: 'Services',
-                value: String(stats.totalServices),
+                value: String(stats.total), // was: stats.totalServices
                 icon: 'construct-outline',
                 color: Colors.primary,
                 bg: Colors.primaryLight,
@@ -272,36 +258,38 @@ export default function VendorDashboardScreen({ navigation }: Props) {
             {
                 id: 'bookings',
                 label: 'Bookings',
-                value: String(stats.totalBookings),
+                value: String(bookingStats.total), // was: stats.totalBookings
                 icon: 'calendar-outline',
                 color: Colors.info,
                 bg: Colors.infoLight,
             },
             {
-                id: 'earnings',
-                label: 'Earnings',
-                value: fmtCurrency(stats.totalEarnings),
-                icon: 'cash-outline',
-                color: Colors.success,
-                bg: Colors.successLight,
+                id: 'pending',
+                label: 'Pending',
+                value: String(stats.pending), // derived; no API field yet
+                icon: 'time',
+                color: Colors.info,
+                bg: Colors.infoLight,
             },
             {
                 id: 'enquiries',
                 label: 'Enquiries',
-                value: String(stats.enquiries),
+                value: String(bookingStats.enquiry), // was: stats.enquiries
                 icon: 'chatbubble-outline',
                 color: Colors.warning,
                 bg: Colors.warningLight,
             },
         ],
-        [stats],
+        [stats, bookingStats],
     );
 
     const goToBookingDetail = useCallback(
-        (booking: RecentBooking) => {
-            console.log('navigating to booking ')
+        (booking: ServiceBooking) => {
+            // TODO: wire up real route, e.g.:
+            // navigation.navigate('serviceBookingDetail', { bookingId: booking._id })
+            console.log('Navigating to booking', booking._id);
         },
-        [navigation],
+        [], // navigation removed from deps until route is wired
     );
 
     // ── Render ────────────────────────────────────────────────────────────────
@@ -309,7 +297,10 @@ export default function VendorDashboardScreen({ navigation }: Props) {
         <View style={s.root}>
             {/* Header */}
             <Animated.View
-                style={[s.header, { opacity: headerFade, transform: [{ translateY: headerSlide }] }]}
+                style={[
+                    s.header,
+                    { opacity: headerFade, transform: [{ translateY: headerSlide }] },
+                ]}
             >
                 <View style={s.headerAccent} />
                 <View style={s.headerContent}>
@@ -324,7 +315,11 @@ export default function VendorDashboardScreen({ navigation }: Props) {
                             style={s.notifBtn}
                             onPress={() => alert.info('Coming Soon', 'Notifications coming soon')}
                         >
-                            <Ionicons name="notifications-outline" size={20} color={Colors.charcoalMid} />
+                            <Ionicons
+                                name="notifications-outline"
+                                size={20}
+                                color={Colors.charcoalMid}
+                            />
                             <View style={s.notifDot} />
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -365,54 +360,54 @@ export default function VendorDashboardScreen({ navigation }: Props) {
                     ))}
                 </View>
 
-                {/* Service overview */}
+                {/* Service overview — mapped to actual API fields */}
                 <View style={s.card}>
                     <CardHeader title="Service Overview" />
                     <View style={s.breakdownRow}>
                         <View style={s.breakdownItem}>
                             <Text style={[s.breakdownValue, { color: Colors.success }]}>
-                                {stats.approvedServices}
+                                {stats.approved} {/* was: stats.approvedServices */}
                             </Text>
                             <Text style={s.breakdownLabel}>Approved</Text>
                             <ProgressBar
-                                value={stats.approvedServices}
-                                total={stats.totalServices}
+                                value={stats.approved}
+                                total={stats.total}
                                 color={Colors.success}
                             />
                         </View>
                         <View style={s.breakdownDivider} />
                         <View style={s.breakdownItem}>
                             <Text style={[s.breakdownValue, { color: Colors.warning }]}>
-                                {stats.pendingServices}
+                                {stats.pending} {/* was: stats.pendingServices */}
                             </Text>
                             <Text style={s.breakdownLabel}>Pending</Text>
                             <ProgressBar
-                                value={stats.pendingServices}
-                                total={stats.totalServices}
+                                value={stats.pending}
+                                total={stats.total}
                                 color={Colors.warning}
                             />
                         </View>
                         <View style={s.breakdownDivider} />
                         <View style={s.breakdownItem}>
                             <Text style={[s.breakdownValue, { color: Colors.info }]}>
-                                {stats.confirmedBookings}
+                                {bookingStats.confirmed} {/* was: stats.confirmedBookings */}
                             </Text>
                             <Text style={s.breakdownLabel}>Confirmed</Text>
                             <ProgressBar
-                                value={stats.confirmedBookings}
-                                total={stats.totalBookings}
+                                value={bookingStats.confirmed}
+                                total={bookingStats.total}
                                 color={Colors.info}
                             />
                         </View>
                         <View style={s.breakdownDivider} />
                         <View style={s.breakdownItem}>
                             <Text style={[s.breakdownValue, { color: Colors.primary }]}>
-                                {stats.totalQuotations}
+                                {stats.draft} {/* was: stats.totalQuotations */}
                             </Text>
-                            <Text style={s.breakdownLabel}>Quotes</Text>
+                            <Text style={s.breakdownLabel}>Draft</Text>
                             <ProgressBar
-                                value={stats.totalQuotations}
-                                total={stats.totalBookings}
+                                value={stats.draft}
+                                total={stats.total}
                                 color={Colors.primary}
                             />
                         </View>
@@ -424,12 +419,16 @@ export default function VendorDashboardScreen({ navigation }: Props) {
                     <CardHeader
                         title="Recent Bookings"
                         count={recentBookings.length > 0 ? recentBookings.length : undefined}
-                        onViewAll={() =>console.log('Naigating to booking')}
+                        onViewAll={() => console.log('Navigating to bookings')}
                     />
                     {recentBookings.length === 0 ? (
                         <View style={s.emptyWrap}>
                             <View style={s.emptyIconWrap}>
-                                <Ionicons name="calendar-outline" size={28} color={Colors.primaryBorder} />
+                                <Ionicons
+                                    name="calendar-outline"
+                                    size={28}
+                                    color={Colors.primaryBorder}
+                                />
                             </View>
                             <Text style={s.emptyTitle}>No bookings yet</Text>
                             <Text style={s.emptySub}>
@@ -453,19 +452,45 @@ export default function VendorDashboardScreen({ navigation }: Props) {
                     <CardHeader title="Quick Actions" />
                     <View style={s.quickActionsGrid}>
                         {[
-                            { icon: 'add-circle-outline', label: 'Add Service', color: Colors.primary, bg: Colors.primaryLight },
-                            { icon: 'person-outline', label: 'Edit Profile', color: Colors.info, bg: Colors.infoLight },
-                            { icon: 'document-text-outline', label: 'Quotations', color: Colors.success, bg: Colors.successLight },
-                            { icon: 'settings-outline', label: 'Settings', color: Colors.charcoalLight, bg: Colors.border },
+                            {
+                                icon: 'add-circle-outline',
+                                label: 'Add Service',
+                                color: Colors.primary,
+                                bg: Colors.primaryLight,
+                            },
+                            {
+                                icon: 'person-outline',
+                                label: 'Edit Profile',
+                                color: Colors.info,
+                                bg: Colors.infoLight,
+                            },
+                            {
+                                icon: 'document-text-outline',
+                                label: 'Quotations',
+                                color: Colors.success,
+                                bg: Colors.successLight,
+                            },
+                            {
+                                icon: 'settings-outline',
+                                label: 'Settings',
+                                color: Colors.charcoalLight,
+                                bg: Colors.border,
+                            },
                         ].map(action => (
                             <TouchableOpacity
                                 key={action.label}
                                 style={s.quickActionBtn}
                                 activeOpacity={0.8}
-                                onPress={() => alert.info('Coming Soon', `${action.label} coming soon`)}
+                                onPress={() =>
+                                    alert.info('Coming Soon', `${action.label} coming soon`)
+                                }
                             >
                                 <View style={[s.quickActionIcon, { backgroundColor: action.bg }]}>
-                                    <Ionicons name={action.icon as any} size={22} color={action.color} />
+                                    <Ionicons
+                                        name={action.icon as any}
+                                        size={22}
+                                        color={action.color}
+                                    />
                                 </View>
                                 <Text style={s.quickActionLabel}>{action.label}</Text>
                             </TouchableOpacity>
@@ -479,10 +504,9 @@ export default function VendorDashboardScreen({ navigation }: Props) {
     );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
+// ─── Styles (unchanged) ───────────────────────────────────────────────────────
 const s = StyleSheet.create({
     root: { flex: 1, backgroundColor: Colors.background },
-
     header: {
         backgroundColor: Colors.surface,
         borderBottomLeftRadius: Radii.xxl,
@@ -562,7 +586,6 @@ const s = StyleSheet.create({
         color: Colors.primaryDark,
         letterSpacing: 1.5,
     },
-
     scroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.xl, paddingBottom: 100 },
     statsGrid: {
         flexDirection: 'row',
@@ -595,7 +618,6 @@ const s = StyleSheet.create({
         color: Colors.charcoal,
     },
     statLabel: { fontSize: 11, color: Colors.charcoalLight, fontWeight: Typography.semiBold },
-
     card: {
         backgroundColor: Colors.surface,
         borderRadius: Radii.xl,
@@ -627,7 +649,6 @@ const s = StyleSheet.create({
     },
     countBadgeText: { fontSize: 10, fontWeight: Typography.extraBold, color: Colors.primaryDark },
     seeAllText: { fontSize: Typography.sm, fontWeight: Typography.bold, color: Colors.primary },
-
     breakdownRow: { flexDirection: 'row', alignItems: 'flex-start' },
     breakdownItem: { flex: 1, alignItems: 'center', gap: 3, paddingHorizontal: 4 },
     breakdownValue: { fontSize: 20, fontWeight: Typography.extraBold, letterSpacing: -0.5 },
@@ -647,8 +668,12 @@ const s = StyleSheet.create({
         overflow: 'hidden',
     },
     progressFill: { height: '100%', borderRadius: 2 },
-
-    row: { flexDirection: 'row', alignItems: 'center', paddingVertical: Spacing.md, gap: Spacing.sm },
+    row: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: Spacing.md,
+        gap: Spacing.sm,
+    },
     rowIconWrap: {
         width: 42,
         height: 42,
@@ -669,10 +694,13 @@ const s = StyleSheet.create({
     rowRight: { alignItems: 'flex-end', gap: 4 },
     rowAmount: { fontSize: 13, fontWeight: Typography.extraBold, color: Colors.primary },
     separator: { height: 1, backgroundColor: Colors.divider },
-
-    statusTag: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radii.full, flexShrink: 0 },
+    statusTag: {
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: Radii.full,
+        flexShrink: 0,
+    },
     statusTagText: { fontSize: 10, fontWeight: Typography.bold, letterSpacing: 0.2 },
-
     emptyWrap: { alignItems: 'center', paddingVertical: Spacing.xl, gap: Spacing.sm },
     emptyIconWrap: {
         width: 64,
@@ -685,7 +713,12 @@ const s = StyleSheet.create({
         borderColor: Colors.primaryBorder,
         marginBottom: Spacing.xs,
     },
-    emptyTitle: { fontSize: 15, fontWeight: Typography.bold, color: Colors.charcoal, letterSpacing: -0.2 },
+    emptyTitle: {
+        fontSize: 15,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal,
+        letterSpacing: -0.2,
+    },
     emptySub: {
         fontSize: 12.5,
         color: Colors.charcoalLight,
@@ -693,7 +726,6 @@ const s = StyleSheet.create({
         lineHeight: 18,
         paddingHorizontal: Spacing.xl,
     },
-
     quickActionsGrid: { flexDirection: 'row', gap: Spacing.sm },
     quickActionBtn: { flex: 1, alignItems: 'center', gap: Spacing.xs },
     quickActionIcon: {

@@ -188,7 +188,7 @@ export default function BookingCard({
                 )}
 
                 {/* Client actions */}
-                {userType === 'client' && booking.status === 'pending' && (
+                {/* {userType === 'client' && booking.status === 'pending' && (
                     <View style={styles.actionsRow}>
                         <TouchableOpacity
                             style={[styles.actionBtn, styles.actionBtnReject, { flex: 1 }]}
@@ -201,7 +201,7 @@ export default function BookingCard({
                             </Text>
                         </TouchableOpacity>
                     </View>
-                )}
+                )} */}
             </View>
         </Animated.View>
     );

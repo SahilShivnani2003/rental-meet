@@ -62,7 +62,7 @@ export const vendorProfileSubmit = async() =>{
     }
 }
 
-export const vendorServices = async() =>{
+export const getVendorServices = async() =>{
     try{
         console.log('Fetching vendor services .... ');
 
@@ -81,7 +81,7 @@ export const createVendorService = async(data: VendorService) =>{
     try{
         console.log('Creating vendor serivce ....');
 
-        const response = await privateClient.post('/vendor/serices', data);
+        const response = await privateClient.post('/vendor/services', data);
 
         console.log('Create vendor service response : ', response.data);
 

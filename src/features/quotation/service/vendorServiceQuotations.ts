@@ -4,7 +4,7 @@ export const getVendorServiceQuotations = async() =>{
     try{
         console.log('Fetching vendor service quotations downloads ...');
         
-        const response = await privateClient.get('/vendor/service-quotation/downloads');
+        const response = await privateClient.get('/vendor/service-quotation-downloads');
 
         console.log('Vendor service quotation download response : ', response.data);
 
