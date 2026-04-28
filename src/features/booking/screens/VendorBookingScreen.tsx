@@ -17,6 +17,8 @@ import { Spacing, Colors, Radii, Shadows, Typography } from '@/theme/theme';
 import { VendorTabParamList } from '@/navigations/tabNavigations/VendorTabNavigation';
 import { ServiceBooking } from '../types/ServiceBooking';
 import { useGetVendorServiceBooking } from '../hooks/useVendorBooking';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '@/types/RootStackParamList';
 
 const { width: W } = Dimensions.get('window');
 
@@ -165,7 +167,9 @@ function BookingCard({ booking, index, onPress }: BookingCardProps) {
                     <View style={s.cardFooter}>
                         <View>
                             <Text style={s.amountLabel}>Total Amount</Text>
-                            <Text style={s.amountValue}>{fmtCurrency(booking.amount || booking?.pricing?.total || 0)}</Text>
+                            <Text style={s.amountValue}>
+                                {fmtCurrency(booking.amount || booking?.pricing?.total || 0)}
+                            </Text>
                         </View>
                         <View style={[s.paymentBadge, { backgroundColor: pst.bg }]}>
                             <Text style={[s.paymentText, { color: pst.color }]}>{pst.label}</Text>
@@ -261,7 +265,11 @@ export default function VendorBookingsScreen({ navigation }: Props) {
     }, [bookings, filter]);
 
     const handleBookingPress = useCallback((booking: ServiceBooking) => {
-        console.log('Navigate to booking detail:', booking._id);
+        navigation
+            .getParent<NativeStackNavigationProp<RootStackParamList>>()
+            .navigate('serviceBookingDetail', {
+                bookingData: booking,
+            });
     }, []);
 
     // ── Render ────────────────────────────────────────────────────────────────

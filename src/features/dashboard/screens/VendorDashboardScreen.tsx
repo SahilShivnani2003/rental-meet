@@ -19,6 +19,8 @@ import { VendorTabParamList } from '@/navigations/tabNavigations/VendorTabNaviga
 import { ServiceBooking } from '@/features/booking/types/ServiceBooking';
 import { useVendorStats } from '../hooks/useVendorDashboard';
 import { useGetVendorServiceBooking } from '@/features/booking/hooks/useVendorBooking';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '@/types/RootStackParamList';
 
 const { width: W } = Dimensions.get('window');
 const STAT_W = (W - Spacing.lg * 2 - Spacing.md) / 2;
@@ -188,6 +190,7 @@ type Props = NativeBottomTabScreenProps<VendorTabParamList, 'dashboard'>;
 export default function VendorDashboardScreen({ navigation }: Props) {
     const { user } = useAuthStore();
     const alert = useAlert();
+    const rootNav = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
 
     const {
         data: statsData,
@@ -285,9 +288,11 @@ export default function VendorDashboardScreen({ navigation }: Props) {
 
     const goToBookingDetail = useCallback(
         (booking: ServiceBooking) => {
-            // TODO: wire up real route, e.g.:
-            // navigation.navigate('serviceBookingDetail', { bookingId: booking._id })
-            console.log('Navigating to booking', booking._id);
+            navigation
+                .getParent<NativeStackNavigationProp<RootStackParamList>>()
+                .navigate('serviceBookingDetail', {
+                    bookingData: booking,
+                });
         },
         [], // navigation removed from deps until route is wired
     );
@@ -457,33 +462,28 @@ export default function VendorDashboardScreen({ navigation }: Props) {
                                 label: 'Add Service',
                                 color: Colors.primary,
                                 bg: Colors.primaryLight,
+                                fn: () => rootNav.navigate('addVendorService'),
                             },
                             {
                                 icon: 'person-outline',
                                 label: 'Edit Profile',
                                 color: Colors.info,
                                 bg: Colors.infoLight,
+                                fn: () => navigation.navigate('profile'),
                             },
                             {
                                 icon: 'document-text-outline',
                                 label: 'Quotations',
                                 color: Colors.success,
                                 bg: Colors.successLight,
-                            },
-                            {
-                                icon: 'settings-outline',
-                                label: 'Settings',
-                                color: Colors.charcoalLight,
-                                bg: Colors.border,
+                                fn: () => navigation.navigate('quotationDownload'),
                             },
                         ].map(action => (
                             <TouchableOpacity
                                 key={action.label}
                                 style={s.quickActionBtn}
                                 activeOpacity={0.8}
-                                onPress={() =>
-                                    alert.info('Coming Soon', `${action.label} coming soon`)
-                                }
+                                onPress={()=>action.fn()}
                             >
                                 <View style={[s.quickActionIcon, { backgroundColor: action.bg }]}>
                                     <Ionicons

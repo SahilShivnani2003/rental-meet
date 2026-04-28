@@ -25,6 +25,7 @@ import { useChangePassword } from '../hooks/useChangePassword';
 import { useUpdateProfile } from '../hooks/useUpdateProfile';
 import ChangePasswordModal from '../models/ChangePasswordModal';
 import EditProfileModal from '../models/EditProfileModal';
+import { VendorTabParamList } from '@/navigations/tabNavigations/VendorTabNavigation';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -107,7 +108,8 @@ function MenuSection({ title, items }: { title: string; items: any[] }) {
     );
 }
 
-type ProfileProps = NativeBottomTabScreenProps<OwnerTabParamList, 'profile'>;
+type tabParamlist = OwnerTabParamList & VendorTabParamList;
+type ProfileProps = NativeBottomTabScreenProps<tabParamlist, 'profile'>;
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function ProfileScreen({ navigation }: ProfileProps) {
@@ -206,7 +208,7 @@ export default function ProfileScreen({ navigation }: ProfileProps) {
             iconBg: Colors.successLight,
             title: 'My Services',
             subtitle: 'Manage your offered services',
-            onPress: () => navigation.navigate('venues'),
+            onPress: () => navigation.navigate('myService'),
         },
         {
             id: 'edit-profile',

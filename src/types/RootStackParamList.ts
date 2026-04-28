@@ -53,5 +53,8 @@ export type RootStackParamList = {
     updateVendorService:{
         serviceId: string;
         initialData: VendorService;
+    };
+    serviceBookingDetail: {
+        bookingData: any
     }
 };
