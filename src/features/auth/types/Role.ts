@@ -3,7 +3,7 @@ import { Colors } from "../../../theme/theme";
 export const ROLES = [
     {
         id: 'customer',
-        title: 'Client',
+        title: 'User Registration',
         subtitle: 'User',
         description:
             'Browse and book premium meeting venues, conference rooms, and event spaces with ease.',
@@ -15,11 +15,12 @@ export const ROLES = [
             'Manage your bookings',
             'Save favourites',
             'Chat with owners',
-        ],
+        ],        
+        featured: true,
     },
     {
         id: 'owner',
-        title: 'Space Owner',
+        title: 'List your venue',
         subtitle: 'Owner',
         description:
             'List and manage your properties. Accept bookings and grow your venue business.',
@@ -32,11 +33,10 @@ export const ROLES = [
             'Set pricing & availability',
             'Earn revenue',
         ],
-        featured: true,
     },
     {
         id: 'vendor',
-        title: 'Service Vendor',
+        title: 'List your business',
         subtitle: 'Vendor',
         description:
             'Offer services like catering, AV setup, decoration, and more to venue bookers.',
