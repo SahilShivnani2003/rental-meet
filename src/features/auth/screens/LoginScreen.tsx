@@ -199,7 +199,7 @@ export default function LoginScreen({ navigation }: LoginProps) {
                 >
                     <View style={styles.logoCard}>
                         <Image
-                            source={require('@assets/MainLogo.png')}
+                            source={require('@assets/NameLogo.png')}
                             style={styles.logo}
                             resizeMode="contain"
                         />

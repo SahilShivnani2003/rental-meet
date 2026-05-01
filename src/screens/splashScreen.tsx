@@ -514,7 +514,7 @@ const SplashScreen = ({ navigation }: splashProps) => {
 
                 {/* Logo pin icon */}
                 <Animated.Image
-                    source={require('../assets/logo1.png')}
+                    source={require('../assets/Logo.png')}
                     style={[
                         styles.logoIcon,
                         {
