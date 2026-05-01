@@ -48,11 +48,83 @@ function formatDate(date: Date) {
 type DropdownType = 'city' | 'capacity' | 'date' | null;
 type landingProps = NativeBottomTabScreenProps<ClientTabParamList, 'home'>;
 
+// ─── Shimmer skeleton helpers ─────────────────────────────────────────────────
+
+function useShimmer() {
+    const anim = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(anim, { toValue: 1, duration: 900, useNativeDriver: true }),
+                Animated.timing(anim, { toValue: 0, duration: 900, useNativeDriver: true }),
+            ]),
+        ).start();
+    }, []);
+    const opacity = anim.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.75] });
+    return opacity;
+}
+
+function SkeletonBox({ style }: { style?: object }) {
+    const opacity = useShimmer();
+    return (
+        <Animated.View
+            style={[{ backgroundColor: Colors.border, borderRadius: Radii.md, opacity }, style]}
+        />
+    );
+}
+
+/** 4-column row skeleton for categories */
+function CategorySkeleton() {
+    // 8 placeholder cards (2 rows of 4)
+    return (
+        <View style={s.catGrid}>
+            {Array.from({ length: 8 }).map((_, i) => (
+                <View key={i} style={[s.catCard, { alignItems: 'center', gap: Spacing.sm }]}>
+                    <SkeletonBox style={{ width: 50, height: 50, borderRadius: Radii.lg }} />
+                    <SkeletonBox style={{ width: '70%', height: 10, borderRadius: 4 }} />
+                </View>
+            ))}
+        </View>
+    );
+}
+
+/** Horizontal scroll skeleton for featured venues */
+function VenueSkeleton() {
+    return (
+        <View style={s.hScroll}>
+            {Array.from({ length: 3 }).map((_, i) => (
+                <View
+                    key={i}
+                    style={{
+                        width: W * 0.72,
+                        borderRadius: Radii.xl,
+                        overflow: 'hidden',
+                        backgroundColor: Colors.surface,
+                        ...Shadows.card,
+                        borderWidth: 1.5,
+                        borderColor: Colors.border,
+                    }}
+                >
+                    <SkeletonBox style={{ width: '100%', height: 160 }} />
+                    <View style={{ padding: Spacing.md, gap: 8 }}>
+                        <SkeletonBox style={{ width: '65%', height: 14, borderRadius: 4 }} />
+                        <SkeletonBox style={{ width: '45%', height: 11, borderRadius: 4 }} />
+                        <SkeletonBox style={{ width: '55%', height: 11, borderRadius: 4 }} />
+                    </View>
+                </View>
+            ))}
+        </View>
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function ClientDashboard({ navigation }: landingProps) {
     const { user } = useAuthStore();
     const [search, setSearch] = useState('');
+    const currentRole = user?.role;
 
-    // ── API hooks — each with unique destructured names ──────────────────────
+    // ── API hooks ─────────────────────────────────────────────────────────────
     const {
         data: venueData,
         isLoading: venuesLoading,
@@ -74,12 +146,12 @@ export default function ClientDashboard({ navigation }: landingProps) {
         refetch: refetchTypes,
     } = useGetVenueType();
 
-    // ── Derive data safely — no local mirror state needed ────────────────────
+    // ── Derive data safely ────────────────────────────────────────────────────
     const venues: Venue[] = venueData?.venues ?? [];
     const cities: string[] = citiesData?.cities ?? [];
     const categories: VenueType[] = venueTypeData?.venueTypes ?? [];
 
-    // ── Filter state ─────────────────────────────────────────────────────────
+    // ── Filter state ──────────────────────────────────────────────────────────
     const [openDropdown, setOpenDropdown] = useState<DropdownType>(null);
     const [selectedCity, setSelectedCity] = useState<string | null>(null);
     const [selectedCapacity, setSelectedCapacity] = useState<{
@@ -88,7 +160,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
     } | null>(null);
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
-    // ── Calendar state ───────────────────────────────────────────────────────
+    // ── Calendar state ────────────────────────────────────────────────────────
     const today = new Date();
     const [calYear, setCalYear] = useState(today.getFullYear());
     const [calMonth, setCalMonth] = useState(today.getMonth());
@@ -124,6 +196,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
     const capacityLabel = selectedCapacity?.label ?? 'Capacity';
     const dateLabel = selectedDate ? formatDate(selectedDate) : 'Date';
     const [isRefreshing, setIsRefreshing] = useState(false);
+
     // ── Calendar helpers ──────────────────────────────────────────────────────
     const daysInMonth = getDaysInMonth(calYear, calMonth);
     const firstDayOfWeek = new Date(calYear, calMonth, 1).getDay();
@@ -160,9 +233,10 @@ export default function ClientDashboard({ navigation }: landingProps) {
 
     const handleRefresh = async () => {
         setIsRefreshing(true);
-        await Promise.all([refetchCities, refetchTypes, refetchVenues]);
+        await Promise.all([refetchCities(), refetchTypes(), refetchVenues()]);
         setIsRefreshing(false);
     };
+
     const isSelectedDay = (day: number) =>
         !!selectedDate &&
         selectedDate.getFullYear() === calYear &&
@@ -176,7 +250,6 @@ export default function ClientDashboard({ navigation }: landingProps) {
             return (
                 <>
                     <Text style={ds.sheetTitle}>Select City</Text>
-                    {/* All Cities option */}
                     <TouchableOpacity
                         style={[ds.optionRow, !selectedCity && ds.optionRowActive]}
                         onPress={() => {
@@ -373,7 +446,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
                     <RefreshControl
                         refreshing={isRefreshing}
                         onRefresh={handleRefresh}
-                        colors={[Colors.primary]} // Android
+                        colors={[Colors.primary]}
                         tintColor={Colors.primary}
                     />
                 }
@@ -550,17 +623,21 @@ export default function ClientDashboard({ navigation }: landingProps) {
                             <Text style={s.seeAll}>See all →</Text>
                         </TouchableOpacity>
                     </View>
-                    <View style={s.catGrid}>
-                        {categories.length === 0 ? (
-                            <View style={s.emptyState}>
-                                <Text style={s.emptyStateIcon}>🏷️</Text>
-                                <Text style={s.emptyStateTitle}>No categories yet</Text>
-                                <Text style={s.emptyStateSub}>
-                                    Check back soon — new venue types are on the way.
-                                </Text>
-                            </View>
-                        ) : (
-                            categories.slice(0, 9).map(cat => (
+
+                    {/* ── Category skeleton or real grid ── */}
+                    {typesLoading ? (
+                        <CategorySkeleton />
+                    ) : categories.length === 0 ? (
+                        <View style={s.emptyState}>
+                            <Text style={s.emptyStateIcon}>🏷️</Text>
+                            <Text style={s.emptyStateTitle}>No categories yet</Text>
+                            <Text style={s.emptyStateSub}>
+                                Check back soon — new venue types are on the way.
+                            </Text>
+                        </View>
+                    ) : (
+                        <View style={s.catGrid}>
+                            {categories.slice(0, 16).map(cat => (
                                 <TouchableOpacity
                                     key={cat._id}
                                     style={s.catCard}
@@ -572,9 +649,9 @@ export default function ClientDashboard({ navigation }: landingProps) {
                                     </View>
                                     <Text style={s.catLabel}>{cat.name}</Text>
                                 </TouchableOpacity>
-                            ))
-                        )}
-                    </View>
+                            ))}
+                        </View>
+                    )}
                 </Animated.View>
 
                 {/* ── FEATURED VENUES ── */}
@@ -589,33 +666,39 @@ export default function ClientDashboard({ navigation }: landingProps) {
                         </TouchableOpacity>
                     </View>
                     <Text style={s.sectionSub}>Handpicked premium spaces for your events</Text>
-                    <View style={s.hScroll}>
-                        {venues.length === 0 ? (
-                            <View style={s.emptyState}>
-                                <Text style={s.emptyStateIcon}>🏛️</Text>
-                                <Text style={s.emptyStateTitle}>No venues available</Text>
-                                <Text style={s.emptyStateSub}>
-                                    We're adding new spaces soon. Browse all to stay updated.
-                                </Text>
-                                <TouchableOpacity
-                                    style={s.emptyStateBtn}
-                                    onPress={goToVenues}
-                                    activeOpacity={0.85}
-                                >
-                                    <Text style={s.emptyStateBtnText}>Browse All Venues</Text>
-                                </TouchableOpacity>
-                            </View>
-                        ) : (
-                            venues.map((v, i) => (
+
+                    {/* ── Venue skeleton or real list ── */}
+                    {venuesLoading ? (
+                        <VenueSkeleton />
+                    ) : venues.length === 0 ? (
+                        <View style={s.emptyState}>
+                            <Text style={s.emptyStateIcon}>🏛️</Text>
+                            <Text style={s.emptyStateTitle}>No venues available</Text>
+                            <Text style={s.emptyStateSub}>
+                                We're adding new spaces soon. Browse all to stay updated.
+                            </Text>
+                            <TouchableOpacity
+                                style={s.emptyStateBtn}
+                                onPress={goToVenues}
+                                activeOpacity={0.85}
+                            >
+                                <Text style={s.emptyStateBtnText}>Browse All Venues</Text>
+                            </TouchableOpacity>
+                        </View>
+                    ) : (
+                        <View style={s.hScroll}>
+                            {venues.map((v, i) => (
                                 <FeaturedCard
                                     key={v._id}
                                     v={v}
                                     index={i}
+                                    role={currentRole}
                                     onPress={goToVenueDetail}
                                 />
-                            ))
-                        )}
-                    </View>
+                            ))}
+                        </View>
+                    )}
+
                     <TouchableOpacity
                         style={s.viewAllBtn}
                         onPress={goToVenues}
@@ -649,7 +732,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
     );
 }
 
-// ─── styles unchanged — only fix position: 'static' → 'relative' ─────────────
+// ─── Bottom sheet styles ──────────────────────────────────────────────────────
 const ds = StyleSheet.create({
     overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
     sheet: {
@@ -747,7 +830,8 @@ const ds = StyleSheet.create({
     clearDateText: { fontSize: 13, color: Colors.charcoalLight, fontWeight: Typography.medium },
 });
 
-const CAT_W = (W - Spacing.lg * 2 - Spacing.sm * 2) / 3;
+// ─── 4-column category card width ─────────────────────────────────────────────
+const CAT_W = (W - Spacing.lg * 2 - Spacing.sm * 3) / 4;
 
 const s = StyleSheet.create({
     root: { flex: 1, backgroundColor: Colors.background },
@@ -760,7 +844,7 @@ const s = StyleSheet.create({
         paddingTop: 24,
         paddingBottom: Spacing.md,
         backgroundColor: Colors.background,
-        position: 'relative', // ← was 'static' — invalid in RN
+        position: 'relative',
     },
     brand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     brandLogo: { height: 50, width: 150 },
@@ -922,6 +1006,8 @@ const s = StyleSheet.create({
     },
     seeAll: { fontSize: 13, fontWeight: Typography.bold, color: Colors.primary },
     hScroll: { paddingBottom: 4, gap: Spacing.lg, width: '100%' },
+
+    // ── 4-column category grid ────────────────────────────────────────────────
     catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
     catCard: {
         width: CAT_W,
@@ -935,8 +1021,8 @@ const s = StyleSheet.create({
         borderColor: Colors.border,
     },
     catIconWrap: {
-        width: 50,
-        height: 50,
+        width: 42,
+        height: 42,
         borderRadius: Radii.lg,
         backgroundColor: Colors.primaryLight,
         alignItems: 'center',
@@ -944,9 +1030,9 @@ const s = StyleSheet.create({
         borderWidth: 1.5,
         borderColor: Colors.primaryBorder,
     },
-    catIconEmoji: { fontSize: 24 },
+    catIconEmoji: { fontSize: 20 },
     catLabel: {
-        fontSize: 11.5,
+        fontSize: 10.5,
         fontWeight: Typography.bold,
         color: Colors.charcoal,
         textAlign: 'center',
@@ -976,10 +1062,7 @@ const s = StyleSheet.create({
         borderStyle: 'dashed',
         gap: Spacing.sm,
     },
-    emptyStateIcon: {
-        fontSize: 36,
-        marginBottom: 4,
-    },
+    emptyStateIcon: { fontSize: 36, marginBottom: 4 },
     emptyStateTitle: {
         fontSize: 15,
         fontWeight: Typography.bold,

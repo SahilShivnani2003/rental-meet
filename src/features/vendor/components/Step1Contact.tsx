@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { Colors, Spacing, Radii, Typography } from '@/theme/theme';
 import { VendorService } from '@/features/otherService/types/VendorService';
+import Field from '@/components/UI/InputField';
 
 type Props = {
     data: Partial<VendorService>;
@@ -26,56 +27,47 @@ export default function Step1Contact({ data, onChange }: Props) {
             <Text style={s.sectionTitle}>Contact Information</Text>
 
             {/* Full Name */}
-            <View style={s.fieldWrap}>
-                <Text style={s.label}>
-                    Full Name <Text style={s.required}>*</Text>
-                </Text>
-                <TextInput
-                    style={s.input}
-                    placeholder="Your full name"
-                    placeholderTextColor={Colors.charcoalLight}
-                    value={contact.fullName || ''}
-                    onChangeText={v => update('fullName', v)}
-                />
-            </View>
+            <Field
+                label="Full Name *"
+                placeholder="Your full name"
+                icon="person-outline"
+                value={contact.fullName || ''}
+                onChangeText={v => update('fullName', v)}
+                autoCapitalize="words"
+            />
 
             {/* Primary Mobile */}
             <View style={s.fieldWrap}>
-                <Text style={s.label}>
-                    Primary Mobile <Text style={s.required}>*</Text>
-                </Text>
                 <View style={s.phoneRow}>
-                    <View style={s.countryCode}>
-                        <Text style={s.countryCodeText}>+91</Text>
+                    <View style={s.phoneField}>
+                        <Field
+                            label="Primary Mobile *"
+                            placeholder="10-digit mobile"
+                            icon="call-outline"
+                            keyboardType="phone-pad"
+                            maxLength={10}
+                            value={contact.primaryMobile || ''}
+                            onChangeText={v => update('primaryMobile', v)}
+                        />
                     </View>
-                    <TextInput
-                        style={[s.input, s.phoneInput]}
-                        placeholder="10-digit mobile"
-                        placeholderTextColor={Colors.charcoalLight}
-                        keyboardType="phone-pad"
-                        maxLength={10}
-                        value={contact.primaryMobile || ''}
-                        onChangeText={v => update('primaryMobile', v)}
-                    />
                 </View>
             </View>
 
             {/* Alternate Mobile */}
             <View style={s.fieldWrap}>
-                <Text style={s.label}>Alternate Mobile</Text>
                 <View style={s.phoneRow}>
-                    <View style={s.countryCode}>
-                        <Text style={s.countryCodeText}>+91</Text>
+                    
+                    <View style={s.phoneField}>
+                        <Field
+                            label="Alternate Mobile"
+                            placeholder="Optional"
+                            icon="call-outline"
+                            keyboardType="phone-pad"
+                            maxLength={10}
+                            value={contact.secondaryMobile || ''}
+                            onChangeText={v => update('secondaryMobile', v)}
+                        />
                     </View>
-                    <TextInput
-                        style={[s.input, s.phoneInput]}
-                        placeholder="Optional"
-                        placeholderTextColor={Colors.charcoalLight}
-                        keyboardType="phone-pad"
-                        maxLength={10}
-                        value={contact.secondaryMobile || ''}
-                        onChangeText={v => update('secondaryMobile', v)}
-                    />
                 </View>
             </View>
 
@@ -119,44 +111,38 @@ const s = StyleSheet.create({
         marginBottom: Spacing.xl,
     },
 
-    fieldWrap: { marginBottom: Spacing.lg },
+    fieldWrap: { marginBottom: Spacing.md },
 
     label: {
-        fontSize: Typography.sm,
-        fontWeight: Typography.semiBold,
+        fontSize: 11,
+        fontWeight: Typography.bold,
         color: Colors.charcoalMid,
-        marginBottom: Spacing.xs,
+        letterSpacing: 0.8,
+        textTransform: 'uppercase',
+        marginBottom: 7,
     },
     required: { color: Colors.danger },
 
-    input: {
-        borderWidth: 1,
-        borderColor: Colors.border,
-        borderRadius: Radii.sm,
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.md,
-        fontSize: Typography.base,
-        color: Colors.charcoal,
-        backgroundColor: Colors.surface,
-    },
-
-    phoneRow: { flexDirection: 'row', gap: Spacing.sm },
+    // Phone row — aligns +91 badge with the Field's input box
+    phoneRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.sm },
     countryCode: {
-        borderWidth: 1,
+        borderWidth: 1.5,
         borderColor: Colors.border,
-        borderRadius: Radii.sm,
+        borderRadius: Radii.md,
         paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.md,
+        height: 54, // matches Field's input height
         backgroundColor: Colors.background,
         justifyContent: 'center',
+        marginBottom: Spacing.md, // matches Field's wrap marginBottom
     },
     countryCodeText: {
-        fontSize: Typography.base,
+        fontSize: 15,
         fontWeight: Typography.semiBold,
         color: Colors.charcoal,
     },
-    phoneInput: { flex: 1 },
+    phoneField: { flex: 1 },
 
+    // Role picker
     roleRow: { gap: Spacing.sm },
     roleOption: {
         flexDirection: 'row',
@@ -165,7 +151,7 @@ const s = StyleSheet.create({
         paddingVertical: Spacing.md,
         paddingHorizontal: Spacing.lg,
         borderRadius: Radii.sm,
-        borderWidth: 1,
+        borderWidth: 1.5,
         borderColor: Colors.border,
         backgroundColor: Colors.surface,
     },

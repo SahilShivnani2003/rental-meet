@@ -371,21 +371,6 @@ export default function AddServiceScreen({ navigation }: any) {
 
                 {/* ── Content ── */}
                 <View style={s.content}>
-                    {/* Back to Services link */}
-                    <View style={s.breadcrumb}>
-                        <TouchableOpacity
-                            style={s.breadcrumbBtn}
-                            onPress={() => navigation?.goBack?.()}
-                            activeOpacity={0.7}
-                        >
-                            <Ionicons
-                                name="arrow-back-outline"
-                                size={14}
-                                color={Colors.charcoalMid}
-                            />
-                            <Text style={s.breadcrumbText}>Back to Services</Text>
-                        </TouchableOpacity>
-                    </View>
 
                     {/* Form card */}
                     <View style={[s.card, { flex: 1 }]}>

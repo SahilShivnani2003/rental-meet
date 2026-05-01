@@ -30,9 +30,9 @@ const clientTabs = [
     },
     {
         name: 'otherService',
-        label: 'Other Service',
-        icon: 'briefcase',
-        iconOff: 'briefcase-outline',
+        label: 'Premium',
+        icon: 'diamond',
+        iconOff: 'diamond-outline',
     },
     { name: 'profile', label: 'Profile', icon: 'person', iconOff: 'person-outline' },
 ];
@@ -51,7 +51,10 @@ export function ClientTabNavigation() {
             <Tabs.Screen name="venues" component={VenuesScreen} />
             <Tabs.Screen name="bookings" component={BookingsScreen} />
             <Tabs.Screen name="otherService" component={OtherServicesScreen} />
-            <Tabs.Screen name="profile" component={isAuthenticated ? ClientProfile : GuestProfile} />
+            <Tabs.Screen
+                name="profile"
+                component={isAuthenticated ? ClientProfile : GuestProfile}
+            />
         </Tabs.Navigator>
     );
 }

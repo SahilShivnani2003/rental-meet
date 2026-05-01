@@ -227,22 +227,35 @@ export default function OtherServicesScreen({ navigation }: otherServiceScreenPr
                     />
                 }
             >
-                {/* ── Category tiles ── */}
-                <Animated.View style={{ opacity: bodyFade }}>
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={s.catScroll}
-                    >
-                        {CATEGORIES.map(cat => (
-                            <CategoryTile
+                {/* ── Category chips (2-row wrap) ── */}
+                {/* ── Category chips (2-row wrap) ── */}
+                <Animated.View style={[s.catWrap, { opacity: bodyFade }]}>
+                    {CATEGORIES.map(cat => {
+                        const isActive = selectedCat === cat.key;
+                        return (
+                            <TouchableOpacity
                                 key={cat.key}
-                                cat={cat}
-                                selected={selectedCat === cat.key}
+                                style={[
+                                    s.chip,
+                                    isActive && {
+                                        backgroundColor: cat.color,
+                                        borderColor: cat.color,
+                                    },
+                                ]}
                                 onPress={() => setSelectedCat(cat.key)}
-                            />
-                        ))}
-                    </ScrollView>
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons
+                                    name={cat.icon as any}
+                                    size={14}
+                                    color={isActive ? Colors.white : cat.color}
+                                />
+                                <Text style={[s.chipText, isActive && s.chipTextActive]}>
+                                    {cat.label}
+                                </Text>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </Animated.View>
 
                 {/* ── Showing count ── */}
@@ -426,6 +439,35 @@ const s = StyleSheet.create({
     // Category scroll
     catScroll: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.xl, paddingBottom: Spacing.md },
 
+    // Category chips
+    catWrap: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        paddingHorizontal: Spacing.lg,
+        paddingTop: Spacing.xl,
+        paddingBottom: Spacing.md,
+        gap: Spacing.sm,
+    },
+    chip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: Radii.full,
+        backgroundColor: Colors.background,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+    },
+    chipText: {
+        fontSize: 12,
+        fontWeight: Typography.medium,
+        color: Colors.charcoalLight,
+    },
+    chipTextActive: {
+        color: Colors.white,
+        fontWeight: Typography.bold,
+    },
     // Count row
     countRow: {
         flexDirection: 'row',

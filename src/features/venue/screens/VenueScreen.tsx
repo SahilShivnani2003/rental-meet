@@ -11,6 +11,8 @@ import {
     Animated,
     Modal,
     FlatList,
+    PanResponder,
+    Dimensions,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -34,6 +36,8 @@ import { useToggleActive } from '../hooks/useToggleActive';
 import { Venue } from '../types/Venue';
 import { useCreateBlockDates } from '../hooks/useCreateBlockDates';
 
+const { width: SCREEN_W } = Dimensions.get('window');
+
 const ALL_CATEGORY: VenueType = {
     _id: 'all',
     name: 'All',
@@ -43,6 +47,200 @@ const ALL_CATEGORY: VenueType = {
     isActive: true,
     order: 0,
 };
+
+// ── Price range constants ─────────────────────────────────────────────────────
+const PRICE_MIN = 0;
+const PRICE_MAX = 100000;
+const PRICE_STEP = 500;
+
+// ── Dual-handle Range Slider ──────────────────────────────────────────────────
+interface RangeSliderProps {
+    min: number;
+    max: number;
+    step: number;
+    low: number;
+    high: number;
+    onValueChange: (low: number, high: number) => void;
+}
+
+function RangeSlider({ min, max, step, low, high, onValueChange }: RangeSliderProps) {
+    const sliderRef = useRef<View>(null);
+    const sliderWidth = useRef(0);
+    const lowRef = useRef(low);
+    const highRef = useRef(high);
+
+    // Keep refs in sync
+    useEffect(() => {
+        lowRef.current = low;
+    }, [low]);
+    useEffect(() => {
+        highRef.current = high;
+    }, [high]);
+
+    const clampStep = (val: number) => {
+        const stepped = Math.round(val / step) * step;
+        return Math.max(min, Math.min(max, stepped));
+    };
+
+    const xToValue = (x: number) => {
+        const ratio = Math.max(0, Math.min(1, x / sliderWidth.current));
+        return clampStep(min + ratio * (max - min));
+    };
+
+    const valueToPercent = (val: number) => ((val - min) / (max - min)) * 100;
+
+    // Low thumb pan
+    const lowPan = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: () => true,
+            onPanResponderGrant: () => {},
+            onPanResponderMove: (_, gs) => {
+                const trackLeft = 0;
+                const newVal = xToValue(gs.moveX - trackLeft);
+                if (newVal < highRef.current) {
+                    onValueChange(newVal, highRef.current);
+                }
+            },
+        }),
+    ).current;
+
+    // High thumb pan
+    const highPan = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: () => true,
+            onPanResponderGrant: () => {},
+            onPanResponderMove: (_, gs) => {
+                const newVal = xToValue(gs.moveX);
+                if (newVal > lowRef.current) {
+                    onValueChange(lowRef.current, newVal);
+                }
+            },
+        }),
+    ).current;
+
+    const lowPct = valueToPercent(low);
+    const highPct = valueToPercent(high);
+
+    const formatPrice = (val: number) =>
+        val >= 100000
+            ? '₹1L+'
+            : val === 0
+            ? '₹0'
+            : `₹${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}k`;
+
+    return (
+        <View style={rs.wrap}>
+            {/* Labels */}
+            <View style={rs.labelsRow}>
+                <Text style={rs.rangeLabel}>{formatPrice(low)}</Text>
+                <Text style={rs.rangeSep}>—</Text>
+                <Text style={rs.rangeLabel}>{formatPrice(high)}</Text>
+            </View>
+
+            {/* Track */}
+            <View
+                ref={sliderRef}
+                style={rs.trackOuter}
+                onLayout={e => {
+                    sliderWidth.current = e.nativeEvent.layout.width;
+                }}
+            >
+                {/* Inactive track */}
+                <View style={rs.trackInactive} />
+
+                {/* Active track fill */}
+                <View
+                    style={[rs.trackActive, { left: `${lowPct}%`, right: `${100 - highPct}%` }]}
+                />
+
+                {/* Low thumb */}
+                <View style={[rs.thumb, { left: `${lowPct}%` }]} {...lowPan.panHandlers}>
+                    <View style={rs.thumbInner} />
+                </View>
+
+                {/* High thumb */}
+                <View style={[rs.thumb, { left: `${highPct}%` }]} {...highPan.panHandlers}>
+                    <View style={rs.thumbInner} />
+                </View>
+            </View>
+
+            {/* Min / Max hint */}
+            <View style={rs.hintRow}>
+                <Text style={rs.hint}>₹0</Text>
+                <Text style={rs.hint}>₹1L+</Text>
+            </View>
+        </View>
+    );
+}
+
+const rs = StyleSheet.create({
+    wrap: { gap: 4 },
+    labelsRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        marginBottom: 6,
+    },
+    rangeLabel: {
+        fontSize: 13,
+        fontWeight: Typography.bold,
+        color: Colors.primary,
+        letterSpacing: -0.2,
+    },
+    rangeSep: { fontSize: 12, color: Colors.charcoalLight },
+    trackOuter: {
+        height: 36,
+        justifyContent: 'center',
+        position: 'relative',
+        marginHorizontal: 10,
+    },
+    trackInactive: {
+        position: 'absolute',
+        left: 0,
+        right: 0,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: Colors.border,
+    },
+    trackActive: {
+        position: 'absolute',
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: Colors.primary,
+    },
+    thumb: {
+        position: 'absolute',
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        marginLeft: -13,
+        top: 5,
+        backgroundColor: Colors.surface,
+        borderWidth: 2,
+        borderColor: Colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        ...Shadows.card,
+    },
+    thumbInner: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: Colors.primary,
+    },
+    hintRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 2,
+        marginHorizontal: 10,
+    },
+    hint: { fontSize: 10, color: Colors.charcoalLight, fontWeight: Typography.medium },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 type appParamList = OwnerTabParamList & ClientTabParamList;
 type venueProps = NativeStackScreenProps<appParamList, 'venues'>;
@@ -186,14 +384,19 @@ export default function VenuesScreen({ navigation }: venueProps) {
     const isOwner = user?.role === 'owner';
     const alert = useAlert();
     const [operationLoading, setOperationLoading] = useState<string | null>(null);
+
     // ── Filter state ──────────────────────────────────────────────────────────
     const [searchQuery, setSearch] = useState('');
     const [debouncedSearch, setDebouncedSearch] = useState('');
     const [selectedVenueType, setSelectedVenueType] = useState('');
     const [selectedCity, setSelectedCity] = useState('');
     const [selectedCapacity, setSelectedCapacity] = useState('');
-    const [minPrice, setMinPrice] = useState('');
-    const [maxPrice, setMaxPrice] = useState('');
+
+    // Price range slider state (stored as numbers internally, passed as strings to API)
+    const [priceLow, setPriceLow] = useState(PRICE_MIN);
+    const [priceHigh, setPriceHigh] = useState(PRICE_MAX);
+    const priceActive = priceLow > PRICE_MIN || priceHigh < PRICE_MAX;
+
     const [filtersExpanded, setFiltersExpanded] = useState(false);
     const [ownerFilter, setOwnerFilter] = useState<string>('all');
 
@@ -204,7 +407,6 @@ export default function VenuesScreen({ navigation }: venueProps) {
 
     // ── Availability modal state ───────────────────────────────────────────────
     const [availabilityModalVisible, setAvailabilityModalVisible] = useState(false);
-    // Track which venue the modal is operating on
     const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
     const [blockDate, setBlockDate] = useState<Date | null>(null);
     const [reason, setReason] = useState('');
@@ -226,8 +428,8 @@ export default function VenuesScreen({ navigation }: venueProps) {
             venueType: selectedVenueType,
             city: selectedCity,
             capacity: selectedCapacity,
-            minPrice: minPrice ? Number(minPrice) : undefined,
-            maxPrice: maxPrice ? Number(maxPrice) : undefined,
+            minPrice: priceActive ? priceLow : undefined,
+            maxPrice: priceActive ? priceHigh : undefined,
         },
         { enabled: !isOwner },
     );
@@ -245,7 +447,6 @@ export default function VenuesScreen({ navigation }: venueProps) {
     const { mutate: createBlockDates } = useCreateBlockDates();
 
     const venues: Venue[] = isOwner ? ownerVenueData?.venues ?? [] : clientVenueData?.venues ?? [];
-
     const isLoading = isOwner ? isOwnerVenueLoading : isClientVenueLoading;
     const isRefetching = isOwner ? isOwnerRefetching : isClientRefetching;
     const refetch = isOwner ? refetchOwnerVenues : refetchClientVenues;
@@ -253,20 +454,15 @@ export default function VenuesScreen({ navigation }: venueProps) {
     const rawVenueTypes: VenueType[] = venueTypeData?.venueTypes ?? [];
     const categories: VenueType[] = [ALL_CATEGORY, ...rawVenueTypes];
 
-    // ── Animate in when venues load ───────────────────────────────────────────
+    // ── Animate in ────────────────────────────────────────────────────────────
     useEffect(() => {
         if (!isLoading && venues.length > 0) {
             fadeAnim.setValue(0);
-            Animated.timing(fadeAnim, {
-                toValue: 1,
-                duration: 400,
-                useNativeDriver: true,
-            }).start();
+            Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
         }
     }, [isLoading, venues.length]);
 
     // ── Handlers ──────────────────────────────────────────────────────────────
-
     const handleDeleteVenue = useCallback(
         (id: string) => {
             if (!id) return;
@@ -303,17 +499,15 @@ export default function VenuesScreen({ navigation }: venueProps) {
         [resubmitVenue, refetch, alert],
     );
 
-    // Opens the availability modal for a specific venue
     const handleOpenAvailabilityModal = useCallback((venue: Venue) => {
         setSelectedVenue(venue);
-        setBlockDate(null); // reset form state for each new open
+        setBlockDate(null);
         setReason('');
         setAvailabilityModalVisible(true);
     }, []);
 
     const handleCloseAvailabilityModal = useCallback(() => {
         setAvailabilityModalVisible(false);
-        // Delay clearing so the closing animation isn't jarring
         setTimeout(() => {
             setSelectedVenue(null);
             setBlockDate(null);
@@ -321,19 +515,11 @@ export default function VenuesScreen({ navigation }: venueProps) {
         }, 300);
     }, []);
 
-    // Disable / re-enable a venue (toggle isActive)
     const handleToggleActive = useCallback(() => {
-        console.log('press')
-        if (!selectedVenue?._id ){
-            return;
-        } 
-
+        if (!selectedVenue?._id) return;
         setOperationLoading(selectedVenue.isActive ? 'Disabling venue…' : 'Enabling venue…');
         toggleActive(
-            {
-                id: selectedVenue._id,
-                payload: { currentIsActive: selectedVenue.isActive },
-            },
+            { id: selectedVenue._id, payload: { currentIsActive: selectedVenue.isActive } },
             {
                 onSuccess: () => {
                     alert.success(
@@ -355,13 +541,7 @@ export default function VenuesScreen({ navigation }: venueProps) {
         if (!selectedVenue?._id || !blockDate || !reason) return;
         setOperationLoading('Blocking dates…');
         createBlockDates(
-            {
-                id: selectedVenue._id,
-                payload: {
-                    date: blockDate,
-                    reason: reason.trim(),
-                },
-            },
+            { id: selectedVenue._id, payload: { date: blockDate, reason: reason.trim() } },
             {
                 onSuccess: () => {
                     alert.success('Success', 'Dates blocked successfully');
@@ -383,7 +563,7 @@ export default function VenuesScreen({ navigation }: venueProps) {
         alert,
         handleCloseAvailabilityModal,
     ]);
-    // ── Debounced search ──────────────────────────────────────────────────────
+
     const handleSearchChange = useCallback((text: string) => {
         setSearch(text);
         if (searchTimer.current) clearTimeout(searchTimer.current);
@@ -403,8 +583,8 @@ export default function VenuesScreen({ navigation }: venueProps) {
         setSelectedVenueType('');
         setSelectedCity('');
         setSelectedCapacity('');
-        setMinPrice('');
-        setMaxPrice('');
+        setPriceLow(PRICE_MIN);
+        setPriceHigh(PRICE_MAX);
         setOwnerFilter('all');
     }, []);
 
@@ -422,8 +602,7 @@ export default function VenuesScreen({ navigation }: venueProps) {
         selectedVenueType,
         selectedCity,
         selectedCapacity,
-        minPrice,
-        maxPrice,
+        priceActive ? 'price' : '',
     ].filter(Boolean).length;
 
     const ownerStats: OwnerStatConfig[] = [
@@ -458,10 +637,8 @@ export default function VenuesScreen({ navigation }: venueProps) {
     ];
 
     const ownerFilterKeys = ['all', 'approved', 'pending', 'rejected'];
-
     const displayedVenues =
         isOwner && ownerFilter !== 'all' ? venues.filter(v => v.status === ownerFilter) : venues;
-
     const venueTypeOptions = rawVenueTypes.map(c => ({ label: c.name, value: c.name }));
 
     const cityOptions = [
@@ -827,43 +1004,39 @@ export default function VenuesScreen({ navigation }: venueProps) {
                                     </TouchableOpacity>
                                 </View>
 
-                                <View style={styles.filterRow}>
-                                    <View style={styles.filterCol}>
-                                        <Text style={styles.filterLabel}>Min Price (₹)</Text>
-                                        <View
-                                            style={[
-                                                styles.filterInput,
-                                                minPrice && styles.filterInputActive,
-                                            ]}
-                                        >
-                                            <TextInput
-                                                style={styles.filterTextInput}
-                                                placeholder="0"
-                                                placeholderTextColor={Colors.charcoalLight}
-                                                value={minPrice}
-                                                onChangeText={setMinPrice}
-                                                keyboardType="numeric"
-                                            />
-                                        </View>
+                                {/* ── Price Range Slider ── */}
+                                <View style={styles.filterRowSingle}>
+                                    <View style={styles.priceLabelRow}>
+                                        <Text style={styles.filterLabel}>Price Range</Text>
+                                        {priceActive && (
+                                            <TouchableOpacity
+                                                onPress={() => {
+                                                    setPriceLow(PRICE_MIN);
+                                                    setPriceHigh(PRICE_MAX);
+                                                }}
+                                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                            >
+                                                <Text style={styles.priceResetLink}>Reset</Text>
+                                            </TouchableOpacity>
+                                        )}
                                     </View>
-
-                                    <View style={styles.filterCol}>
-                                        <Text style={styles.filterLabel}>Max Price (₹)</Text>
-                                        <View
-                                            style={[
-                                                styles.filterInput,
-                                                maxPrice && styles.filterInputActive,
-                                            ]}
-                                        >
-                                            <TextInput
-                                                style={styles.filterTextInput}
-                                                placeholder="∞"
-                                                placeholderTextColor={Colors.charcoalLight}
-                                                value={maxPrice}
-                                                onChangeText={setMaxPrice}
-                                                keyboardType="numeric"
-                                            />
-                                        </View>
+                                    <View
+                                        style={[
+                                            styles.sliderWrap,
+                                            priceActive && styles.sliderWrapActive,
+                                        ]}
+                                    >
+                                        <RangeSlider
+                                            min={PRICE_MIN}
+                                            max={PRICE_MAX}
+                                            step={PRICE_STEP}
+                                            low={priceLow}
+                                            high={priceHigh}
+                                            onValueChange={(lo, hi) => {
+                                                setPriceLow(lo);
+                                                setPriceHigh(hi);
+                                            }}
+                                        />
                                     </View>
                                 </View>
 
@@ -891,8 +1064,12 @@ export default function VenuesScreen({ navigation }: venueProps) {
                                         selectedCity,
                                         selectedVenueType,
                                         selectedCapacity && `Cap: ${selectedCapacity}`,
-                                        (minPrice || maxPrice) &&
-                                            `₹${minPrice || '0'} – ₹${maxPrice || '∞'}`,
+                                        priceActive &&
+                                            `₹${priceLow / 1000}k – ₹${
+                                                priceHigh >= PRICE_MAX
+                                                    ? '1L+'
+                                                    : `${priceHigh / 1000}k`
+                                            }`,
                                     ]
                                         .filter(Boolean)
                                         .join(' · ')}
@@ -986,7 +1163,6 @@ export default function VenuesScreen({ navigation }: venueProps) {
                 visible={availabilityModalVisible}
                 onClose={handleCloseAvailabilityModal}
                 title="Manage Availability"
-                // Show the actual venue name in the subtitle
                 subtitle={selectedVenue?.businessName}
                 sections={[
                     {
@@ -1031,6 +1207,7 @@ export default function VenuesScreen({ navigation }: venueProps) {
                     },
                 ]}
             />
+
             {/* ── Operation loader overlay ── */}
             {operationLoading !== null && (
                 <View style={styles.opLoaderBackdrop} pointerEvents="box-only">
@@ -1044,7 +1221,7 @@ export default function VenuesScreen({ navigation }: venueProps) {
     );
 }
 
-// ─── Styles (unchanged) ───────────────────────────────────────────────────────
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
     header: {
@@ -1235,6 +1412,24 @@ const styles = StyleSheet.create({
         fontWeight: Typography.medium,
         padding: 0,
     },
+
+    // ── Price slider ──────────────────────────────────────────────────────────
+    priceLabelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    priceResetLink: { fontSize: Typography.sm, color: Colors.primary, fontWeight: Typography.bold },
+    sliderWrap: {
+        backgroundColor: Colors.background,
+        borderRadius: Radii.md,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+    },
+    sliderWrapActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
+
     applyFiltersBtn: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1346,10 +1541,7 @@ const styles = StyleSheet.create({
         fontWeight: Typography.bold,
         textDecorationLine: 'underline',
     },
-    dropdownBackdrop: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0,0,0,0.45)',
-    },
+    dropdownBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
     dropdownSheet: {
         position: 'absolute',
         bottom: 0,

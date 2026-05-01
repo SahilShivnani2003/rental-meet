@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, TextInput, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Spacing, Radii, Typography } from '@/theme/theme';
 import { VendorService } from '@features/otherService/types/VendorService';
+import Field from '@/components/UI/InputField';
 
 type Props = {
     data: Partial<VendorService>;
@@ -35,11 +36,141 @@ const CITIES_BY_STATE: Record<string, string[]> = {
     Rajasthan: ['Jaipur', 'Jodhpur', 'Udaipur', 'Kota'],
 };
 
+// ── Reusable picker styled to match Field exactly ─────────────────────────────
+type PickerFieldProps = {
+    label: string;
+    icon: string;
+    value: string;
+    placeholder: string;
+    disabled?: boolean;
+    open: boolean;
+    onToggle: () => void;
+    options: string[];
+    onSelect: (v: string) => void;
+};
+
+function PickerField({
+    label,
+    icon,
+    value,
+    placeholder,
+    disabled,
+    open,
+    onToggle,
+    options,
+    onSelect,
+}: PickerFieldProps) {
+    return (
+        <View style={p.wrap}>
+            <Text style={p.label}>{label}</Text>
+            <TouchableOpacity
+                style={[p.btn, disabled && p.btnDisabled, open && p.btnOpen]}
+                onPress={onToggle}
+                activeOpacity={0.8}
+                disabled={disabled}
+            >
+                <Ionicons
+                    name={icon as any}
+                    size={18}
+                    color={value ? Colors.primary : Colors.charcoalLight}
+                    style={p.leadIcon}
+                />
+                <Text style={[p.btnText, !value && p.btnPlaceholder]} numberOfLines={1}>
+                    {value || placeholder}
+                </Text>
+                <Ionicons
+                    name={open ? 'chevron-up' : 'chevron-down'}
+                    size={15}
+                    color={Colors.charcoalLight}
+                />
+            </TouchableOpacity>
+            {open && options.length > 0 && (
+                <View style={p.dropdown}>
+                    <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }}>
+                        {options.map(opt => {
+                            const active = value === opt;
+                            return (
+                                <TouchableOpacity
+                                    key={opt}
+                                    style={[p.item, active && p.itemActive]}
+                                    onPress={() => onSelect(opt)}
+                                >
+                                    <Ionicons
+                                        name={active ? 'checkmark-circle' : 'ellipse-outline'}
+                                        size={15}
+                                        color={active ? Colors.primary : Colors.border}
+                                        style={{ marginRight: 8 }}
+                                    />
+                                    <Text style={[p.itemText, active && p.itemTextActive]}>
+                                        {opt}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </ScrollView>
+                </View>
+            )}
+        </View>
+    );
+}
+
+// ── Prefix field (@ / /) styled to match Field ────────────────────────────────
+type PrefixFieldProps = {
+    label: string;
+    prefix: string;
+    icon: string;
+    placeholder?: string;
+    value: string;
+    onChangeText: (v: string) => void;
+};
+
+function PrefixField({
+    label,
+    prefix,
+    icon,
+    placeholder = '',
+    value,
+    onChangeText,
+}: PrefixFieldProps) {
+    return (
+        <View style={pf.wrap}>
+            <Text style={pf.label}>{label}</Text>
+            <View style={pf.row}>
+                <View style={pf.prefixBox}>
+                    <Text style={pf.prefixText}>{prefix}</Text>
+                </View>
+                <View style={pf.fieldBox}>
+                    <Ionicons
+                        name={icon as any}
+                        size={18}
+                        color={Colors.charcoalLight}
+                        style={pf.icon}
+                    />
+                    <Field
+                        label=""
+                        placeholder={placeholder}
+                        icon={icon}
+                        value={value}
+                        onChangeText={onChangeText}
+                        autoCapitalize="none"
+                    />
+                </View>
+            </View>
+        </View>
+    );
+}
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function Step3Address({ data, onChange }: Props) {
     const [showStatePicker, setShowStatePicker] = React.useState(false);
     const [showCityPicker, setShowCityPicker] = React.useState(false);
 
     const cities = CITIES_BY_STATE[data.state || ''] || [];
+
+    const closeAll = () => {
+        setShowStatePicker(false);
+        setShowCityPicker(false);
+    };
 
     return (
         <ScrollView
@@ -50,288 +181,178 @@ export default function Step3Address({ data, onChange }: Props) {
             <Text style={s.sectionTitle}>Business Address</Text>
 
             {/* Office Address */}
-            <View style={s.fieldWrap}>
-                <Text style={s.label}>
-                    Office / Work Address <Text style={s.required}>*</Text>
-                </Text>
-                <TextInput
-                    style={s.input}
-                    placeholder=""
-                    placeholderTextColor={Colors.charcoalLight}
-                    value={data.officeAddress || ''}
-                    onChangeText={v => onChange('officeAddress', v)}
-                />
-            </View>
+            <Field
+                label="Office / Work Address *"
+                placeholder="Building, street, landmark"
+                icon="business-outline"
+                value={data.officeAddress || ''}
+                onChangeText={v => onChange('officeAddress', v)}
+            />
 
-            {/* State */}
-            <View style={[s.fieldWrap, { zIndex: 20 }]}>
-                <Text style={s.label}>
-                    State <Text style={s.required}>*</Text>
-                </Text>
-                <TouchableOpacity
-                    style={s.selectBtn}
-                    onPress={() => {
+            {/* State picker */}
+            <View style={{ zIndex: 20 }}>
+                <PickerField
+                    label="State *"
+                    icon="map-outline"
+                    value={data.state || ''}
+                    placeholder="Select state"
+                    open={showStatePicker}
+                    onToggle={() => {
                         setShowStatePicker(v => !v);
                         setShowCityPicker(false);
                     }}
-                    activeOpacity={0.8}
-                >
-                    <Text style={[s.selectBtnText, !data.state && { color: Colors.charcoalLight }]}>
-                        {data.state || 'Select state'}
-                    </Text>
-                    <Text style={s.chevron}>▾</Text>
-                </TouchableOpacity>
-                {showStatePicker && (
-                    <View style={s.dropdown}>
-                        <ScrollView nestedScrollEnabled style={{ maxHeight: 180 }}>
-                            {STATES.map(st => (
-                                <TouchableOpacity
-                                    key={st}
-                                    style={[
-                                        s.dropdownItem,
-                                        data.state === st && s.dropdownItemActive,
-                                    ]}
-                                    onPress={() => {
-                                        onChange('state', st);
-                                        onChange('city', '');
-                                        setShowStatePicker(false);
-                                    }}
-                                >
-                                    <Text
-                                        style={[
-                                            s.dropdownItemText,
-                                            data.state === st && s.dropdownItemTextActive,
-                                        ]}
-                                    >
-                                        {st}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
-                    </View>
-                )}
+                    options={STATES}
+                    onSelect={st => {
+                        onChange('state', st);
+                        onChange('city', '');
+                        closeAll();
+                    }}
+                />
             </View>
 
-            {/* City */}
-            <View style={[s.fieldWrap, { zIndex: 10 }]}>
-                <Text style={s.label}>
-                    City <Text style={s.required}>*</Text>
-                </Text>
-                <TouchableOpacity
-                    style={[s.selectBtn, !data.state && s.selectBtnDisabled]}
-                    onPress={() => {
-                        if (!data.state) return;
+            {/* City picker */}
+            <View style={{ zIndex: 10 }}>
+                <PickerField
+                    label="City *"
+                    icon="location-outline"
+                    value={data.city || ''}
+                    placeholder={data.state ? 'Select city' : 'Select state first'}
+                    disabled={!data.state}
+                    open={showCityPicker}
+                    onToggle={() => {
                         setShowCityPicker(v => !v);
                         setShowStatePicker(false);
                     }}
-                    activeOpacity={0.8}
-                >
-                    <Text style={[s.selectBtnText, !data.city && { color: Colors.charcoalLight }]}>
-                        {data.city || (data.state ? 'Select city' : 'Select state first')}
-                    </Text>
-                    <Text style={s.chevron}>▾</Text>
-                </TouchableOpacity>
-                {showCityPicker && cities.length > 0 && (
-                    <View style={s.dropdown}>
-                        <ScrollView nestedScrollEnabled style={{ maxHeight: 180 }}>
-                            {cities.map(c => (
-                                <TouchableOpacity
-                                    key={c}
-                                    style={[
-                                        s.dropdownItem,
-                                        data.city === c && s.dropdownItemActive,
-                                    ]}
-                                    onPress={() => {
-                                        onChange('city', c);
-                                        setShowCityPicker(false);
-                                    }}
-                                >
-                                    <Text
-                                        style={[
-                                            s.dropdownItemText,
-                                            data.city === c && s.dropdownItemTextActive,
-                                        ]}
-                                    >
-                                        {c}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </ScrollView>
-                    </View>
-                )}
+                    options={cities}
+                    onSelect={c => {
+                        onChange('city', c);
+                        closeAll();
+                    }}
+                />
             </View>
 
             {/* Pincode */}
-            <View style={s.fieldWrap}>
-                <Text style={s.label}>
-                    Pincode <Text style={s.required}>*</Text>
-                </Text>
-                <View style={s.iconInputWrap}>
-                    <Ionicons
-                        name="location-outline"
-                        size={16}
-                        color={Colors.charcoalLight}
-                        style={s.inputIcon}
-                    />
-                    <TextInput
-                        style={[s.input, s.iconInput]}
-                        placeholder="6-digit pincode"
-                        placeholderTextColor={Colors.charcoalLight}
-                        keyboardType="numeric"
-                        maxLength={6}
-                        value={data.pincode || ''}
-                        onChangeText={v => onChange('pincode', v)}
-                    />
-                </View>
-            </View>
+            <Field
+                label="Pincode *"
+                placeholder="6-digit pincode"
+                icon="locate-outline"
+                keyboardType="numeric"
+                maxLength={6}
+                value={data.pincode || ''}
+                onChangeText={v => onChange('pincode', v)}
+            />
 
             {/* Area */}
-            <View style={s.fieldWrap}>
-                <Text style={s.label}>Area / Locality</Text>
-                <TextInput
-                    style={s.input}
-                    placeholder="e.g. Civil Lines, Station Road"
-                    placeholderTextColor={Colors.charcoalLight}
-                    value={data.area || ''}
-                    onChangeText={v => onChange('area', v)}
-                />
-            </View>
+            <Field
+                label="Area / Locality"
+                placeholder="e.g. Civil Lines, Station Road"
+                icon="navigate-outline"
+                value={data.area || ''}
+                onChangeText={v => onChange('area', v)}
+            />
 
             {/* Village */}
-            <View style={s.fieldWrap}>
-                <Text style={s.label}>Village</Text>
-                <TextInput
-                    style={s.input}
-                    placeholder=""
-                    placeholderTextColor={Colors.charcoalLight}
-                    value={data.village || ''}
-                    onChangeText={v => onChange('village', v)}
-                />
-            </View>
+            <Field
+                label="Village"
+                placeholder="Village name (if applicable)"
+                icon="home-outline"
+                value={data.village || ''}
+                onChangeText={v => onChange('village', v)}
+            />
 
             {/* Serviceable Areas */}
-            <View style={s.fieldWrap}>
-                <Text style={s.label}>Serviceable Areas</Text>
-                <TextInput
-                    style={s.input}
-                    placeholder="Bhopal, Indore, Gwalior etc."
-                    placeholderTextColor={Colors.charcoalLight}
-                    value={(data.serviceableAreas || []).join(', ')}
-                    onChangeText={v =>
-                        onChange(
-                            'serviceableAreas',
-                            v
-                                .split(',')
-                                .map(a => a.trim())
-                                .filter(Boolean),
-                        )
-                    }
-                />
-            </View>
+            <Field
+                label="Serviceable Areas"
+                placeholder="Bhopal, Indore, Gwalior etc."
+                icon="earth-outline"
+                value={(data.serviceableAreas || []).join(', ')}
+                onChangeText={v =>
+                    onChange(
+                        'serviceableAreas',
+                        v
+                            .split(',')
+                            .map(a => a.trim())
+                            .filter(Boolean),
+                    )
+                }
+            />
 
-            {/* Online Presence */}
+            {/* ── Online Presence ── */}
             <Text style={[s.sectionTitle, { marginTop: Spacing.lg }]}>Online Presence</Text>
 
-            <View style={s.fieldWrap}>
-                <Text style={s.label}>Website</Text>
-                <TextInput
-                    style={s.input}
-                    placeholder="https://yourwebsite.com"
-                    placeholderTextColor={Colors.charcoalLight}
-                    keyboardType="url"
+            {/* Website */}
+            <Field
+                label="Website"
+                placeholder="https://yourwebsite.com"
+                icon="globe-outline"
+                keyboardType="url"
+                autoCapitalize="none"
+                value={data.website || ''}
+                onChangeText={v => onChange('website', v)}
+            />
+
+            {/* Instagram — prefix @ */}
+            <View style={s.prefixWrap}>
+                <Field
+                    label="Instagram"
+                    placeholder="yourhandle"
+                    icon="at-outline"
                     autoCapitalize="none"
-                    value={data.website || ''}
-                    onChangeText={v => onChange('website', v)}
+                    value={data.instagram || ''}
+                    onChangeText={v => onChange('instagram', v)}
                 />
             </View>
 
-            <View style={s.fieldWrap}>
-                <Text style={s.label}>Instagram</Text>
-                <View style={s.prefixInputWrap}>
-                    <View style={s.prefix}>
-                        <Text style={s.prefixText}>@</Text>
-                    </View>
-                    <TextInput
-                        style={[s.input, s.prefixInput]}
-                        placeholder=""
-                        placeholderTextColor={Colors.charcoalLight}
-                        autoCapitalize="none"
-                        value={data.instagram || ''}
-                        onChangeText={v => onChange('instagram', v)}
-                    />
-                </View>
-            </View>
-
-            <View style={s.fieldWrap}>
-                <Text style={s.label}>Facebook</Text>
-                <View style={s.prefixInputWrap}>
-                    <View style={s.prefix}>
-                        <Text style={s.prefixText}>/</Text>
-                    </View>
-                    <TextInput
-                        style={[s.input, s.prefixInput]}
-                        placeholder=""
-                        placeholderTextColor={Colors.charcoalLight}
-                        autoCapitalize="none"
-                        value={data.facebook || ''}
-                        onChangeText={v => onChange('facebook', v)}
-                    />
-                </View>
+            {/* Facebook — prefix / */}
+            <View style={s.prefixWrap}>
+                <Field
+                    label="Facebook"
+                    placeholder="yourpagename"
+                    icon="people-outline"
+                    autoCapitalize="none"
+                    value={data.facebook || ''}
+                    onChangeText={v => onChange('facebook', v)}
+                />
             </View>
         </ScrollView>
     );
 }
 
-const s = StyleSheet.create({
-    container: { paddingBottom: Spacing.xl },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: Typography.extraBold,
-        color: Colors.charcoal,
-        letterSpacing: -0.3,
-        marginBottom: Spacing.xl,
-    },
-    fieldWrap: { marginBottom: Spacing.lg },
+// ── PickerField styles ────────────────────────────────────────────────────────
+const p = StyleSheet.create({
+    wrap: { marginBottom: Spacing.md },
     label: {
-        fontSize: Typography.sm,
-        fontWeight: Typography.semiBold,
+        fontSize: 11,
+        fontWeight: Typography.bold,
         color: Colors.charcoalMid,
-        marginBottom: Spacing.xs,
+        letterSpacing: 0.8,
+        textTransform: 'uppercase',
+        marginBottom: 7,
     },
-    required: { color: Colors.danger },
-    input: {
-        borderWidth: 1,
-        borderColor: Colors.border,
-        borderRadius: Radii.sm,
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.md,
-        fontSize: Typography.base,
-        color: Colors.charcoal,
-        backgroundColor: Colors.surface,
-    },
-    selectBtn: {
-        borderWidth: 1,
-        borderColor: Colors.border,
-        borderRadius: Radii.sm,
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.md,
-        backgroundColor: Colors.surface,
+    btn: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
+        backgroundColor: Colors.background,
+        borderRadius: Radii.md,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        height: 54,
+        paddingHorizontal: Spacing.md,
     },
-    selectBtnDisabled: { backgroundColor: Colors.background },
-    selectBtnText: { fontSize: Typography.base, color: Colors.charcoal },
-    chevron: { fontSize: 14, color: Colors.charcoalLight },
+    btnDisabled: { backgroundColor: Colors.surface, opacity: 0.6 },
+    btnOpen: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight + '44' },
+    leadIcon: { marginRight: Spacing.sm },
+    btnText: { flex: 1, fontSize: 15, color: Colors.charcoal },
+    btnPlaceholder: { color: Colors.charcoalLight },
     dropdown: {
         position: 'absolute',
-        top: '100%',
+        top: 54 + 7,
         left: 0,
         right: 0,
         backgroundColor: Colors.surface,
-        borderWidth: 1,
+        borderWidth: 1.5,
         borderColor: Colors.border,
-        borderRadius: Radii.sm,
+        borderRadius: Radii.md,
         zIndex: 100,
         shadowColor: Colors.charcoal,
         shadowOffset: { width: 0, height: 4 },
@@ -339,41 +360,93 @@ const s = StyleSheet.create({
         shadowRadius: 8,
         elevation: 8,
     },
-    dropdownItem: {
+    item: {
+        flexDirection: 'row',
+        alignItems: 'center',
         paddingHorizontal: Spacing.lg,
         paddingVertical: Spacing.md,
         borderBottomWidth: 1,
         borderBottomColor: Colors.divider,
     },
-    dropdownItemActive: { backgroundColor: Colors.primaryLight },
-    dropdownItemText: { fontSize: Typography.base, color: Colors.charcoal },
-    dropdownItemTextActive: { color: Colors.primaryDark, fontWeight: Typography.semiBold },
+    itemActive: { backgroundColor: Colors.primaryLight },
+    itemText: { fontSize: Typography.base, color: Colors.charcoal },
+    itemTextActive: { color: Colors.primaryDark, fontWeight: Typography.semiBold },
+});
 
-    iconInputWrap: { flexDirection: 'row', alignItems: 'center', position: 'relative' },
-    inputIcon: { position: 'absolute', left: Spacing.md, zIndex: 1 },
-    iconInput: { flex: 1, paddingLeft: 36 },
-
-    prefixInputWrap: { flexDirection: 'row' },
-    prefix: {
-        borderWidth: 1,
+// ── Prefix field styles ───────────────────────────────────────────────────────
+const pf = StyleSheet.create({
+    wrap: { marginBottom: Spacing.md },
+    label: {
+        fontSize: 11,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalMid,
+        letterSpacing: 0.8,
+        textTransform: 'uppercase',
+        marginBottom: 7,
+    },
+    row: { flexDirection: 'row', alignItems: 'flex-end' },
+    prefixBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        height: 54,
+        paddingHorizontal: Spacing.md,
+        borderWidth: 1.5,
         borderColor: Colors.border,
         borderRightWidth: 0,
-        borderTopLeftRadius: Radii.sm,
-        borderBottomLeftRadius: Radii.sm,
-        paddingHorizontal: Spacing.md,
-        backgroundColor: Colors.background,
-        justifyContent: 'center',
-        minWidth: 36,
-        alignItems: 'center',
+        borderTopLeftRadius: Radii.md,
+        borderBottomLeftRadius: Radii.md,
+        backgroundColor: Colors.surface,
+        marginBottom: Spacing.md, // aligns with Field's wrap marginBottom
     },
     prefixText: {
-        fontSize: Typography.base,
-        color: Colors.charcoalMid,
+        fontSize: 15,
         fontWeight: Typography.semiBold,
+        color: Colors.charcoalMid,
     },
-    prefixInput: {
-        flex: 1,
-        borderTopLeftRadius: 0,
-        borderBottomLeftRadius: 0,
+    icon: { marginRight: Spacing.sm },
+    fieldBox: { flex: 1 },
+});
+
+// ── Main styles ───────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+    container: { paddingBottom: Spacing.xl },
+
+    sectionTitle: {
+        fontSize: 18,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+        letterSpacing: -0.3,
+        marginBottom: Spacing.xl,
+    },
+
+    // Prefix rows (Instagram / Facebook)
+    prefixWrap: { marginBottom: Spacing.sm },
+    prefixLabel: {
+        fontSize: 11,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalMid,
+        letterSpacing: 0.8,
+        textTransform: 'uppercase',
+    },
+    prefixRow: { flexDirection: 'row', alignItems: 'flex-end' },
+    prefixBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        height: 54,
+        paddingHorizontal: Spacing.md,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        borderRightWidth: 0,
+        borderTopLeftRadius: Radii.md,
+        borderBottomLeftRadius: Radii.md,
+        backgroundColor: Colors.surface,
+        marginBottom: Spacing.sm,
+    },
+    prefixText: {
+        fontSize: 15,
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoalMid,
     },
 });
