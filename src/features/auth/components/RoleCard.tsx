@@ -85,12 +85,14 @@ export function RoleCard({
                     {/* Description */}
                     <Text style={styles.cardDescription}>{role.description}</Text>
 
-                    {/* Perks */}
-                    <View style={styles.perksWrap}>
+                    {/* Perks — 2 × 2 grid */}
+                    <View style={styles.perksGrid}>
                         {role.perks.map(perk => (
-                            <View key={perk} style={styles.perkRow}>
+                            <View key={perk} style={styles.perkItem}>
                                 <View style={[styles.perkDot, { backgroundColor: role.color }]} />
-                                <Text style={styles.perkText}>{perk}</Text>
+                                <Text style={styles.perkText} numberOfLines={2}>
+                                    {perk}
+                                </Text>
                             </View>
                         ))}
                     </View>
@@ -181,23 +183,33 @@ const styles = StyleSheet.create({
         color: Colors.charcoalLight,
         lineHeight: 20,
     },
-    perksWrap: {
-        gap: 6,
+
+    // ── 2 × 2 perks grid ─────────────────────────────────────────────────────
+    perksGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.sm,
         paddingTop: Spacing.xxs,
     },
-    perkRow: {
+    perkItem: {
+        // each item takes exactly half the row minus the gap
+        width: '48%',
         flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.sm,
+        alignItems: 'flex-start',
+        gap: Spacing.xs,
     },
     perkDot: {
         width: 6,
         height: 6,
         borderRadius: 3,
+        marginTop: 4, // aligns dot with first line of text
+        flexShrink: 0,
     },
     perkText: {
+        flex: 1,
         fontSize: 12,
         color: Colors.charcoalMid,
         fontWeight: Typography.medium,
+        lineHeight: 17,
     },
 });
