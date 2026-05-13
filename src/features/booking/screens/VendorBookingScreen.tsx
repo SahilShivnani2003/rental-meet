@@ -288,13 +288,13 @@ export default function VendorBookingsScreen({ navigation }: Props) {
                         <Text style={s.headerEyebrow}>MY BOOKINGS</Text>
                         <Text style={s.headerTitle}>Track Your Orders</Text>
                     </View>
-                    <TouchableOpacity
+                    {/* <TouchableOpacity
                         style={s.filterBtn}
                         onPress={() => alert.info('Filter', 'Advanced filters coming soon')}
                         activeOpacity={0.85}
                     >
                         <Ionicons name="filter-outline" size={18} color={Colors.charcoalMid} />
-                    </TouchableOpacity>
+                    </TouchableOpacity> */}
                 </View>
                 <HeaderStats bookings={bookings} />
 

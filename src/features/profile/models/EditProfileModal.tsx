@@ -9,6 +9,8 @@ import {
     Animated,
     KeyboardAvoidingView,
     Platform,
+    TextInput,
+    FlatList,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Field from '@/components/UI/InputField';
@@ -17,7 +19,236 @@ import { useAlert } from '@/context/AlertContext';
 import { Colors, Spacing, Radii, Shadows, Typography } from '@/theme/theme';
 import { ApiError } from '@/types/ApiError';
 import { User, UpdateUser } from '../types/User';
+import Config from 'react-native-config';
 
+const GOOGLE_PLACES_API_KEY = Config.GOOGLEAPI; // 🔑 Replace with your key
+
+interface PlacePrediction {
+    place_id: string;
+    description: string;
+    structured_formatting: {
+        main_text: string;
+        secondary_text: string;
+    };
+    types: string[];
+}
+
+interface CityStatePickerProps {
+    label: string;
+    placeholder: string;
+    icon: string;
+    value: string;
+    onSelect: (value: string) => void;
+    error?: string;
+    types: '(cities)' | 'administrative_area_level_1';
+}
+
+function CityStatePicker({
+    label,
+    placeholder,
+    icon,
+    value,
+    onSelect,
+    error,
+    types,
+}: CityStatePickerProps) {
+    const [query, setQuery] = useState(value);
+    const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
+    const [showDropdown, setShowDropdown] = useState(false);
+    const [fetching, setFetching] = useState(false);
+    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // Sync external value changes (e.g. modal re-open pre-fill)
+    useEffect(() => {
+        setQuery(value);
+    }, [value]);
+
+    const fetchPredictions = async (input: string) => {
+        if (!input || input.length < 2) {
+            setPredictions([]);
+            return;
+        }
+        setFetching(true);
+        try {
+            const typeParam = types === '(cities)' ? 'locality' : 'administrative_area_level_1';
+            const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
+                input,
+            )}&types=${typeParam}&components=country:in&key=${GOOGLE_PLACES_API_KEY}`;
+
+            const res = await fetch(url);
+            const data = await res.json();
+            console.log('Google Places API response:', data);
+            if (data.status === 'OK') {
+                setPredictions(data.predictions ?? []);
+            } else {
+                setPredictions([]);
+            }
+        } catch(error) {
+            console.error('Google Places API error:', error);
+            setPredictions([]);
+        } finally {
+            setFetching(false);
+        }
+    };
+
+    const handleChangeText = (text: string) => {
+        setQuery(text);
+        setShowDropdown(true);
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        debounceRef.current = setTimeout(() => fetchPredictions(text), 350);
+    };
+
+    const handleSelect = (prediction: PlacePrediction) => {
+        const mainText = prediction.structured_formatting.main_text;
+        setQuery(mainText);
+        onSelect(mainText);
+        setPredictions([]);
+        setShowDropdown(false);
+    };
+
+    const handleBlur = () => {
+        // Small delay so tap on suggestion registers before blur hides dropdown
+        setTimeout(() => setShowDropdown(false), 180);
+    };
+
+    return (
+        <View style={picker.wrapper}>
+            {/* Label */}
+            <Text style={picker.label}>{label}</Text>
+
+            {/* Input row */}
+            <View style={[picker.inputRow, error ? picker.inputRowError : null]}>
+                <Ionicons
+                    name={icon as string}
+                    size={16}
+                    color={Colors.charcoalLight}
+                    style={picker.icon}
+                />
+                <TextInput
+                    style={picker.input}
+                    value={query}
+                    onChangeText={handleChangeText}
+                    placeholder={placeholder}
+                    placeholderTextColor={Colors.charcoalLight}
+                    onFocus={() => query.length >= 2 && setShowDropdown(true)}
+                    onBlur={handleBlur}
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                />
+                {fetching && (
+                    <Ionicons name="reload-outline" size={14} color={Colors.charcoalLight} />
+                )}
+                {!!query && !fetching && (
+                    <TouchableOpacity
+                        onPress={() => {
+                            setQuery('');
+                            onSelect('');
+                            setPredictions([]);
+                        }}
+                    >
+                        <Ionicons name="close-circle" size={16} color={Colors.charcoalLight} />
+                    </TouchableOpacity>
+                )}
+            </View>
+
+            {error ? <Text style={picker.errorText}>{error}</Text> : null}
+
+            {/* Dropdown */}
+            {showDropdown && predictions.length > 0 && (
+                <View style={picker.dropdown}>
+                    {predictions.map(item => (
+                        <TouchableOpacity
+                            key={item.place_id}
+                            style={picker.suggestion}
+                            onPress={() => handleSelect(item)}
+                            activeOpacity={0.75}
+                        >
+                            <Ionicons
+                                name="location-outline"
+                                size={14}
+                                color={Colors.charcoalLight}
+                                style={{ marginRight: 8, marginTop: 1 }}
+                            />
+                            <View style={{ flex: 1 }}>
+                                <Text style={picker.suggestionMain}>
+                                    {item.structured_formatting.main_text}
+                                </Text>
+                                <Text style={picker.suggestionSub} numberOfLines={1}>
+                                    {item.structured_formatting.secondary_text}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            )}
+        </View>
+    );
+}
+
+// ─── Picker styles ─────────────────────────────────────────────────────────────
+const picker = StyleSheet.create({
+    wrapper: { marginBottom: Spacing.sm, zIndex: 10 },
+    label: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal,
+        marginBottom: 6,
+    },
+    inputRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.background,
+        borderRadius: Radii.sm,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        paddingHorizontal: Spacing.md,
+        height: 48,
+        gap: 8,
+    },
+    inputRowError: { borderColor: '#E53E3E' },
+    icon: { marginRight: 2 },
+    input: {
+        flex: 1,
+        fontSize: 14,
+        color: Colors.charcoal,
+        paddingVertical: 0,
+    },
+    errorText: { fontSize: 12, color: '#E53E3E', marginTop: 4 },
+    dropdown: {
+        position: 'absolute',
+        top: 76, // label height + input height + gap
+        left: 0,
+        right: 0,
+        backgroundColor: Colors.surface,
+        borderRadius: Radii.sm,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        ...Shadows.floating,
+        zIndex: 999,
+        maxHeight: 220,
+        overflow: 'hidden',
+    },
+    suggestion: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        paddingVertical: 10,
+        paddingHorizontal: Spacing.md,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: Colors.border,
+    },
+    suggestionMain: {
+        fontSize: 13,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal,
+    },
+    suggestionSub: {
+        fontSize: 11,
+        color: Colors.charcoalLight,
+        marginTop: 1,
+    },
+});
+
+// ─── Main modal ────────────────────────────────────────────────────────────────
 interface Props {
     visible: boolean;
     onClose: () => void;
@@ -32,7 +263,6 @@ export default function EditProfileModal({ visible, onClose, user, mutate }: Pro
     const alert = useAlert();
     const slideAnim = useRef(new Animated.Value(600)).current;
 
-    // ── Form state pre-filled from user ──────────────────────────────────────
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
@@ -46,7 +276,6 @@ export default function EditProfileModal({ visible, onClose, user, mutate }: Pro
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    // Pre-fill when user data arrives or modal opens
     useEffect(() => {
         if (visible) {
             setName(user.name ?? '');
@@ -115,9 +344,11 @@ export default function EditProfileModal({ visible, onClose, user, mutate }: Pro
     };
 
     const handleClose = () => {
-        Animated.timing(slideAnim, { toValue: 600, duration: 220, useNativeDriver: true }).start(
-            onClose,
-        );
+        Animated.timing(slideAnim, {
+            toValue: 600,
+            duration: 220,
+            useNativeDriver: true,
+        }).start(onClose);
     };
 
     return (
@@ -133,10 +364,8 @@ export default function EditProfileModal({ visible, onClose, user, mutate }: Pro
                     style={s.kavWrapper}
                 >
                     <Animated.View style={[s.sheet, { transform: [{ translateY: slideAnim }] }]}>
-                        {/* Handle */}
                         <View style={s.handle} />
 
-                        {/* Header */}
                         <View style={s.header}>
                             <View>
                                 <Text style={s.headerTitle}>Edit Profile</Text>
@@ -151,8 +380,9 @@ export default function EditProfileModal({ visible, onClose, user, mutate }: Pro
                             showsVerticalScrollIndicator={false}
                             contentContainerStyle={s.body}
                             keyboardShouldPersistTaps="handled"
+                            // Needed so dropdown isn't clipped by ScrollView
+                            nestedScrollEnabled
                         >
-                            {/* Basic info */}
                             <Text style={s.sectionLabel}>BASIC INFO</Text>
 
                             <Field
@@ -185,14 +415,11 @@ export default function EditProfileModal({ visible, onClose, user, mutate }: Pro
                                 placeholder="+91 98765 43210"
                                 icon="call-outline"
                                 value={phone}
-                                onChangeText={t => {
-                                    setPhone(t.replace(/[^\d\s+\-()]/g, ''));
-                                }}
+                                onChangeText={t => setPhone(t.replace(/[^\d\s+\-()]/g, ''))}
                                 keyboardType="phone-pad"
                                 maxLength={13}
                             />
 
-                            {/* Address */}
                             <Text style={[s.sectionLabel, { marginTop: Spacing.lg }]}>ADDRESS</Text>
 
                             <Field
@@ -203,28 +430,31 @@ export default function EditProfileModal({ visible, onClose, user, mutate }: Pro
                                 onChangeText={setAddress}
                                 autoCapitalize="sentences"
                             />
+
+                            {/* ── City & State — Google Places dropdowns ── */}
                             <View style={s.row}>
                                 <View style={{ flex: 1 }}>
-                                    <Field
+                                    <CityStatePicker
                                         label="City"
                                         placeholder="Bhopal"
                                         icon="business-outline"
                                         value={city}
-                                        onChangeText={setCity}
-                                        autoCapitalize="words"
+                                        onSelect={setCity}
+                                        types="(cities)"
                                     />
                                 </View>
                                 <View style={{ flex: 1 }}>
-                                    <Field
+                                    <CityStatePicker
                                         label="State"
                                         placeholder="Madhya Pradesh"
                                         icon="map-outline"
                                         value={state}
-                                        onChangeText={setState}
-                                        autoCapitalize="words"
+                                        onSelect={setState}
+                                        types="administrative_area_level_1"
                                     />
                                 </View>
                             </View>
+
                             <Field
                                 label="Pincode"
                                 placeholder="462001"
@@ -239,7 +469,6 @@ export default function EditProfileModal({ visible, onClose, user, mutate }: Pro
                                 maxLength={6}
                             />
 
-                            {/* Business (optional) */}
                             <Text style={[s.sectionLabel, { marginTop: Spacing.lg }]}>
                                 BUSINESS (OPTIONAL)
                             </Text>
@@ -271,7 +500,6 @@ export default function EditProfileModal({ visible, onClose, user, mutate }: Pro
                                 maxLength={10}
                             />
 
-                            {/* Save */}
                             <TouchableOpacity
                                 style={[s.saveBtn, loading && { opacity: 0.7 }]}
                                 onPress={handleSave}

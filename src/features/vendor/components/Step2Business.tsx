@@ -5,27 +5,122 @@ import { VendorService } from '@features/otherService/types/VendorService';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Field from '@/components/UI/InputField';
 
+// ─── Types ─────────────────────────────────────────────────────────────────
+
 type Props = {
     data: Partial<VendorService>;
     onChange: (key: keyof VendorService, value: any) => void;
 };
 
+// ─── Constants ─────────────────────────────────────────────────────────────
+
+const PRIMARY = '#6C63FF';
+
 const CATEGORIES = [
-    'Photography',
-    'Videography',
-    'Catering',
-    'Decoration',
-    'Music & DJ',
-    'Venue',
-    'Makeup & Beauty',
-    'Event Management',
-    'Mehendi',
-    'Wedding Planning',
-    'Other',
+    { value: 'Photography', icon: 'camera-outline' },
+    { value: 'Videography', icon: 'videocam-outline' },
+    { value: 'Catering', icon: 'restaurant-outline' },
+    { value: 'Decoration', icon: 'color-palette-outline' },
+    { value: 'Music & DJ', icon: 'musical-notes-outline' },
+    { value: 'Venue', icon: 'business-outline' },
+    { value: 'Makeup & Beauty', icon: 'rose-outline' },
+    { value: 'Event Management', icon: 'calendar-outline' },
+    { value: 'Mehendi', icon: 'hand-left-outline' },
+    { value: 'Wedding Planning', icon: 'heart-outline' },
+    { value: 'Other', icon: 'ellipsis-horizontal-outline' },
 ];
+
+// Required fields for progress
+const REQUIRED_FIELDS = ['title', 'companyName', 'category', 'experienceYears', 'description'];
+
+// ─── Category Picker Field ─────────────────────────────────────────────────
+
+type CategoryPickerProps = {
+    value: string;
+    open: boolean;
+    onToggle: () => void;
+    onSelect: (v: string) => void;
+};
+
+function CategoryPicker({ value, open, onToggle, onSelect }: CategoryPickerProps) {
+    const selected = CATEGORIES.find(c => c.value === value);
+
+    return (
+        <View style={pk.wrap}>
+            <Text style={pk.label}>
+                Category <Text style={pk.required}>*</Text>
+            </Text>
+            <TouchableOpacity
+                style={[pk.btn, open && pk.btnOpen]}
+                onPress={onToggle}
+                activeOpacity={0.8}
+            >
+                <View style={[pk.iconWrap, open && pk.iconWrapActive]}>
+                    <Ionicons
+                        name={(selected?.icon ?? 'apps-outline') as any}
+                        size={16}
+                        color={open ? PRIMARY : value ? Colors.charcoalMid : Colors.charcoalLight}
+                    />
+                </View>
+                <Text style={[pk.btnText, !value && pk.btnPlaceholder]} numberOfLines={1}>
+                    {value || 'Select category'}
+                </Text>
+                <Ionicons
+                    name={open ? 'chevron-up' : 'chevron-down'}
+                    size={15}
+                    color={open ? PRIMARY : Colors.charcoalLight}
+                />
+            </TouchableOpacity>
+            {open && (
+                <View style={pk.dropdown}>
+                    <ScrollView nestedScrollEnabled style={{ maxHeight: 220 }}>
+                        {CATEGORIES.map(c => {
+                            const active = value === c.value;
+                            return (
+                                <TouchableOpacity
+                                    key={c.value}
+                                    style={[pk.item, active && pk.itemActive]}
+                                    onPress={() => onSelect(c.value)}
+                                >
+                                    <Ionicons
+                                        name={c.icon as any}
+                                        size={15}
+                                        color={active ? PRIMARY : Colors.charcoalLight}
+                                        style={{ marginRight: 8 }}
+                                    />
+                                    <Text style={[pk.itemText, active && pk.itemTextActive]}>
+                                        {c.value}
+                                    </Text>
+                                    {active && (
+                                        <Ionicons
+                                            name="checkmark-circle"
+                                            size={15}
+                                            color={PRIMARY}
+                                        />
+                                    )}
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </ScrollView>
+                </View>
+            )}
+        </View>
+    );
+}
+
+// ─── Main Component ────────────────────────────────────────────────────────
 
 export default function Step2Business({ data, onChange }: Props) {
     const [showCategoryPicker, setShowCategoryPicker] = React.useState(false);
+
+    // ── Progress calculation ─────────────────────────────────────────────
+    const requiredFilled = REQUIRED_FIELDS.filter(f => !!(data as any)[f]).length;
+    const totalRequired = REQUIRED_FIELDS.length;
+    const pct = Math.round((requiredFilled / totalRequired) * 100);
+
+    // ── Char count for description ───────────────────────────────────────
+    const descLength = (data.description || '').length;
+    const DESC_MIN = 50;
 
     return (
         <ScrollView
@@ -33,9 +128,31 @@ export default function Step2Business({ data, onChange }: Props) {
             contentContainerStyle={s.container}
             keyboardShouldPersistTaps="handled"
         >
-            <Text style={s.sectionTitle}>Business Information</Text>
+            {/* ── Header ──────────────────────────────────────────────── */}
+            <View style={s.headerRow}>
+                <View style={s.headerIcon}>
+                    <Ionicons name="briefcase" size={18} color="#fff" />
+                </View>
+                <View>
+                    <Text style={s.sectionTitle}>Business Information</Text>
+                    <Text style={s.sectionSub}>Tell customers what you offer</Text>
+                </View>
+            </View>
 
-            {/* Service Title */}
+            {/* ── Progress bar ─────────────────────────────────────────── */}
+            <View style={s.progressWrap}>
+                <View style={s.progressRow}>
+                    <Text style={s.progressLabel}>
+                        {requiredFilled}/{totalRequired} required fields
+                    </Text>
+                    <Text style={s.progressPct}>{pct}%</Text>
+                </View>
+                <View style={s.progressTrack}>
+                    <View style={[s.progressFill, { width: `${pct}%` as any }]} />
+                </View>
+            </View>
+
+            {/* ── Service Title ────────────────────────────────────────── */}
             <Field
                 label="Service Title *"
                 placeholder="e.g. Royal Wedding Photography"
@@ -45,110 +162,77 @@ export default function Step2Business({ data, onChange }: Props) {
                 autoCapitalize="words"
             />
 
-            {/* Company Name */}
-            <Field
-                label="Business / Company Name *"
-                placeholder="Your registered company name"
-                icon="business-outline"
-                value={data.companyName || ''}
-                onChangeText={v => onChange('companyName', v)}
-                autoCapitalize="words"
-            />
-
-            {/* Brand Name */}
-            <Field
-                label="Brand Name (if different)"
-                placeholder="e.g. Studio Luxe"
-                icon="pricetag-outline"
-                value={data.brandName || ''}
-                onChangeText={v => onChange('brandName', v)}
-                autoCapitalize="words"
-            />
-
-            {/* Category + Experience row */}
+            {/* ── Company + Brand row ──────────────────────────────────── */}
             <View style={s.rowWrap}>
-                {/* Category — custom picker styled to match Field */}
-                <View style={s.halfWrap}>
-                    <Text style={s.fieldLabel}>Category *</Text>
-                    <TouchableOpacity
-                        style={s.selectBtn}
-                        onPress={() => setShowCategoryPicker(v => !v)}
-                        activeOpacity={0.8}
-                    >
-                        <Ionicons
-                            name="apps-outline"
-                            size={18}
-                            color={data.category ? Colors.primary : Colors.charcoalLight}
-                            style={s.selectIcon}
-                        />
-                        <Text
-                            style={[
-                                s.selectBtnText,
-                                !data.category && { color: Colors.charcoalLight },
-                            ]}
-                            numberOfLines={1}
-                        >
-                            {data.category || 'Select'}
-                        </Text>
-                        <Ionicons
-                            name={showCategoryPicker ? 'chevron-up' : 'chevron-down'}
-                            size={15}
-                            color={Colors.charcoalLight}
-                        />
-                    </TouchableOpacity>
-                    {showCategoryPicker && (
-                        <View style={s.dropdown}>
-                            {CATEGORIES.map(c => (
-                                <TouchableOpacity
-                                    key={c}
-                                    style={[
-                                        s.dropdownItem,
-                                        data.category === c && s.dropdownItemActive,
-                                    ]}
-                                    onPress={() => {
-                                        onChange('category', c);
-                                        setShowCategoryPicker(false);
-                                    }}
-                                >
-                                    {data.category === c && (
-                                        <Ionicons
-                                            name="checkmark"
-                                            size={14}
-                                            color={Colors.primary}
-                                            style={{ marginRight: 6 }}
-                                        />
-                                    )}
-                                    <Text
-                                        style={[
-                                            s.dropdownItemText,
-                                            data.category === c && s.dropdownItemTextActive,
-                                        ]}
-                                    >
-                                        {c}
-                                    </Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
-                    )}
-                </View>
-
-                {/* Years of Experience */}
-                <View style={s.halfWrap}>
+                <View style={{ flex: 1 }}>
                     <Field
-                        label="Experience (yrs) *"
-                        placeholder="e.g. 5"
+                        label="Company Name *"
+                        placeholder="Registered name"
+                        icon="business-outline"
+                        value={data.companyName || ''}
+                        onChangeText={v => onChange('companyName', v)}
+                        autoCapitalize="words"
+                    />
+                </View>
+                <View style={{ flex: 1 }}>
+                    <Field
+                        label="Brand Name"
+                        placeholder="e.g. Studio Luxe"
+                        icon="pricetag-outline"
+                        value={data.brandName || ''}
+                        onChangeText={v => onChange('brandName', v)}
+                        autoCapitalize="words"
+                    />
+                </View>
+            </View>
+
+            {/* ── Category + Experience row ────────────────────────────── */}
+            <View style={[s.rowWrap, { zIndex: 20 }]}>
+                <View style={{ flex: 1.4 }}>
+                    <CategoryPicker
+                        value={data.category || ''}
+                        open={showCategoryPicker}
+                        onToggle={() => setShowCategoryPicker(v => !v)}
+                        onSelect={v => {
+                            onChange('category', v);
+                            setShowCategoryPicker(false);
+                        }}
+                    />
+                </View>
+                <View style={{ flex: 0.6 }}>
+                    <Field
+                        label="Experience *"
+                        placeholder="Yrs"
                         icon="time-outline"
                         keyboardType="numeric"
                         value={data.experienceYears?.toString() || ''}
                         onChangeText={v => onChange('experienceYears', parseInt(v) || 0)}
                     />
+                    {!!data.experienceYears && data.experienceYears > 0 && (
+                        <View style={s.hintRow}>
+                            <Ionicons name="star-outline" size={11} color={PRIMARY} />
+                            <Text style={s.hintText}>{data.experienceYears}+ yrs</Text>
+                        </View>
+                    )}
                 </View>
             </View>
 
-            {/* Description — multiline, Field doesn't support this so styled to match */}
-            <View style={s.textareaWrap}>
-                <Text style={s.fieldLabel}>Service Description *</Text>
-                <View style={s.textareaBox}>
+            {/* ── Description ──────────────────────────────────────────── */}
+            <View style={s.fieldWrap}>
+                <View style={s.labelRow}>
+                    <Text style={s.label}>
+                        Service Description <Text style={s.required}>*</Text>
+                    </Text>
+                    <Text style={[s.charCount, descLength >= DESC_MIN && s.charCountOk]}>
+                        {descLength} / {DESC_MIN} min
+                    </Text>
+                </View>
+                <View
+                    style={[
+                        s.textareaBox,
+                        (data.description?.length ?? 0) > 0 && s.textareaBoxFocused,
+                    ]}
+                >
                     <Ionicons
                         name="document-text-outline"
                         size={18}
@@ -157,7 +241,7 @@ export default function Step2Business({ data, onChange }: Props) {
                     />
                     <TextInput
                         style={s.textarea}
-                        placeholder="Describe your service, what makes you unique..."
+                        placeholder="Describe your service, what makes you unique, packages offered..."
                         placeholderTextColor={Colors.charcoalLight}
                         multiline
                         numberOfLines={5}
@@ -166,9 +250,34 @@ export default function Step2Business({ data, onChange }: Props) {
                         onChangeText={v => onChange('description', v)}
                     />
                 </View>
+                {descLength > 0 && descLength < DESC_MIN && (
+                    <View style={s.hintRow}>
+                        <Ionicons
+                            name="information-circle-outline"
+                            size={11}
+                            color={Colors.charcoalLight}
+                        />
+                        <Text style={s.hintTextMuted}>
+                            Add {DESC_MIN - descLength} more characters
+                        </Text>
+                    </View>
+                )}
+                {descLength >= DESC_MIN && (
+                    <View style={s.hintRow}>
+                        <Ionicons name="checkmark-circle-outline" size={11} color={PRIMARY} />
+                        <Text style={s.hintText}>Looks great!</Text>
+                    </View>
+                )}
             </View>
 
-            {/* Specialization */}
+            {/* ── Divider ──────────────────────────────────────────────── */}
+            <View style={s.divider}>
+                <View style={s.dividerLine} />
+                <Text style={s.dividerText}>Optional</Text>
+                <View style={s.dividerLine} />
+            </View>
+
+            {/* ── Specialization ───────────────────────────────────────── */}
             <Field
                 label="Specialization"
                 placeholder="e.g. North Indian, Continental, Live Counters"
@@ -177,112 +286,136 @@ export default function Step2Business({ data, onChange }: Props) {
                 onChangeText={v => onChange('specialization', v)}
             />
 
-            {/* Tags */}
-            <Field
-                label="Tags (comma separated)"
-                placeholder="e.g. wedding, candid, album"
-                icon="pricetags-outline"
-                value={(data.tags || []).join(', ')}
-                onChangeText={v =>
-                    onChange(
-                        'tags',
-                        v
-                            .split(',')
-                            .map(t => t.trim())
-                            .filter(Boolean),
-                    )
-                }
-            />
+            {/* ── Tags ─────────────────────────────────────────────────── */}
+            <View style={s.fieldWrap}>
+                <Field
+                    label="Tags"
+                    placeholder="e.g. wedding, candid, album"
+                    icon="pricetags-outline"
+                    value={(data.tags || []).join(', ')}
+                    onChangeText={v =>
+                        onChange(
+                            'tags',
+                            v
+                                .split(',')
+                                .map(t => t.trim())
+                                .filter(Boolean),
+                        )
+                    }
+                />
+                <View style={s.hintRow}>
+                    <Ionicons
+                        name="information-circle-outline"
+                        size={11}
+                        color={Colors.charcoalLight}
+                    />
+                    <Text style={s.hintTextMuted}>Separate multiple tags with a comma</Text>
+                </View>
+            </View>
+
+            {/* ── Info note ─────────────────────────────────────────────── */}
+            <View style={s.infoNote}>
+                <Ionicons name="bulb-outline" size={15} color={PRIMARY} />
+                <Text style={s.infoNoteText}>
+                    A detailed description and accurate category help customers find your service
+                    faster in search results.
+                </Text>
+            </View>
         </ScrollView>
     );
 }
 
+// ─── Constants ─────────────────────────────────────────────────────────────
+
+const PRIMARY_COLOR = '#6C63FF';
+
+// ─── Styles ────────────────────────────────────────────────────────────────
+
 const s = StyleSheet.create({
     container: { paddingBottom: Spacing.xl },
 
+    // Header
+    headerRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.md,
+        marginBottom: Spacing.xl,
+    },
+    headerIcon: {
+        width: 40,
+        height: 40,
+        borderRadius: 12,
+        backgroundColor: PRIMARY_COLOR,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     sectionTitle: {
         fontSize: 18,
         fontWeight: Typography.extraBold,
         color: Colors.charcoal,
         letterSpacing: -0.3,
-        marginBottom: Spacing.xl,
+    },
+    sectionSub: {
+        fontSize: 11,
+        color: Colors.charcoalLight,
+        marginTop: 2,
     },
 
-    // Shared label — mirrors Field's label style exactly
-    fieldLabel: {
+    // Progress
+    progressWrap: { marginBottom: Spacing.xl },
+    progressRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 6,
+    },
+    progressLabel: { fontSize: 11, color: Colors.charcoalLight },
+    progressPct: { fontSize: 11, color: PRIMARY_COLOR, fontWeight: '600' },
+    progressTrack: {
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: `${PRIMARY_COLOR}18`,
+        overflow: 'hidden',
+    },
+    progressFill: {
+        height: '100%',
+        borderRadius: 2,
+        backgroundColor: PRIMARY_COLOR,
+    },
+
+    // Layout
+    rowWrap: { flexDirection: 'row', gap: Spacing.md },
+    fieldWrap: { marginBottom: Spacing.md },
+
+    // Label row (for fields with right-aligned accessory like char count)
+    labelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 7,
+    },
+    label: {
         fontSize: 11,
         fontWeight: Typography.bold,
         color: Colors.charcoalMid,
-        letterSpacing: 0.8,
+        letterSpacing: 0.6,
         textTransform: 'uppercase',
-        marginBottom: 7,
     },
+    required: { color: Colors.danger },
+    charCount: { fontSize: 10, color: Colors.charcoalLight, fontWeight: '500' },
+    charCountOk: { color: PRIMARY_COLOR },
 
-    // Category + Experience side-by-side
-    rowWrap: {
-        flexDirection: 'row',
-        gap: Spacing.md,
-        zIndex: 10, // so dropdown floats above fields below
-    },
-    halfWrap: { flex: 1 },
-
-    // Category picker — matches Field's row exactly
-    selectBtn: {
+    // Inline hints
+    hintRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: Colors.background,
-        borderRadius: Radii.md,
-        borderWidth: 1.5,
-        borderColor: Colors.border,
-        height: 54,
-        paddingHorizontal: Spacing.md,
-        marginBottom: Spacing.md, // match Field's wrap marginBottom
+        gap: 4,
+        marginTop: -Spacing.sm,
+        marginBottom: Spacing.sm,
     },
-    selectIcon: { marginRight: Spacing.sm },
-    selectBtnText: {
-        flex: 1,
-        fontSize: 15,
-        color: Colors.charcoal,
-    },
+    hintText: { fontSize: 10, color: PRIMARY_COLOR },
+    hintTextMuted: { fontSize: 10, color: Colors.charcoalLight },
 
-    // Dropdown
-    dropdown: {
-        position: 'absolute',
-        top: 54 + 7, // height of selectBtn + label gap
-        left: 0,
-        right: 0,
-        backgroundColor: Colors.surface,
-        borderWidth: 1.5,
-        borderColor: Colors.border,
-        borderRadius: Radii.md,
-        zIndex: 100,
-        maxHeight: 220,
-        shadowColor: Colors.charcoal,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 8,
-    },
-    dropdownItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.divider,
-    },
-    dropdownItemActive: { backgroundColor: Colors.primaryLight },
-    dropdownItemText: {
-        fontSize: Typography.base,
-        color: Colors.charcoal,
-    },
-    dropdownItemTextActive: {
-        color: Colors.primaryDark,
-        fontWeight: Typography.semiBold,
-    },
-
-    // Textarea — mirrors Field visually
-    textareaWrap: { marginBottom: Spacing.md },
+    // Textarea
     textareaBox: {
         flexDirection: 'row',
         alignItems: 'flex-start',
@@ -294,6 +427,10 @@ const s = StyleSheet.create({
         paddingVertical: Spacing.md,
         minHeight: 120,
     },
+    textareaBoxFocused: {
+        borderColor: `${PRIMARY_COLOR}88`,
+        backgroundColor: `${PRIMARY_COLOR}04`,
+    },
     textareaIcon: { marginRight: Spacing.sm, marginTop: 2 },
     textarea: {
         flex: 1,
@@ -302,4 +439,105 @@ const s = StyleSheet.create({
         textAlignVertical: 'top',
         minHeight: 100,
     },
+
+    // Divider
+    divider: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+        marginVertical: Spacing.lg,
+    },
+    dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
+    dividerText: { fontSize: 11, color: Colors.charcoalLight, fontWeight: '500' },
+
+    // Info note
+    infoNote: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: Spacing.sm,
+        backgroundColor: `${PRIMARY_COLOR}08`,
+        borderRadius: Radii.sm,
+        padding: Spacing.md,
+        marginTop: Spacing.sm,
+    },
+    infoNoteText: {
+        flex: 1,
+        fontSize: 11,
+        color: Colors.charcoalLight,
+        lineHeight: 16,
+    },
+});
+
+// ─── Category Picker Styles ────────────────────────────────────────────────
+
+const pk = StyleSheet.create({
+    wrap: { marginBottom: Spacing.md },
+    label: {
+        fontSize: 11,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalMid,
+        letterSpacing: 0.6,
+        textTransform: 'uppercase',
+        marginBottom: 7,
+    },
+    required: { color: Colors.danger },
+
+    btn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: Colors.background,
+        borderRadius: Radii.md,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        height: 54,
+        paddingHorizontal: Spacing.md,
+        gap: Spacing.sm,
+    },
+    btnOpen: {
+        borderColor: PRIMARY_COLOR,
+        backgroundColor: `${PRIMARY_COLOR}08`,
+    },
+
+    iconWrap: {
+        width: 30,
+        height: 30,
+        borderRadius: 8,
+        backgroundColor: `${Colors.charcoalLight}15`,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    iconWrapActive: {
+        backgroundColor: `${PRIMARY_COLOR}15`,
+    },
+
+    btnText: { flex: 1, fontSize: 15, color: Colors.charcoal },
+    btnPlaceholder: { color: Colors.charcoalLight },
+
+    dropdown: {
+        position: 'absolute',
+        top: 54 + 7 + 18,
+        left: 0,
+        right: 0,
+        backgroundColor: Colors.surface,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        borderRadius: Radii.md,
+        zIndex: 100,
+        shadowColor: Colors.charcoal,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    item: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: Spacing.lg,
+        paddingVertical: Spacing.md,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.divider,
+    },
+    itemActive: { backgroundColor: `${PRIMARY_COLOR}08` },
+    itemText: { flex: 1, fontSize: Typography.base, color: Colors.charcoal },
+    itemTextActive: { color: PRIMARY_COLOR, fontWeight: Typography.semiBold },
 });
