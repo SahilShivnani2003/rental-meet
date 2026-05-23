@@ -25,6 +25,7 @@ import { ServiceBooking } from '../types/ServiceBooking';
 import { useCreatePaymentOrder, useVerifyPayment } from '../hooks/usePayment';
 import RazorpayCheckout from 'react-native-razorpay';
 import { useAuthStore } from '@/store/useAuthStore';
+import Config from 'react-native-config';
 
 const { width: W } = Dimensions.get('window');
 
@@ -240,7 +241,7 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                             }
                             try {
                                 const options = {
-                                    key: orderData.key ?? '',
+                                    key: orderData.key ?? Config.RAZORPAY_KEY,
                                     amount: orderData.order.amount,
                                     currency: orderData.order.currency ?? 'INR',
                                     name: 'RentalMeet',

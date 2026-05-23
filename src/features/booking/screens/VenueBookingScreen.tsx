@@ -26,6 +26,7 @@ import { useCreatePaymentOrder, useVerifyPayment } from '../hooks/usePayment';
 import { usePlatformSetting } from '../hooks/usePlatformSetting';
 import { useTermsCondition } from '../hooks/useTermsCondition';
 import { SelectedAmenityItem } from '@/features/venue/models/BookingSheet';
+import Config from 'react-native-config';
 
 const { width: W } = Dimensions.get('window');
 
@@ -816,7 +817,7 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
                             }
                             try {
                                 const options = {
-                                    key: orderData.key ?? '',
+                                    key: orderData.key ?? Config.RAZORPAY_KEY,
                                     amount: orderData.order.amount,
                                     currency: orderData.order.currency ?? 'INR',
                                     name: 'RentalMeet',
