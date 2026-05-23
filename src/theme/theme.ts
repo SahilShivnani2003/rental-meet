@@ -57,6 +57,7 @@ export const Typography = {
     lg: 17,
     xl: 20,
     xxl: 28,
+    xxxl: 32,
 
     // Letter spacings
     tight: -0.5,

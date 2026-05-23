@@ -1,24 +1,14 @@
-import React, { useRef, useState } from 'react';
-import {
-    View,
-    Text,
-    StyleSheet,
-    TouchableOpacity,
-    Dimensions,
-    Platform,
-    StatusBar,
-    ScrollView,
-    Image,
-} from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../navigations/RootNavigation';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../theme/theme';
+import { RootStackParamList } from '@/types/RootStackParamList';
 
 const { width: W, height: H } = Dimensions.get('window');
 type Props = NativeStackScreenProps<RootStackParamList, 'onBoarding'>;
 
-// ─── Slide data — single brand palette across all 3 slides ───────────────────
+// ─── Slide data ───────────────────────────────────────────────────────────────
 const SLIDES = [
     {
         id: 1,
@@ -64,12 +54,13 @@ const SLIDES = [
     },
 ] as const;
 
-// ─── Illustrations ─────────────────────────────────────────────────────────────
+// ─── Illustrations — adapted for amber background ─────────────────────────────
 function SlideIllustration({ type }: { type: string }) {
     // ── Slide 1: Buildings ──
     if (type === 'buildings') {
         return (
             <View style={il.wrap}>
+                {/* Concentric rings — white on amber */}
                 <View
                     style={[
                         il.ring,
@@ -77,7 +68,7 @@ function SlideIllustration({ type }: { type: string }) {
                             width: 280,
                             height: 280,
                             borderRadius: 140,
-                            borderColor: Colors.primaryBorder + '50',
+                            borderColor: 'rgba(255,255,255,0.20)',
                         },
                     ]}
                 />
@@ -88,7 +79,7 @@ function SlideIllustration({ type }: { type: string }) {
                             width: 200,
                             height: 200,
                             borderRadius: 100,
-                            borderColor: Colors.primaryBorder + '80',
+                            borderColor: 'rgba(255,255,255,0.28)',
                         },
                     ]}
                 />
@@ -99,22 +90,24 @@ function SlideIllustration({ type }: { type: string }) {
                             width: 130,
                             height: 130,
                             borderRadius: 65,
-                            borderColor: Colors.primaryBorder + 'AA',
+                            borderColor: 'rgba(255,255,255,0.38)',
                         },
                     ]}
                 />
-                <View style={[il.glow, { backgroundColor: Colors.primaryLight }]} />
+
+                {/* Warm white glow */}
+                <View style={[il.glow, { backgroundColor: 'rgba(255,255,255,0.18)' }]} />
 
                 <View style={il.cityRow}>
-                    {/* Left building */}
+                    {/* Left building — white card */}
                     <View
                         style={[
                             il.bld,
                             {
                                 height: 78,
                                 width: 38,
-                                backgroundColor: Colors.background,
-                                borderColor: Colors.border,
+                                backgroundColor: Colors.surface,
+                                borderColor: 'rgba(255,255,255,0.6)',
                                 marginRight: 4,
                             },
                         ]}
@@ -129,7 +122,7 @@ function SlideIllustration({ type }: { type: string }) {
                                             il.win,
                                             {
                                                 backgroundColor:
-                                                    r === 0 ? Colors.primaryDim : Colors.border,
+                                                    r === 0 ? Colors.primaryBorder : Colors.border,
                                             },
                                         ]}
                                     />
@@ -138,7 +131,7 @@ function SlideIllustration({ type }: { type: string }) {
                         ))}
                     </View>
 
-                    {/* Centre hero building — charcoal */}
+                    {/* Centre hero building — charcoal (brand) */}
                     <View
                         style={[
                             il.bld,
@@ -190,15 +183,15 @@ function SlideIllustration({ type }: { type: string }) {
                         ))}
                     </View>
 
-                    {/* Right building */}
+                    {/* Right building — light card */}
                     <View
                         style={[
                             il.bld,
                             {
                                 height: 94,
                                 width: 42,
-                                backgroundColor: Colors.divider,
-                                borderColor: Colors.border,
+                                backgroundColor: Colors.background,
+                                borderColor: 'rgba(255,255,255,0.5)',
                             },
                         ]}
                     >
@@ -212,7 +205,7 @@ function SlideIllustration({ type }: { type: string }) {
                                             il.win,
                                             {
                                                 backgroundColor:
-                                                    r < 2 ? Colors.primaryDim : Colors.background,
+                                                    r < 2 ? Colors.primaryBorder : Colors.surface,
                                             },
                                         ]}
                                     />
@@ -222,9 +215,21 @@ function SlideIllustration({ type }: { type: string }) {
                     </View>
                 </View>
 
-                {/* Pin */}
-                <View style={[il.pin, { backgroundColor: Colors.primary, ...Shadows.primary }]}>
-                    <Ionicons name="location" size={13} color={Colors.white} />
+                {/* Pin — charcoal on amber bg */}
+                <View
+                    style={[
+                        il.pin,
+                        {
+                            backgroundColor: Colors.charcoal,
+                            shadowColor: Colors.charcoal,
+                            shadowOffset: { width: 0, height: 4 },
+                            shadowOpacity: 0.35,
+                            shadowRadius: 8,
+                            elevation: 5,
+                        },
+                    ]}
+                >
+                    <Ionicons name="location" size={13} color={Colors.primary} />
                 </View>
 
                 {/* Float card */}
@@ -234,9 +239,7 @@ function SlideIllustration({ type }: { type: string }) {
                 </View>
 
                 {/* Ground line */}
-                <View
-                    style={[il.ground, { backgroundColor: Colors.primaryBorder, opacity: 0.35 }]}
-                />
+                <View style={[il.ground, { backgroundColor: 'rgba(255,255,255,0.35)' }]} />
             </View>
         );
     }
@@ -252,7 +255,7 @@ function SlideIllustration({ type }: { type: string }) {
                             width: 280,
                             height: 280,
                             borderRadius: 140,
-                            borderColor: Colors.primaryBorder + '50',
+                            borderColor: 'rgba(255,255,255,0.20)',
                         },
                     ]}
                 />
@@ -263,7 +266,7 @@ function SlideIllustration({ type }: { type: string }) {
                             width: 200,
                             height: 200,
                             borderRadius: 100,
-                            borderColor: Colors.primaryBorder + '80',
+                            borderColor: 'rgba(255,255,255,0.28)',
                         },
                     ]}
                 />
@@ -274,22 +277,22 @@ function SlideIllustration({ type }: { type: string }) {
                             width: 130,
                             height: 130,
                             borderRadius: 65,
-                            borderColor: Colors.primaryBorder + 'AA',
+                            borderColor: 'rgba(255,255,255,0.38)',
                         },
                     ]}
                 />
-                <View style={[il.glow, { backgroundColor: Colors.primaryLight }]} />
+                <View style={[il.glow, { backgroundColor: 'rgba(255,255,255,0.18)' }]} />
 
                 <View style={[il.calCard, { backgroundColor: Colors.surface, ...Shadows.card }]}>
-                    {/* Amber header */}
-                    <View style={[il.calHead, { backgroundColor: Colors.primary }]}>
+                    {/* Charcoal header — logo matches */}
+                    <View style={[il.calHead, { backgroundColor: Colors.charcoal }]}>
                         <View>
                             <Text style={il.calMonth}>MARCH</Text>
                             <Text style={il.calYear}>2026</Text>
                         </View>
                         <View style={{ flexDirection: 'row', gap: 6 }}>
-                            <Ionicons name="chevron-back" size={13} color={Colors.white} />
-                            <Ionicons name="chevron-forward" size={13} color={Colors.white} />
+                            <Ionicons name="chevron-back" size={13} color={Colors.primary} />
+                            <Ionicons name="chevron-forward" size={13} color={Colors.primary} />
                         </View>
                     </View>
 
@@ -364,20 +367,21 @@ function SlideIllustration({ type }: { type: string }) {
                     </Text>
                 </View>
 
-                {/* Time chip */}
+                {/* Time chip — white on amber */}
                 <View
                     style={[
                         il.floatingChip,
                         {
-                            backgroundColor: Colors.primaryLight,
-                            borderColor: Colors.primaryBorder,
+                            backgroundColor: Colors.surface,
+                            borderColor: 'rgba(255,255,255,0.6)',
                             top: '16%' as any,
                             left: '3%' as any,
+                            ...Shadows.card,
                         },
                     ]}
                 >
-                    <Ionicons name="time-outline" size={11} color={Colors.primaryDark} />
-                    <Text style={[il.floatingChipText, { color: Colors.primaryDark }]}>
+                    <Ionicons name="time-outline" size={11} color={Colors.charcoalMid} />
+                    <Text style={[il.floatingChipText, { color: Colors.charcoalMid }]}>
                         10:00 AM – 2:00 PM
                     </Text>
                 </View>
@@ -395,7 +399,7 @@ function SlideIllustration({ type }: { type: string }) {
                         width: 280,
                         height: 280,
                         borderRadius: 140,
-                        borderColor: Colors.primaryBorder + '50',
+                        borderColor: 'rgba(255,255,255,0.20)',
                     },
                 ]}
             />
@@ -406,7 +410,7 @@ function SlideIllustration({ type }: { type: string }) {
                         width: 200,
                         height: 200,
                         borderRadius: 100,
-                        borderColor: Colors.primaryBorder + '80',
+                        borderColor: 'rgba(255,255,255,0.28)',
                     },
                 ]}
             />
@@ -417,30 +421,30 @@ function SlideIllustration({ type }: { type: string }) {
                         width: 130,
                         height: 130,
                         borderRadius: 65,
-                        borderColor: Colors.primaryBorder + 'AA',
+                        borderColor: 'rgba(255,255,255,0.38)',
                     },
                 ]}
             />
-            <View style={[il.glow, { backgroundColor: Colors.primaryLight }]} />
+            <View style={[il.glow, { backgroundColor: 'rgba(255,255,255,0.18)' }]} />
 
             <View style={[il.venueCard, { backgroundColor: Colors.surface, ...Shadows.card }]}>
                 {/* Hero */}
-                <View style={[il.venueHero, { backgroundColor: Colors.primaryLight }]}>
+                <View style={[il.venueHero, { backgroundColor: Colors.charcoal }]}>
                     {[0, 1, 2, 3, 4, 5].map(i => (
                         <View
                             key={i}
                             style={[
                                 il.heroStripe,
-                                { left: i * 38, backgroundColor: Colors.primary + '12' },
+                                { left: i * 38, backgroundColor: 'rgba(255,255,255,0.05)' },
                             ]}
                         />
                     ))}
                     <View style={[il.venueIconCircle, { backgroundColor: Colors.primary + '22' }]}>
                         <Ionicons name="business" size={32} color={Colors.primary} />
                     </View>
-                    <View style={[il.verTag, { backgroundColor: Colors.charcoal }]}>
-                        <Ionicons name="shield-checkmark" size={9} color={Colors.primary} />
-                        <Text style={il.verText}>VERIFIED</Text>
+                    <View style={[il.verTag, { backgroundColor: Colors.primary }]}>
+                        <Ionicons name="shield-checkmark" size={9} color={Colors.white} />
+                        <Text style={[il.verText, { color: Colors.white }]}>VERIFIED</Text>
                     </View>
                 </View>
 
@@ -478,15 +482,16 @@ function SlideIllustration({ type }: { type: string }) {
                 style={[
                     il.floatingBadge,
                     {
-                        backgroundColor: Colors.primaryLight,
-                        borderColor: Colors.primaryBorder,
+                        backgroundColor: Colors.surface,
+                        borderColor: 'rgba(255,255,255,0.5)',
                         bottom: '15%' as any,
                         right: '4%' as any,
+                        ...Shadows.card,
                     },
                 ]}
             >
                 <Ionicons name="trending-up" size={13} color={Colors.primaryDark} />
-                <Text style={[il.floatingBadgeText, { color: Colors.primaryDark }]}>
+                <Text style={[il.floatingBadgeText, { color: Colors.charcoal }]}>
                     ₹24,600 this month
                 </Text>
             </View>
@@ -497,7 +502,7 @@ function SlideIllustration({ type }: { type: string }) {
                     il.floatingChip,
                     {
                         backgroundColor: Colors.surface,
-                        borderColor: Colors.border,
+                        borderColor: 'rgba(255,255,255,0.5)',
                         top: '16%' as any,
                         left: '3%' as any,
                         ...Shadows.card,
@@ -516,12 +521,8 @@ function SlideIllustration({ type }: { type: string }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function OnboardingScreen({ navigation }: Props) {
     const [current, setCurrent] = useState(0);
-    const scrollRef = useRef<ScrollView>(null);
 
-    const goTo = (idx: number) => {
-        scrollRef.current?.scrollTo({ x: W * idx, animated: true });
-        setCurrent(idx);
-    };
+    const goTo = (idx: number) => setCurrent(idx);
 
     const handleNext = () => {
         if (current < SLIDES.length - 1) goTo(current + 1);
@@ -532,19 +533,11 @@ export default function OnboardingScreen({ navigation }: Props) {
 
     return (
         <View style={s.root}>
-            <StatusBar backgroundColor={Colors.surface} barStyle="dark-content" />
-
-            {/* ── Top bar ── */}
+            {/* ── Top bar — on amber ── */}
             <View style={s.topBar}>
-                <View style={s.topAmberLine} />
                 <View style={s.topContent}>
-                    <Image
-                        source={require('../assets/NameLogo.png')}
-                        style={s.logo}
-                        resizeMode="contain"
-                    />
                     <View style={s.topRight}>
-                        {/* Step indicator pill */}
+                        {/* Step indicator pill — white on amber */}
                         <View style={s.stepPill}>
                             <Text style={s.stepNum}>{slide.step}</Text>
                             <Text style={s.stepOf}> / 03</Text>
@@ -562,87 +555,54 @@ export default function OnboardingScreen({ navigation }: Props) {
                 </View>
             </View>
 
-            {/* ── Slides ── */}
-            <ScrollView
-                ref={scrollRef}
-                horizontal
-                pagingEnabled
-                scrollEnabled={false}
-                showsHorizontalScrollIndicator={false}
-                style={{ flex: 1 }}
-            >
-                {SLIDES.map(sl => (
-                    <View key={sl.id} style={s.slide}>
-                        {/* ── Vertical scroll — lets content breathe on short screens ── */}
-                        <ScrollView
-                            showsVerticalScrollIndicator={false}
-                            bounces={true}
-                            contentContainerStyle={s.slideScroll}
-                            keyboardShouldPersistTaps="handled"
+            {/* ── Illustration zone — full amber canvas ── */}
+            <View style={s.ilZone}>
+                {/* Subtle diagonal strip for depth — lighter amber */}
+                <View style={s.diagStrip} />
+                <SlideIllustration type={slide.illustration} />
+            </View>
+
+            {/* ── Content card — floats over amber ── */}
+            <View style={s.card}>
+                {/* Amber top accent bar */}
+                <View style={s.cardBar} />
+
+                {/* Eyebrow */}
+                <View style={s.eyebrowRow}>
+                    <View style={s.eyebrowDot} />
+                    <Text style={s.eyebrow}>{slide.eyebrow}</Text>
+                </View>
+
+                {/* Title */}
+                <Text style={s.title}>{slide.title}</Text>
+
+                {/* Subtitle */}
+                <Text style={s.subtitle}>{slide.subtitle}</Text>
+
+                {/* Divider */}
+                <View style={s.cardDivider} />
+
+                {/* Feature rows */}
+                <View style={s.featureList}>
+                    {slide.features.map((f, fi) => (
+                        <View
+                            key={fi}
+                            style={[
+                                s.featureRow,
+                                fi < slide.features.length - 1 && s.featureRowBorder,
+                            ]}
                         >
-                            {/* Illustration zone */}
-                            <View style={s.ilZone}>
-                                <View style={s.ilBg} />
-                                <View style={s.diagStrip} />
-                                <SlideIllustration type={sl.illustration} />
+                            <View style={s.featureIconBox}>
+                                <Ionicons name={f.icon as any} size={15} color={Colors.primary} />
                             </View>
+                            <Text style={s.featureLabel}>{f.label}</Text>
+                            <Ionicons name="chevron-forward" size={11} color={Colors.border} />
+                        </View>
+                    ))}
+                </View>
+            </View>
 
-                            {/* Content card */}
-                            <View style={s.card}>
-                                {/* Amber top accent bar */}
-                                <View style={s.cardBar} />
-
-                                {/* Eyebrow */}
-                                <View style={s.eyebrowRow}>
-                                    <View style={s.eyebrowDot} />
-                                    <Text style={s.eyebrow}>{sl.eyebrow}</Text>
-                                </View>
-
-                                {/* Title */}
-                                <Text style={s.title}>{sl.title}</Text>
-
-                                {/* Subtitle */}
-                                <Text style={s.subtitle}>{sl.subtitle}</Text>
-
-                                {/* Divider */}
-                                <View style={s.cardDivider} />
-
-                                {/* Feature rows */}
-                                <View style={s.featureList}>
-                                    {sl.features.map((f, fi) => (
-                                        <View
-                                            key={fi}
-                                            style={[
-                                                s.featureRow,
-                                                fi < sl.features.length - 1 && s.featureRowBorder,
-                                            ]}
-                                        >
-                                            <View style={s.featureIconBox}>
-                                                <Ionicons
-                                                    name={f.icon as any}
-                                                    size={15}
-                                                    color={Colors.primary}
-                                                />
-                                            </View>
-                                            <Text style={s.featureLabel}>{f.label}</Text>
-                                            <Ionicons
-                                                name="chevron-forward"
-                                                size={11}
-                                                color={Colors.border}
-                                            />
-                                        </View>
-                                    ))}
-                                </View>
-                            </View>
-
-                            {/* Bottom spacing so card clears the fixed bottom bar */}
-                            <View style={s.scrollBottomSpacer} />
-                        </ScrollView>
-                    </View>
-                ))}
-            </ScrollView>
-
-            {/* ── Bottom bar ── */}
+            {/* ── Bottom bar — white tray ── */}
             <View style={s.bottomBar}>
                 {/* Dot indicators */}
                 <View style={s.dotsRow}>
@@ -665,11 +625,12 @@ export default function OnboardingScreen({ navigation }: Props) {
                     ))}
                 </View>
 
-                {/* CTA — charcoal button with amber icon bubble */}
+                {/* CTA — primary amber button, charcoal text for contrast on amber */}
                 <TouchableOpacity style={s.cta} onPress={handleNext} activeOpacity={0.85}>
                     <Text style={s.ctaText}>
                         {current === SLIDES.length - 1 ? 'Get Started' : 'Continue'}
                     </Text>
+                    {/* Charcoal icon bubble so it pops against amber button */}
                     <View style={s.ctaIconBubble}>
                         <Ionicons
                             name={
@@ -695,26 +656,17 @@ export default function OnboardingScreen({ navigation }: Props) {
     );
 }
 
-// ─── Illustration styles ───────────────────────────────────────────────────────
+// ─── Illustration styles ──────────────────────────────────────────────────────
 const il = StyleSheet.create({
     wrap: {
         width: W,
-        height: H * 0.43,
+        height: H * 0.38,
         alignItems: 'center',
         justifyContent: 'center',
         position: 'relative',
     },
-    ring: {
-        position: 'absolute',
-        borderWidth: 1,
-    },
-    glow: {
-        position: 'absolute',
-        width: 160,
-        height: 160,
-        borderRadius: 80,
-        opacity: 0.65,
-    },
+    ring: { position: 'absolute', borderWidth: 1 },
+    glow: { position: 'absolute', width: 160, height: 160, borderRadius: 80, opacity: 0.65 },
 
     // Buildings
     cityRow: { flexDirection: 'row', alignItems: 'flex-end' },
@@ -797,7 +749,7 @@ const il = StyleSheet.create({
     calCell: { flex: 1, alignItems: 'center', paddingVertical: 4 },
     calNum: { fontSize: 11, fontWeight: Typography.medium, color: Colors.charcoal },
 
-    // Reusable floating badge & chip
+    // Floating badges
     floatingBadge: {
         position: 'absolute',
         flexDirection: 'row',
@@ -809,7 +761,7 @@ const il = StyleSheet.create({
         borderWidth: 1,
         shadowColor: Colors.charcoal,
         shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.08,
+        shadowOpacity: 0.1,
         shadowRadius: 6,
         elevation: 4,
     },
@@ -825,7 +777,7 @@ const il = StyleSheet.create({
         borderWidth: 1,
         shadowColor: Colors.charcoal,
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
+        shadowOpacity: 0.08,
         shadowRadius: 5,
         elevation: 3,
     },
@@ -865,12 +817,7 @@ const il = StyleSheet.create({
         paddingVertical: 3,
         borderRadius: Radii.full,
     },
-    verText: {
-        fontSize: 8,
-        fontWeight: Typography.extraBold,
-        color: Colors.primary,
-        letterSpacing: 0.8,
-    },
+    verText: { fontSize: 8, fontWeight: Typography.extraBold, letterSpacing: 0.8 },
     venueBody: { padding: 13 },
     venueName: { fontSize: 13, fontWeight: Typography.extraBold, marginBottom: 4 },
     venueMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 9 },
@@ -894,18 +841,14 @@ const il = StyleSheet.create({
 
 // ─── Screen styles ────────────────────────────────────────────────────────────
 const s = StyleSheet.create({
+    // ── Root — full amber ──────────────────────────────────────────────────────
     root: {
         flex: 1,
-        backgroundColor: Colors.background,
+        backgroundColor: Colors.primary,
     },
 
-    // Top bar
+    // ── Top bar — transparent on amber ────────────────────────────────────────
     topBar: {
-        backgroundColor: Colors.surface,
-        ...Shadows.header,
-    },
-    topAmberLine: {
-        height: 3,
         backgroundColor: Colors.primary,
     },
     topContent: {
@@ -913,89 +856,79 @@ const s = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: Spacing.xl,
-        paddingTop: Platform.OS === 'ios' ? Spacing.xl : Spacing.lg,
+        paddingTop: Platform.OS === 'ios' ? Spacing.xl + 24 : Spacing.lg + 16,
         paddingBottom: Spacing.md,
     },
-    logo: { height: 26, width: 110 },
-    topRight: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    topRight: { 
+        flex: 1, 
+        flexDirection: 'row', 
+        justifyContent: 'space-between',
+        alignItems: 'center', 
+        gap: Spacing.sm 
+    },
+
+    // White pill on amber
     stepPill: {
         flexDirection: 'row',
         alignItems: 'baseline',
-        backgroundColor: Colors.primaryLight,
+        backgroundColor: 'rgba(255,255,255,0.28)',
         paddingHorizontal: 11,
         paddingVertical: 5,
         borderRadius: Radii.full,
         borderWidth: 1,
-        borderColor: Colors.primaryBorder,
+        borderColor: 'rgba(255,255,255,0.45)',
     },
-    stepNum: {
-        fontSize: Typography.sm,
-        fontWeight: Typography.extraBold,
-        color: Colors.primaryDark,
+    stepNum: { fontSize: Typography.md, fontWeight: Typography.extraBold, color: Colors.charcoal },
+    stepOf: {
+        fontSize: Typography.md,
+        fontWeight: Typography.regular,
+        color: Colors.charcoal + 'AA',
     },
-    stepOf: { fontSize: Typography.xs, fontWeight: Typography.regular, color: Colors.charcoalWarm },
+
+    // Charcoal skip btn on amber
     skipBtn: {
         paddingHorizontal: 12,
         paddingVertical: 5,
         borderRadius: Radii.full,
-        backgroundColor: Colors.background,
-        borderWidth: 1,
-        borderColor: Colors.border,
+        backgroundColor: Colors.charcoal,
+        borderWidth: 0,
     },
-    skipTxt: {
-        fontSize: Typography.sm,
-        fontWeight: Typography.semiBold,
-        color: Colors.charcoalLight,
-    },
+    skipTxt: { fontSize: Typography.md, fontWeight: Typography.semiBold, color: Colors.primary },
 
-    // Slide
-    slide: { width: W, flex: 1 },
-
-    // Vertical scroll content container
-    slideScroll: {
-        flexGrow: 1,
-    },
-
-    // Pushes card bottom clear of the fixed bottom bar
-    scrollBottomSpacer: {
-        height: Spacing.xl,
-    },
-
-    // Illustration zone
+    // ── Illustration zone — bare amber canvas ─────────────────────────────────
     ilZone: {
-        height: H * 0.43,
+        height: H * 0.38,
+        backgroundColor: Colors.primary, // seamless amber
         overflow: 'hidden',
         position: 'relative',
-        backgroundColor: Colors.background,
-    },
-    ilBg: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: Colors.primaryLight,
-        opacity: 0.3,
     },
     diagStrip: {
         position: 'absolute',
         bottom: -60,
         left: -60,
         right: -60,
-        height: H * 0.28,
-        backgroundColor: Colors.primaryLight,
+        height: H * 0.18,
+        backgroundColor: 'rgba(255,255,255,0.07)',
         transform: [{ rotate: '-7deg' }],
-        opacity: 0.65,
     },
 
-    // Content card
+    // ── Content card — white, floats up over amber ────────────────────────────
     card: {
+        flex: 1, // fills remaining space above bottom bar
         backgroundColor: Colors.surface,
         marginHorizontal: Spacing.lg,
-        marginTop: -(Spacing.xl + 6),
-        borderRadius: Radii.xxl,
+        marginTop: -(Spacing.xl + 6), // overlaps illustration zone
+        borderTopLeftRadius: Radii.xxl,
+        borderTopRightRadius: Radii.xxl,
+        borderBottomLeftRadius: 0,
+        borderBottomRightRadius: 0,
         overflow: 'hidden',
         paddingHorizontal: Spacing.xl,
-        paddingBottom: Spacing.xl,
+        paddingBottom: Spacing.sm,
         paddingTop: Spacing.lg,
         ...Shadows.card,
     },
+    // Amber top accent bar inside card
     cardBar: {
         position: 'absolute',
         top: 0,
@@ -1007,7 +940,6 @@ const s = StyleSheet.create({
         borderBottomRightRadius: 3,
     },
 
-    // Eyebrow
     eyebrowRow: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1038,24 +970,11 @@ const s = StyleSheet.create({
         fontWeight: Typography.regular,
     },
 
-    cardDivider: {
-        height: 1,
-        backgroundColor: Colors.divider,
-        marginVertical: Spacing.md,
-    },
+    cardDivider: { height: 1, backgroundColor: Colors.divider, marginVertical: Spacing.md },
 
-    // Features
     featureList: { gap: 0 },
-    featureRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
-        paddingVertical: 10,
-    },
-    featureRowBorder: {
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.divider,
-    },
+    featureRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: 9 },
+    featureRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.divider },
     featureIconBox: {
         width: 34,
         height: 34,
@@ -1073,50 +992,54 @@ const s = StyleSheet.create({
         color: Colors.charcoalMid,
     },
 
-    // Bottom bar
+    // ── Bottom bar — white tray ───────────────────────────────────────────────
     bottomBar: {
         backgroundColor: Colors.surface,
+        marginHorizontal: Spacing.lg,
+        borderBottomLeftRadius: Radii.xxl,
+        borderBottomRightRadius: Radii.xxl,
         paddingHorizontal: Spacing.xl,
-        paddingTop: Spacing.lg,
-        paddingBottom: Platform.OS === 'ios' ? 38 : Spacing.xl,
+        paddingTop: Spacing.md,
+        paddingBottom: Platform.OS === 'ios' ? 32 : Spacing.xl,
         borderTopWidth: 1,
         borderTopColor: Colors.divider,
         alignItems: 'center',
-        gap: Spacing.md,
+        gap: Spacing.sm,
         ...Shadows.floating,
+        marginBottom: Spacing.xl
     },
 
     dotsRow: { flexDirection: 'row', gap: 7, alignItems: 'center' },
     dot: { height: 7, borderRadius: 3.5 },
     dotActive: { width: 26 },
 
-    // CTA — charcoal body, amber icon bubble
+    // ── CTA — PRIMARY amber, charcoal text + charcoal icon bubble ─────────────
     cta: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         width: '100%',
-        paddingVertical: 16,
+        paddingVertical: 15,
         borderRadius: Radii.full,
-        backgroundColor: Colors.charcoal,
+        backgroundColor: Colors.primary, // golden amber
         gap: Spacing.sm,
-        shadowColor: Colors.charcoal,
+        shadowColor: Colors.primaryDark,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.28,
+        shadowOpacity: 0.4,
         shadowRadius: 10,
-        elevation: 6,
+        elevation: 7,
     },
     ctaText: {
         fontSize: Typography.lg,
         fontWeight: Typography.extraBold,
-        color: Colors.white,
+        color: Colors.charcoal, // charcoal on amber — strong contrast
         letterSpacing: Typography.normal,
     },
     ctaIconBubble: {
         width: 28,
         height: 28,
         borderRadius: 14,
-        backgroundColor: Colors.primary,
+        backgroundColor: Colors.charcoal, // charcoal bubble inside amber button
         alignItems: 'center',
         justifyContent: 'center',
     },

@@ -2,7 +2,7 @@ import { useRef, useEffect } from "react";
 import { Animated, View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import Ionicons from "react-native-vector-icons/Ionicons";
 import { Colors, Radii, Shadows, Spacing, Typography } from "../../theme/theme";
-import { ROLES } from "../../types/Role";
+import { ROLES } from "../../features/auth/types/Role";
 
 export function RoleCard({
     role,
