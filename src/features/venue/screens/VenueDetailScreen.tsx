@@ -729,6 +729,48 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                     <Text style={s.description}>{venue.description}</Text>
                 </View>
 
+                {/* ── Availability ── */}
+                <View style={s.section}>
+                    <SectionTitle icon="calendar-outline" label="Availability" />
+
+                    <View style={av.daysRow}>
+                        {ALL_DAYS.map(day => {
+                            const active = availability.availableDays.includes(day);
+                            return (
+                                <View
+                                    key={day}
+                                    style={[av.dayCircle, active && av.dayCircleActive]}
+                                >
+                                    <Text style={[av.dayAbbr, active && av.dayAbbrActive]}>
+                                        {DAY_ABBR[day]}
+                                    </Text>
+                                </View>
+                            );
+                        })}
+                    </View>
+
+                    <View style={av.infoRow}>
+                        <Ionicons name="time-outline" size={13} color={Colors.primary} />
+                        <Text style={av.timeText}>
+                            {formatTime(availability.openingTime)} –{' '}
+                            {formatTime(availability.closingTime)}
+                        </Text>
+                        {!!availability.advanceBookingRule && (
+                            <>
+                                <View style={av.dot} />
+                                <Ionicons
+                                    name="alert-circle-outline"
+                                    size={13}
+                                    color={Colors.primary}
+                                />
+                                <Text style={av.ruleText} numberOfLines={1}>
+                                    {availability.advanceBookingRule}
+                                </Text>
+                            </>
+                        )}
+                    </View>
+                </View>
+
                 {/* ── Amenities ── */}
                 <View style={s.section}>
                     <SectionTitle icon="options-outline" label="Select Amenities & Services" />
@@ -1166,51 +1208,6 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                             <Text style={pr.extraPrice}>
                                 ₹{pricing.extraHourRate.weekend!.toLocaleString()}/hr
                             </Text>
-                        </View>
-                    )}
-                </View>
-
-                {/* ── Availability ── */}
-                <View style={s.section}>
-                    <SectionTitle icon="calendar-outline" label="Availability" />
-                    <View style={av.timeRow}>
-                        <View style={av.timeBox}>
-                            <Text style={av.timeLabel}>Opens</Text>
-                            <Text style={av.timeValue}>{formatTime(availability.openingTime)}</Text>
-                        </View>
-                        <View style={av.timeSep}>
-                            <View style={av.timeLine} />
-                            <Ionicons name="time-outline" size={18} color={Colors.primary} />
-                            <View style={av.timeLine} />
-                        </View>
-                        <View style={av.timeBox}>
-                            <Text style={av.timeLabel}>Closes</Text>
-                            <Text style={av.timeValue}>{formatTime(availability.closingTime)}</Text>
-                        </View>
-                    </View>
-                    <View style={av.daysRow}>
-                        {ALL_DAYS.map(day => {
-                            const active = availability.availableDays.includes(day);
-                            return (
-                                <View
-                                    key={day}
-                                    style={[av.dayCircle, active && av.dayCircleActive]}
-                                >
-                                    <Text style={[av.dayAbbr, active && av.dayAbbrActive]}>
-                                        {DAY_ABBR[day]}
-                                    </Text>
-                                </View>
-                            );
-                        })}
-                    </View>
-                    {!!availability.advanceBookingRule && (
-                        <View style={av.ruleBox}>
-                            <Ionicons
-                                name="alert-circle-outline"
-                                size={14}
-                                color={Colors.primary}
-                            />
-                            <Text style={av.ruleText}>{availability.advanceBookingRule}</Text>
                         </View>
                     )}
                 </View>
@@ -1765,39 +1762,15 @@ const pr = StyleSheet.create({
 });
 
 const av = StyleSheet.create({
-    timeRow: {
+    daysRow: {
         flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: Spacing.md,
-        marginBottom: Spacing.lg,
+        justifyContent: 'space-between',
+        marginBottom: 10,
     },
-    timeBox: {
-        alignItems: 'center',
-        backgroundColor: Colors.primaryLight,
-        paddingHorizontal: 24,
-        paddingVertical: 12,
-        borderRadius: Radii.md,
-        minWidth: 100,
-    },
-    timeLabel: {
-        fontSize: 9,
-        fontWeight: Typography.bold,
-        color: Colors.primaryDark,
-        letterSpacing: 1,
-    },
-    timeValue: {
-        fontSize: Typography.xl,
-        fontWeight: Typography.extraBold,
-        color: Colors.primaryDark,
-    },
-    timeSep: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    timeLine: { width: 14, height: 1.5, backgroundColor: Colors.primaryBorder },
-    daysRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: Spacing.md },
     dayCircle: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: Colors.background,
@@ -1807,18 +1780,27 @@ const av = StyleSheet.create({
     dayCircleActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
     dayAbbr: { fontSize: Typography.sm, fontWeight: Typography.bold, color: Colors.charcoalLight },
     dayAbbrActive: { color: Colors.white },
-    ruleBox: {
+    infoRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        backgroundColor: Colors.primaryDim,
-        padding: Spacing.sm,
-        borderRadius: Radii.md,
+        gap: 5,
+    },
+    timeText: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoal,
+    },
+    dot: {
+        width: 3,
+        height: 3,
+        borderRadius: 2,
+        backgroundColor: Colors.border,
+        marginHorizontal: 2,
     },
     ruleText: {
         flex: 1,
         fontSize: Typography.sm,
-        color: Colors.primaryDark,
+        color: Colors.charcoalMid,
         fontWeight: Typography.medium,
     },
 });
