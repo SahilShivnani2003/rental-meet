@@ -15,7 +15,7 @@ import {
     Dimensions,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import VenueCard from '@/components/venues/venueCard';
 import { ClientTabParamList } from '@/navigations/tabNavigations/ClientTabNavigation';
 import { OwnerTabParamList } from '@/navigations/tabNavigations/OwnerTabNavigation';
@@ -35,6 +35,8 @@ import ManageAvailabilityModal from '../models/ManageAvailabilityModal';
 import { useToggleActive } from '../hooks/useToggleActive';
 import { Venue } from '../types/Venue';
 import { useCreateBlockDates } from '../hooks/useCreateBlockDates';
+import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import { CompositeScreenProps } from '@react-navigation/native';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -243,7 +245,10 @@ const rs = StyleSheet.create({
 // ─────────────────────────────────────────────────────────────────────────────
 
 type appParamList = OwnerTabParamList & ClientTabParamList;
-type venueProps = NativeStackScreenProps<appParamList, 'venues'>;
+type VenueProps = CompositeScreenProps<
+    BottomTabScreenProps<ClientTabParamList, 'venues'>,
+    BottomTabScreenProps<OwnerTabParamList, 'venues'>
+>;
 
 // ── Owner stat card ───────────────────────────────────────────────────────────
 type OwnerStatConfig = {
@@ -378,7 +383,8 @@ function DropdownModal({
 }
 
 // ── Screen ────────────────────────────────────────────────────────────────────
-export default function VenuesScreen({ navigation }: venueProps) {
+export default function VenuesScreen({ navigation, route }: VenueProps) {
+    const { search, city, capacity, venueType } = route?.params ?? {};
     const rootNav = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
     const { user } = useAuthStore();
     const isOwner = user?.role === 'owner';
@@ -454,6 +460,17 @@ export default function VenuesScreen({ navigation }: venueProps) {
     const rawVenueTypes: VenueType[] = venueTypeData?.venueTypes ?? [];
     const categories: VenueType[] = [ALL_CATEGORY, ...rawVenueTypes];
 
+    useEffect(() => {
+        if (search || city || capacity || venueType) {
+            setSearch(search ?? '');
+            setDebouncedSearch(search ?? '');
+            setSelectedCapacity(capacity ?? '');
+            setSelectedCity(city ?? '');
+            setSelectedVenueType(venueType ?? '');
+
+            refetchClientVenues();
+        }
+    }, [search, city, capacity, venueType]);
     // ── Animate in ────────────────────────────────────────────────────────────
     useEffect(() => {
         if (!isLoading && venues.length > 0) {
@@ -517,9 +534,10 @@ export default function VenuesScreen({ navigation }: venueProps) {
 
     const handleToggleActive = useCallback(() => {
         if (!selectedVenue?._id) return;
+        if (!selectedVenue?.isActive) return;
         setOperationLoading(selectedVenue.isActive ? 'Disabling venue…' : 'Enabling venue…');
         toggleActive(
-            { id: selectedVenue._id, payload: { currentIsActive: selectedVenue.isActive } },
+            { id: selectedVenue._id, payload: { currentIsActive: selectedVenue?.isActive } },
             {
                 onSuccess: () => {
                     alert.success(

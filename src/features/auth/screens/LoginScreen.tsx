@@ -138,7 +138,7 @@ export default function LoginScreen({ navigation }: LoginProps) {
         console.log('Skip press')
         alert.show({
             title: 'Continue as Guest',
-            message: 'You can browse venues without singing in. Some features will be limited',
+            message: 'You can browse venues & services without singing in. Some features will be limited',
             buttons: [
                 { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },
                 {
@@ -366,13 +366,13 @@ const styles = StyleSheet.create({
     },
 
     // Logo
-    logoArea: { alignItems: 'center', paddingTop: SCREEN_HEIGHT * 0.09, marginBottom: Spacing.xxl },
+    logoArea: { alignItems: 'center', paddingTop: SCREEN_HEIGHT * 0.05, marginBottom: Spacing.xl },
     logoCard: {
-        width: 200,
-        height: 110,
+        width: 250,
+        height: 160,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: Spacing.md,
+        marginBottom: Spacing.sm,
     },
     logo: { width: '100%', height: '100%' },
     brandRow: { flexDirection: 'row', alignItems: 'baseline' },
@@ -425,7 +425,7 @@ const styles = StyleSheet.create({
 
     // Login button
     loginBtn: {
-        backgroundColor: Colors.charcoal,
+        backgroundColor: Colors.primary,
         borderRadius: Radii.md,
         height: 54,
         flexDirection: 'row',
@@ -471,12 +471,12 @@ const styles = StyleSheet.create({
         borderRadius: Radii.md,
         borderWidth: 1.5,
         borderColor: Colors.border ?? 'rgba(0,0,0,0.1)',
-        backgroundColor: 'transparent',
+        backgroundColor: Colors.charcoal,
     },
     guestBtnText: {
         fontSize: 15,
         fontWeight: Typography.semiBold ?? Typography.bold,
-        color: Colors.charcoalLight,
+        color: Colors.white,
     },
 
     // Sign up

@@ -11,7 +11,12 @@ import GuestProfile from '@/features/profile/screen/GuestProfile';
 
 export type ClientTabParamList = {
     home: undefined;
-    venues: undefined;
+    venues: {
+        search?:string,  
+        city?:string,
+        capacity?:string,
+        venueType?:string,
+    }| undefined;
     bookings: undefined;
     otherService: undefined;
     profile: undefined;

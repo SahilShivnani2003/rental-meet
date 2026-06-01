@@ -76,3 +76,4 @@ yarn-error.log
 .vscode/settings.json
 .env
 android/app/rentalmeet-release-key.jks
+android/app/google-services.json

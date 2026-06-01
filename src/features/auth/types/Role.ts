@@ -10,23 +10,25 @@ export const ROLES = [
         icon: 'person',
         color: Colors.info,
         bg: Colors.infoLight,
+        cardBg: Colors.infoHighLight,
         perks: [
             'Browse & book venues',
             'Manage your bookings',
             'Save favourites',
             'Chat with owners',
-        ],        
+        ],
         featured: true,
     },
     {
         id: 'owner',
-        title: 'List your venue',
-        subtitle: 'Owner',
+        title: 'List Your Venue',
+        subtitle: 'Venue Owner',
         description:
             'List and manage your properties. Accept bookings and grow your venue business.',
         icon: 'business',
         color: Colors.primary,
         bg: Colors.primaryLight,
+        cardBg: Colors.primaryHighLight,
         perks: [
             'List your spaces',
             'Accept & manage bookings',
@@ -36,13 +38,14 @@ export const ROLES = [
     },
     {
         id: 'vendor',
-        title: 'List your business',
+        title: 'List Your Service',
         subtitle: 'Vendor',
         description:
             'Offer services like catering, AV setup, decoration, and more to venue bookers.',
         icon: 'construct',
         color: Colors.success,
         bg: Colors.successLight,
+        cardBg: Colors.successHighLight,
         perks: [
             'Offer your services',
             'Connect with clients',

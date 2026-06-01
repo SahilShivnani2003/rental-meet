@@ -4,6 +4,7 @@ export const Colors = {
     primary: '#F5A623',
     primaryDark: '#D98E0E',
     primaryLight: '#FEF3DC',
+    primaryHighLight: '#FFFBF5',
     primaryBorder: '#F5D48A',
     primaryGlow: 'rgba(245,166,35,0.30)',
     primaryDim: 'rgba(245,166,35,0.14)',
@@ -27,12 +28,14 @@ export const Colors = {
     // Semantic status colors (keep their universal meaning)
     success: '#16A34A',
     successLight: '#DCFCE7',
+    successHighLight: '#F6FEF9',
     warning: '#D98E0E',   // reuse primaryDark for "pending"
     warningLight: '#FEF3DC',   // reuse primaryLight
     danger: '#DC2626',
     dangerLight: '#FEE2E2',
     info: '#2563EB',
     infoLight: '#DBEAFE',
+    infoHighLight: '#F5F9FF',
 
     // Misc
     white: '#FFFFFF',

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react';
 import {
     View,
     Text,
@@ -93,10 +93,6 @@ function SectionTitle({ icon, label }: { icon: string; label: string }) {
             <Text style={util.sectionTitleText}>{label}</Text>
         </View>
     );
-}
-
-function Divider() {
-    return <View style={util.divider} />;
 }
 
 const util = StyleSheet.create({
@@ -308,6 +304,28 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
     const [activeImageIndex, setActiveImageIndex] = useState(0);
     const [bookingVisible, setBookingVisible] = useState(false);
 
+    // Auto-slide images
+    const autoSlideRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    const startAutoSlide = useCallback(() => {
+        if (images.length <= 1) return;
+        if (autoSlideRef.current) clearInterval(autoSlideRef.current);
+        autoSlideRef.current = setInterval(() => {
+            setActiveImageIndex(prev => {
+                const next = (prev + 1) % images.length;
+                flatListRef.current?.scrollToIndex({ index: next, animated: true });
+                return next;
+            });
+        }, 3000);
+    }, [images.length]);
+
+    useEffect(() => {
+        startAutoSlide();
+        return () => {
+            if (autoSlideRef.current) clearInterval(autoSlideRef.current);
+        };
+    }, [startAutoSlide]);
+
     // ── Amenity selection state ───────────────────────────────────────────────
     const [paidChecked, setPaidChecked] = useState<Set<string>>(new Set());
     const [paidQty, setPaidQty] = useState<Record<string, number>>({});
@@ -455,10 +473,15 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
         extrapolate: 'clamp',
     });
 
-    const scrollToImage = useCallback((index: number) => {
-        flatListRef.current?.scrollToIndex({ index, animated: true });
-        setActiveImageIndex(index);
-    }, []);
+    const scrollToImage = useCallback(
+        (index: number) => {
+            if (autoSlideRef.current) clearInterval(autoSlideRef.current);
+            flatListRef.current?.scrollToIndex({ index, animated: true });
+            setActiveImageIndex(index);
+            setTimeout(startAutoSlide, 4000);
+        },
+        [startAutoSlide],
+    );
 
     const handleBookNow = () => {
         if (!isAuthenticated) {
@@ -466,11 +489,15 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                 type: 'confirm',
                 title: 'Login Required',
                 message: 'For booking login is required',
-                buttons:[
-                    {label:'Login', onPress:()=>navigation.navigate('login'), style:'primary' },
-                    {label: 'Cancel', onPress:alert.dismiss, style:'ghost'}
-                ]
-            })
+                buttons: [
+                    {
+                        label: 'Login',
+                        onPress: () => navigation.navigate('login'),
+                        style: 'primary',
+                    },
+                    { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },
+                ],
+            });
         } else {
             isOwner
                 ? navigation.navigate('updateVenue', { venueId: venue._id! })
@@ -510,11 +537,13 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                 horizontal
                                 pagingEnabled
                                 showsHorizontalScrollIndicator={false}
-                                onMomentumScrollEnd={e =>
+                                onMomentumScrollEnd={e => {
+                                    if (autoSlideRef.current) clearInterval(autoSlideRef.current);
                                     setActiveImageIndex(
                                         Math.round(e.nativeEvent.contentOffset.x / width),
-                                    )
-                                }
+                                    );
+                                    setTimeout(startAutoSlide, 4000);
+                                }}
                                 keyExtractor={(_, i) => String(i)}
                                 renderItem={({ item }) =>
                                     item.url ? (

@@ -30,12 +30,13 @@ import { useGetVenueType } from '@/features/venueType/hooks/useGetVenueType';
 const { width: W, height: H } = Dimensions.get('window');
 
 const CAPACITY_OPTIONS = [
-    { label: 'Any Capacity', value: null },
-    { label: 'Up to 50 guests', value: 50 },
-    { label: 'Up to 100 guests', value: 100 },
-    { label: 'Up to 200 guests', value: 200 },
-    { label: 'Up to 500 guests', value: 500 },
-    { label: '500+ guests', value: 999 },
+    { label: '10–20', value: '10-20' },
+    { label: '20–30', value: '20-30' },
+    { label: '30–50', value: '30-50' },
+    { label: '50–100', value: '50-100' },
+    { label: '100–200', value: '100-200' },
+    { label: '200–300', value: '200-300' },
+    { label: '300+', value: '300-400' },
 ];
 
 function getDaysInMonth(year: number, month: number) {
@@ -156,7 +157,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
     const [selectedCity, setSelectedCity] = useState<string | null>(null);
     const [selectedCapacity, setSelectedCapacity] = useState<{
         label: string;
-        value: number | null;
+        value: string;
     } | null>(null);
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
@@ -182,7 +183,22 @@ export default function ClientDashboard({ navigation }: landingProps) {
 
     const closeDropdown = () => setOpenDropdown(null);
 
-    const goToVenues = () => navigation.navigate('venues');
+    const goToVenues = () => {
+        debugger;
+        if (search || selectedCapacity || selectedCity) {
+            navigation.navigate('venues', {
+                search: search,
+                capacity: selectedCapacity?.value,
+                city: selectedCity ?? '',
+            });
+
+            setSearch('');
+            setSelectedCity(null);
+            setSelectedCapacity(null);
+        } else {
+            navigation.navigate('venues');
+        }
+    };
     const goToProfile = () => navigation.navigate('profile');
 
     const goToVenueDetail = (venue: Venue) => {
@@ -641,7 +657,11 @@ export default function ClientDashboard({ navigation }: landingProps) {
                                 <TouchableOpacity
                                     key={cat._id}
                                     style={s.catCard}
-                                    onPress={goToVenues}
+                                    onPress={() =>
+                                        navigation.navigate('venues', {
+                                            venueType: cat.name,
+                                        })
+                                    }
                                     activeOpacity={0.8}
                                 >
                                     <View style={s.catIconWrap}>

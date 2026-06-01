@@ -56,7 +56,7 @@ export function RoleCard({
             )}
 
             <TouchableOpacity
-                style={styles.card}
+                style={[styles.card, {backgroundColor: role.cardBg}]}
                 onPress={() => onSelect(role.id)}
                 onPressIn={onPressIn}
                 onPressOut={onPressOut}
@@ -127,7 +127,6 @@ const styles = StyleSheet.create({
         textTransform: 'uppercase',
     },
     card: {
-        backgroundColor: Colors.surface,
         borderRadius: Radii.xl,
         flexDirection: 'row',
         overflow: 'hidden',
