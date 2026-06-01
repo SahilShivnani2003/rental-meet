@@ -23,6 +23,7 @@ import { StatusConfig, Colors, Radii, Shadows, Spacing, Typography } from '@/the
 import { RootStackParamList } from '@/types/RootStackParamList';
 import { Booking } from '../types/Booking';
 import { useGetCustomerServicebookings } from '../hooks/useVendorBooking';
+import QuotationModal from '@/features/quotation/screens/QuotationModal';
 
 // ─── Layout constant (must be before component for getItemLayout) ─────────────
 const BOOKING_CARD_HEIGHT = 148;

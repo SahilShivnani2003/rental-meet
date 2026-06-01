@@ -523,15 +523,17 @@ const styles = StyleSheet.create({
     headerEyebrow: {
         fontSize: Typography.sm,
         fontWeight: Typography.bold,
-        color: Colors.primary,
+        color: Colors.charcoalLight, // ← was Colors.primary, now muted so it reads as a sub-label
         letterSpacing: Typography.wider,
-        marginBottom: Spacing.xxs,
+        marginBottom: 6,
     },
     headerTitle: {
-        fontSize: Typography.xxl,
+        fontSize: 30, // was 26
         fontWeight: Typography.extraBold,
         color: Colors.charcoal,
-        letterSpacing: Typography.tight,
+        letterSpacing: -0.8, // was -0.6
+        lineHeight: 36, // was 32
+        marginBottom: 4, // was 6
     },
     content: { flex: 1 },
     contentPadding: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.xl, paddingBottom: 120 },

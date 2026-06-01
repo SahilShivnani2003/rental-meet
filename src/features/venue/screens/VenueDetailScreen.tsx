@@ -235,17 +235,26 @@ function BeverageItem({
     );
 }
 
+type RefreshmentItemProps = {
+    name: string;
+    rate: number;
+    qty: number;
+    checked: boolean;
+    onToggle: () => void;
+    onIncrement: () => void;
+    onDecrement: () => void;
+    onQtyChange: (v: string) => void;
+};
 function RefreshmentItem({
     name,
     rate,
+    qty,
     checked,
     onToggle,
-}: {
-    name: string;
-    rate: number;
-    checked: boolean;
-    onToggle: () => void;
-}) {
+    onIncrement,
+    onDecrement,
+    onQtyChange,
+}: RefreshmentItemProps) {
     return (
         <View style={am.paidRow}>
             <TouchableOpacity
@@ -256,7 +265,25 @@ function RefreshmentItem({
                 {checked && <Ionicons name="checkmark" size={11} color={Colors.white} />}
             </TouchableOpacity>
             <Text style={am.paidName}>{name}</Text>
-            <Text style={am.paidPrice}>₹{rate}/plate</Text>
+            {checked ? (
+                <View style={am.stepper}>
+                    <TouchableOpacity onPress={onDecrement} style={am.stepBtn}>
+                        <Text style={am.stepBtnText}>−</Text>
+                    </TouchableOpacity>
+                    <TextInput
+                        style={am.stepInput}
+                        value={String(qty)}
+                        onChangeText={onQtyChange}
+                        keyboardType="number-pad"
+                        selectTextOnFocus
+                    />
+                    <TouchableOpacity onPress={onIncrement} style={am.stepBtn}>
+                        <Text style={am.stepBtnText}>+</Text>
+                    </TouchableOpacity>
+                </View>
+            ) : (
+                <Text style={am.paidPrice}>₹{rate}/plate</Text>
+            )}
         </View>
     );
 }
@@ -331,6 +358,8 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
     const [paidQty, setPaidQty] = useState<Record<string, number>>({});
     const [bevChecked, setBevChecked] = useState<Set<string>>(new Set());
     const [bevQty, setBevQty] = useState<Record<string, number>>({});
+    const [refQty, setRefQty] = useState<Record<string, number>>({});
+    const [thaliQty, setThaliQty] = useState<Record<string, number>>({});
     const [refChecked, setRefChecked] = useState<Set<string>>(new Set());
     const [thaliChecked, setThaliChecked] = useState<Set<string>>(new Set());
 
@@ -418,16 +447,17 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
         // 5. Refreshments
         amenities.refreshmentFood
             .filter(f => f.name && refChecked.has(f.name))
-            .forEach(f =>
+            .forEach(f => {
+                const qty = refQty[f.name!] ?? 1;
                 all.push({
                     name: f.name!,
                     category: 'refreshment',
-                    qty: 1,
+                    qty,
                     unitPrice: f.ratePerPlate ?? 0,
-                    total: f.ratePerPlate ?? 0,
+                    total: (f.ratePerPlate ?? 0) * qty,
                     rateType: 'Per Plate',
-                }),
-            );
+                });
+            });
 
         // 6. Thalis
         amenities.lunchThalis.forEach(t => {
@@ -435,12 +465,13 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                 t.categories?.forEach(cat => {
                     const key = `${t.thaliType}__${cat.category}`;
                     if (thaliChecked.has(key)) {
+                        const qty = thaliQty[key] ?? 1;
                         all.push({
                             name: `${t.thaliType} — ${cat.category}`,
                             category: 'thali',
-                            qty: 1,
+                            qty,
                             unitPrice: cat.ratePerPlate,
-                            total: cat.ratePerPlate,
+                            total: cat.ratePerPlate * qty,
                             rateType: 'Per Plate',
                             thaliCategory: cat.category,
                             numberOfItems: cat.numberOfItems,
@@ -454,7 +485,17 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
         const paid = all.filter(i => i.category !== 'basic_included');
         const total = paid.reduce((sum, i) => sum + i.total, 0);
         return { allAmenities: all, paidAmenities: paid, amenitiesTotal: total };
-    }, [paidChecked, paidQty, bevChecked, bevQty, refChecked, thaliChecked, amenities]);
+    }, [
+        paidChecked,
+        paidQty,
+        bevChecked,
+        bevQty,
+        refChecked,
+        thaliChecked,
+        amenities,
+        refQty,
+        thaliQty,
+    ]);
 
     // ── Hero parallax + sticky header ─────────────────────────────────────────
     const heroTranslate = scrollY.interpolate({
@@ -942,9 +983,27 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                         key={i}
                                         name={food.name!}
                                         rate={food.ratePerPlate ?? 0}
+                                        qty={refQty[food.name!] ?? 1}
                                         checked={refChecked.has(food.name!)}
-                                        onToggle={() =>
-                                            setRefChecked(prev => toggleSet(prev, food.name!))
+                                        onToggle={() => {
+                                            setRefChecked(prev => toggleSet(prev, food.name!));
+                                            if (!refQty[food.name!])
+                                                setRefQty(p => ({ ...p, [food.name!]: 1 }));
+                                        }}
+                                        onIncrement={() =>
+                                            setRefQty(p => ({
+                                                ...p,
+                                                [food.name!]: (p[food.name!] ?? 1) + 1,
+                                            }))
+                                        }
+                                        onDecrement={() =>
+                                            setRefQty(p => ({
+                                                ...p,
+                                                [food.name!]: Math.max(1, (p[food.name!] ?? 1) - 1),
+                                            }))
+                                        }
+                                        onQtyChange={val =>
+                                            handleQtyChange(food.name!, val, setRefQty)
                                         }
                                     />
                                 ))}
@@ -970,25 +1029,31 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                         {t.categories.map((cat, ci) => {
                                             const key = `${t.thaliType}__${cat.category}`;
                                             const checked = thaliChecked.has(key);
+                                            const qty = thaliQty[key] ?? 1;
                                             return (
-                                                <TouchableOpacity
+                                                <View
                                                     key={ci}
                                                     style={[
                                                         am.thaliRow,
                                                         checked && am.thaliRowActive,
                                                     ]}
-                                                    onPress={() =>
-                                                        setThaliChecked(prev =>
-                                                            toggleSet(prev, key),
-                                                        )
-                                                    }
-                                                    activeOpacity={0.8}
                                                 >
-                                                    <View
+                                                    <TouchableOpacity
                                                         style={[
                                                             am.checkbox,
                                                             checked && am.checkboxOn,
                                                         ]}
+                                                        onPress={() => {
+                                                            setThaliChecked(prev =>
+                                                                toggleSet(prev, key),
+                                                            );
+                                                            if (!thaliQty[key])
+                                                                setThaliQty(p => ({
+                                                                    ...p,
+                                                                    [key]: 1,
+                                                                }));
+                                                        }}
+                                                        activeOpacity={0.75}
                                                     >
                                                         {checked && (
                                                             <Ionicons
@@ -997,7 +1062,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                                                 color={Colors.white}
                                                             />
                                                         )}
-                                                    </View>
+                                                    </TouchableOpacity>
                                                     <View style={{ flex: 1 }}>
                                                         <Text style={am.thaliType}>
                                                             {cat.category}
@@ -1016,10 +1081,57 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                                             </Text>
                                                         )}
                                                     </View>
-                                                    <Text style={am.thaliPrice}>
-                                                        ₹{cat.ratePerPlate}/plate
-                                                    </Text>
-                                                </TouchableOpacity>
+                                                    {checked ? (
+                                                        <View style={am.stepper}>
+                                                            <TouchableOpacity
+                                                                onPress={() =>
+                                                                    setThaliQty(p => ({
+                                                                        ...p,
+                                                                        [key]: Math.max(
+                                                                            1,
+                                                                            (p[key] ?? 1) - 1,
+                                                                        ),
+                                                                    }))
+                                                                }
+                                                                style={am.stepBtn}
+                                                            >
+                                                                <Text style={am.stepBtnText}>
+                                                                    −
+                                                                </Text>
+                                                            </TouchableOpacity>
+                                                            <TextInput
+                                                                style={am.stepInput}
+                                                                value={String(qty)}
+                                                                onChangeText={val =>
+                                                                    handleQtyChange(
+                                                                        key,
+                                                                        val,
+                                                                        setThaliQty,
+                                                                    )
+                                                                }
+                                                                keyboardType="number-pad"
+                                                                selectTextOnFocus
+                                                            />
+                                                            <TouchableOpacity
+                                                                onPress={() =>
+                                                                    setThaliQty(p => ({
+                                                                        ...p,
+                                                                        [key]: (p[key] ?? 1) + 1,
+                                                                    }))
+                                                                }
+                                                                style={am.stepBtn}
+                                                            >
+                                                                <Text style={am.stepBtnText}>
+                                                                    +
+                                                                </Text>
+                                                            </TouchableOpacity>
+                                                        </View>
+                                                    ) : (
+                                                        <Text style={am.thaliPrice}>
+                                                            ₹{cat.ratePerPlate}/plate
+                                                        </Text>
+                                                    )}
+                                                </View>
                                             );
                                         })}
                                     </View>

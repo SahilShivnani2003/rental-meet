@@ -25,7 +25,7 @@ export function ServiceCard({
     const displayName = service.brandName ?? service.companyName ?? 'Vendor';
 
     return (
-        <View style={sv.card}>
+        <View style={sv.card} onTouchMove={onViewProfile}>
             {/* Image */}
             <View style={sv.imageWrap}>
                 {service.featuredImage ? (
@@ -118,14 +118,14 @@ export function ServiceCard({
                     >
                         <Text style={sv.btnPrimaryText}>Book Now</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
+                    {/* <TouchableOpacity
                         style={sv.btnQuote}
                         onPress={onGetQuotation}
                         activeOpacity={0.85}
                     >
                         <Ionicons name="document-text-outline" size={13} color={Colors.white} />
                         <Text style={sv.btnQuoteText}>Get Quotation</Text>
-                    </TouchableOpacity>
+                    </TouchableOpacity> */}
                 </View>
             </View>
         </View>

@@ -25,6 +25,21 @@ export const CATEGORIES: CategoryMeta[] = [
         bg: '#F5EEF8',
     },
     {
+        key: 'Security',
+        label: 'Security',
+        icon: 'shield-checkmark-outline',
+        color: '#C0392B',
+        bg: '#FDEDEC',
+    },
+    { key: 'Celebrity', label: 'Celebrity', icon: 'star-outline', color: '#F39C12', bg: '#FEF9E7' },
+    {
+        key: 'Logistics & Support',
+        label: 'Logistics',
+        icon: 'car-outline',
+        color: '#17A589',
+        bg: '#E8F8F5',
+    },
+    {
         key: 'Photography',
         label: 'Photography',
         icon: 'camera-outline',
@@ -45,19 +60,5 @@ export const CATEGORIES: CategoryMeta[] = [
         color: '#27AE60',
         bg: '#EAFAF1',
     },
-    {
-        key: 'Security',
-        label: 'Security',
-        icon: 'shield-checkmark-outline',
-        color: '#C0392B',
-        bg: '#FDEDEC',
-    },
-    { key: 'Celebrity', label: 'Celebrity', icon: 'star-outline', color: '#F39C12', bg: '#FEF9E7' },
-    {
-        key: 'Logistics & Support',
-        label: 'Logistics',
-        icon: 'car-outline',
-        color: '#17A589',
-        bg: '#E8F8F5',
-    },
+
 ];

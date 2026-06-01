@@ -1063,7 +1063,7 @@ const s = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 8,
-        backgroundColor: Colors.charcoal,
+        backgroundColor: Colors.primary,
         borderRadius: Radii.full,
         paddingVertical: 14,
         marginTop: Spacing.lg,

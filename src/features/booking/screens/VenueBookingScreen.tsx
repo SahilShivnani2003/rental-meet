@@ -27,6 +27,7 @@ import { usePlatformSetting } from '../hooks/usePlatformSetting';
 import { useTermsCondition } from '../hooks/useTermsCondition';
 import { SelectedAmenityItem } from '@/features/venue/models/BookingSheet';
 import Config from 'react-native-config';
+import QuotationModal, { QuotationData } from '@/features/quotation/screens/QuotationModal';
 
 const { width: W } = Dimensions.get('window');
 
@@ -504,6 +505,112 @@ const cal = StyleSheet.create({
     },
 });
 
+const dummyQuotation: QuotationData = {
+    // Booking details
+    bookingDate: '2026-06-15',
+    startTime: '10:00 AM',
+    endTime: '02:00 PM',
+    bookingType: 'halfday',
+    durationLabel: 'Half Day',
+    isWeekend: false,
+
+    // Customer
+    customerName: 'Rahul Sharma',
+    customerEmail: 'rahul.sharma@example.com',
+    customerPhone: '+91 9876543210',
+    eventType: 'Wedding',
+    guestCount: 150,
+    specialRequirements: 'Stage decoration, DJ and veg catering',
+
+    // Pricing
+    basePrice: 50000,
+    amenitiesTotal: 22000,
+    subtotal: 72000,
+
+    venueCGST: 6480,
+    venueCGSTRate: 9,
+    venueSGST: 6480,
+    venueSGSTRate: 9,
+    venueGSTTotal: 12960,
+
+    platformFee: 2000,
+    platformFeeLabel: 'Platform Convenience Fee',
+
+    platformCGST: 180,
+    platformCGSTRate: 9,
+    platformSGST: 180,
+    platformSGSTRate: 9,
+    platformFeeTotal: 2360,
+
+    grandTotal: 87320,
+
+    // Amenities
+    paidAmenities: [
+        {
+            name: 'DJ Setup',
+            category: 'additional',
+            qty: 1,
+            unitPrice: 8000,
+            total: 8000,
+            rateType: 'fixed',
+        },
+        {
+            name: 'Veg Catering',
+            category: 'thali',
+            qty: 150,
+            unitPrice: 200,
+            total: 30000,
+            rateType: 'per_plate',
+            thaliCategory: 'Veg',
+            numberOfItems: 10,
+            itemNames: 'Paneer, Dal, Rice, Roti, Salad, Sweet',
+        },
+    ],
+
+    allAmenities: [
+        {
+            name: 'Parking',
+            category: 'basic_included',
+            qty: 1,
+            unitPrice: 0,
+            total: 0,
+            rateType: 'included',
+        },
+        {
+            name: 'Air Conditioning',
+            category: 'basic_included',
+            qty: 1,
+            unitPrice: 0,
+            total: 0,
+            rateType: 'included',
+        },
+        {
+            name: 'DJ Setup',
+            category: 'additional',
+            qty: 1,
+            unitPrice: 8000,
+            total: 8000,
+            rateType: 'fixed',
+        },
+        {
+            name: 'Veg Catering',
+            category: 'thali',
+            qty: 150,
+            unitPrice: 200,
+            total: 30000,
+            rateType: 'per_plate',
+            thaliCategory: 'Veg',
+            numberOfItems: 10,
+            itemNames: 'Paneer, Dal, Rice, Roti, Salad, Sweet',
+        },
+    ],
+
+    // Meta
+    quotationNumber: 'QT-2026-0002',
+    generatedAt: new Date('2026-06-01T10:00:00'),
+    validUntil: new Date('2026-06-07T23:59:59'),
+};
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function VenueBookingScreen({ navigation, route }: BookingScreenProps) {
@@ -514,7 +621,7 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
         preselectedDurationHours?: number;
         preselectedDurationType?: 'hourly' | 'halfday' | 'fullday';
     };
-
+    const [viewQuotation, setVeiwQuotation] = useState<boolean>(false);
     const { mutate: createBooking } = useCreateBooking();
     const { mutate: createPaymentOrder } = useCreatePaymentOrder();
     const { mutate: verifyPaymentMutate } = useVerifyPayment();
@@ -932,7 +1039,7 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
                 specialRequirements: specialRequirements.trim(),
             },
         };
-        debugger
+        debugger;
         createBooking(bookingPayload, {
             // FIX 8: response is received here in onSuccess, not as a return value
             onSuccess: async (response: any) => {
@@ -969,7 +1076,8 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
             alert.error('Validation Error', err);
             return;
         }
-        alert.info('Coming Soon', 'Quotation generation will be available soon.');
+        //alert.info('Coming Soon', 'Quotation generation will be available soon.');
+        setVeiwQuotation(true);
     };
 
     const displayDate = useMemo(() => {
@@ -1690,6 +1798,15 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
                     />
                 </View>
             </Modal>
+
+            <QuotationModal
+                visible={viewQuotation}
+                onClose={() => setVeiwQuotation(false)}
+                venue={venue}
+                onConfirmBooking={() => setVeiwQuotation(false)}
+                platformSettings={platformSettings}
+                quotationData={dummyQuotation}
+            />
         </View>
     );
 }

@@ -37,6 +37,7 @@ import { Venue } from '../types/Venue';
 import { useCreateBlockDates } from '../hooks/useCreateBlockDates';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { CompositeScreenProps } from '@react-navigation/native';
+import useEntrance from '@/hooks/useEntrance';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
@@ -682,35 +683,59 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
         { label: '300+', value: '300-400' },
     ];
 
+    const { fade: headerFade, slide: headerSlide } = useEntrance(0);
+    const { fade: bodyFade } = useEntrance(160);
     // ── Render ────────────────────────────────────────────────────────────────
     return (
         <View style={styles.container}>
             {/* ── Header ── */}
-            <View style={styles.header}>
-                <View style={styles.headerAccentBar} />
-                <View style={styles.headerContent}>
-                    <View>
-                        <Text style={styles.greetingLabel}>{isOwner ? 'MANAGE' : 'DISCOVER'}</Text>
-                        <Text style={styles.greeting}>{isOwner ? 'My Venues' : 'Venues'}</Text>
+            {isOwner ? (
+                <View style={styles.header}>
+                    <View style={styles.headerAccentBar} />
+                    <View style={styles.headerContent}>
+                        <View>
+                            <Text style={styles.greetingLabel}>
+                                {isOwner ? 'MANAGE' : 'DISCOVER'}
+                            </Text>
+                            <Text style={styles.greeting}>{isOwner ? 'My Venues' : 'Venues'}</Text>
+                        </View>
+                        {isOwner && (
+                            <TouchableOpacity
+                                style={styles.addVenueButton}
+                                onPress={handleAddVenue}
+                                activeOpacity={0.85}
+                            >
+                                <Ionicons name="add" size={18} color={Colors.charcoal} />
+                                <Text style={styles.addVenueLabel}>Add Venue</Text>
+                            </TouchableOpacity>
+                        )}
                     </View>
-                    {isOwner && (
-                        <TouchableOpacity
-                            style={styles.addVenueButton}
-                            onPress={handleAddVenue}
-                            activeOpacity={0.85}
-                        >
-                            <Ionicons name="add" size={18} color={Colors.charcoal} />
-                            <Text style={styles.addVenueLabel}>Add Venue</Text>
-                        </TouchableOpacity>
-                    )}
+                    <Text style={styles.headerSubtitle}>
+                        {isOwner
+                            ? `${venues.length} venue${venues.length !== 1 ? 's' : ''} listed`
+                            : 'Book your premium meeting venues.'}
+                    </Text>
                 </View>
-                <Text style={styles.headerSubtitle}>
-                    {isOwner
-                        ? `${venues.length} venue${venues.length !== 1 ? 's' : ''} listed`
-                        : 'Book your premium meeting venues.'}
-                </Text>
-            </View>
-
+            ) : (
+                <Animated.View
+                    style={[
+                        styles.header,
+                        { opacity: headerFade, transform: [{ translateY: headerSlide }] },
+                    ]}
+                >
+                    <View style={styles.headerAccentBar} />
+                    <View style={styles.headerContent}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.headerEyebrow}>BROWSE VENUES</Text>
+                            <Text style={styles.headerTitle}>Browse All Venues</Text>
+                            <Text style={styles.headerSub}>
+                                Find the perfect venue for your next meeting, conference, or
+                                corporate event.
+                            </Text>
+                        </View>
+                    </View>
+                </Animated.View>
+            )}
             <ScrollView
                 style={styles.content}
                 showsVerticalScrollIndicator={false}
@@ -1257,6 +1282,22 @@ const styles = StyleSheet.create({
         paddingHorizontal: Spacing.xl,
         paddingTop: Spacing.xl,
     },
+    headerTitle: {
+        fontSize: 30, // was 26
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+        letterSpacing: -0.8, // was -0.6
+        lineHeight: 36, // was 32
+        marginBottom: 4, // was 6
+    },
+    headerEyebrow: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalLight, // ← was Colors.primary, now muted so it reads as a sub-label
+        letterSpacing: Typography.wider,
+        marginBottom: 6,
+    },
+    headerSub: { fontSize: 13, color: Colors.charcoalLight, lineHeight: 20 },
     greetingLabel: {
         fontSize: Typography.sm,
         fontWeight: Typography.bold,

@@ -27,7 +27,6 @@ import { CategoryTile } from '../components/CategoryTile';
 import { FilterSheet } from '../components/FilterSheet';
 import { useAuthStore } from '@/store/useAuthStore';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
-import { VendorTabParamList } from '@/navigations/tabNavigations/VendorTabNavigation';
 import { ClientTabParamList } from '@/navigations/tabNavigations/ClientTabNavigation';
 import { useAlert } from '@/context/AlertContext';
 
@@ -227,7 +226,6 @@ export default function OtherServicesScreen({ navigation }: otherServiceScreenPr
                     />
                 }
             >
-                {/* ── Category chips (2-row wrap) ── */}
                 {/* ── Category chips (2-row wrap) ── */}
                 <Animated.View style={[s.catWrap, { opacity: bodyFade }]}>
                     {CATEGORIES.map(cat => {
