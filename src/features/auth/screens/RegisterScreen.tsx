@@ -12,6 +12,7 @@ import {
     Platform,
     ScrollView,
     Alert,
+    Modal,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -25,6 +26,12 @@ import { RootStackParamList } from '@/types/RootStackParamList';
 import { ROLE_META } from '../data/RoleMetaData';
 import { useRegister } from '../hooks/useRegister';
 import { ApiError } from '@/types/ApiError';
+import {
+    useSendEmailOtp,
+    useSendPhoneOtp,
+    useVerifyEmailOtp,
+    useVerifyPhoneOtp,
+} from '../hooks/useVerfication';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -42,14 +49,22 @@ const VENDOR_CATEGORIES = [
     'Other',
 ];
 
+// ── OTP step type ─────────────────────────────────────────────────────────────
+type OtpStep = 'none' | 'email' | 'phone';
+
 type registerProps = NativeStackScreenProps<RootStackParamList, 'register'>;
 
 export default function RegisterScreen({ navigation, route }: registerProps) {
+    // FIX: ROLE_META key must match the role value. Fallback to 'customer' not 'client'.
     const role = route.params?.role ?? 'customer';
-    const meta = ROLE_META[role] ?? ROLE_META.client;
+    const meta = ROLE_META[role] ?? ROLE_META['client'];
     const alert = useAlert();
     const { setUser } = useAuthStore();
     const { mutate: register } = useRegister();
+    const { mutate: sendEmailOtp, isPending: sendingEmailOtp } = useSendEmailOtp();
+    const { mutate: sendPhoneOtp, isPending: sendingPhoneOtp } = useSendPhoneOtp();
+    const { mutate: verifyEmailOtp, isPending: verifyingEmailOtp } = useVerifyEmailOtp();
+    const { mutate: verifyPhoneOtp, isPending: verifyingPhoneOtp } = useVerifyPhoneOtp();
 
     // ── Common fields ─────────────────────────────────────────────────────────
     const [fullName, setFullName] = useState('');
@@ -61,6 +76,15 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
     const [referralCode, setReferralCode] = useState('');
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    // ── Verification state ────────────────────────────────────────────────────
+    const [emailVerified, setEmailVerified] = useState(false);
+    const [phoneVerified, setPhoneVerified] = useState(false);
+
+    // ── OTP modal state ───────────────────────────────────────────────────────
+    const [otpStep, setOtpStep] = useState<OtpStep>('none');
+    const [otpValue, setOtpValue] = useState('');
+    const [otpError, setOtpError] = useState('');
 
     // ── Customer / Vendor location fields ─────────────────────────────────────
     const [city, setCity] = useState('');
@@ -110,27 +134,32 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
             e.email = 'Email is required';
         } else if (!/\S+@\S+\.\S+/.test(email)) {
             e.email = 'Enter a valid email';
+        } else if (!emailVerified) {
+            // FIX: enforce email OTP verification before submission
+            e.email = 'Please verify your email first';
         }
 
         if (!phone.trim()) {
             e.phone = 'Phone number is required';
         } else if (phone.replace(/\D/g, '').length < 10) {
             e.phone = 'Enter a valid 10-digit number';
+        } else if (!phoneVerified) {
+            // FIX: enforce phone OTP verification before submission
+            e.phone = 'Please verify your phone number first';
         }
 
+        // FIX: password min-length consistent with hint UI (8, not 6)
         if (!password) {
             e.password = 'Password is required';
-        } else if (password.length < 6) {
-            e.password = 'Must be at least 6 characters';
+        } else if (password.length < 8) {
+            e.password = 'Must be at least 8 characters';
         }
 
-        // Location required for customer and vendor
         if (role === 'customer' || role === 'vendor') {
             if (!city.trim()) e.city = 'City is required';
             if (!state.trim()) e.state = 'State is required';
         }
 
-        // Vendor-specific
         if (role === 'vendor') {
             if (!vendorCategory) e.vendorCategory = 'Please select a category';
         }
@@ -138,6 +167,94 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
         if (!agreed) e.agreed = 'Please accept the terms to continue';
 
         return e;
+    };
+
+    // ── OTP: Send email ───────────────────────────────────────────────────────
+    const handleSendEmailOtp = () => {
+        if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) {
+            setErrors(prev => ({ ...prev, email: 'Enter a valid email first' }));
+            return;
+        }
+        setOtpValue('');
+        setOtpError('');
+        sendEmailOtp(
+            { email, name: fullName },
+            {
+                onSuccess: () => {
+                    alert.success('OTP Sent', 'An OTP has been sent to your email');
+                    setOtpStep('email');
+                },
+                onError: (error: ApiError) => {
+                    alert.error('OTP Error', error?.message || 'Failed to send OTP');
+                },
+            },
+        );
+    };
+
+    // ── OTP: Verify email ─────────────────────────────────────────────────────
+    const handleVerifyEmailOtp = () => {
+        if (otpValue.length < 4) {
+            setOtpError('Enter the complete OTP');
+            return;
+        }
+        verifyEmailOtp(
+            { email, otp: otpValue },
+            {
+                onSuccess: () => {
+                    setEmailVerified(true);
+                    setOtpStep('none');
+                    clearError('email');
+                    alert.success('OTP Verified', 'Email verified successfully');
+                },
+                onError: (error: ApiError) => {
+                    setOtpError(error?.message || 'Invalid OTP. Please try again.');
+                },
+            },
+        );
+    };
+
+    // ── OTP: Send phone ───────────────────────────────────────────────────────
+    const handleSendPhoneOtp = () => {
+        if (phone.replace(/\D/g, '').length < 10) {
+            setErrors(prev => ({ ...prev, phone: 'Enter a valid 10-digit number first' }));
+            return;
+        }
+        setOtpValue('');
+        setOtpError('');
+        sendPhoneOtp(
+            { phone, name: fullName },
+            {
+                onSuccess: () => {
+                    alert.success('OTP Sent', 'An OTP has been sent to your phone');
+                    setOtpStep('phone');
+                },
+                onError: (error: ApiError) => {
+                    alert.error('OTP Error', error?.message || 'Failed to send OTP');
+                },
+            },
+        );
+    };
+
+    // ── OTP: Verify phone ─────────────────────────────────────────────────────
+    const handleVerifyPhoneOtp = () => {
+        if (otpValue.length < 4) {
+            setOtpError('Enter the complete OTP');
+            return;
+        }
+        verifyPhoneOtp(
+            { phone, otp: otpValue },
+            {
+                onSuccess: () => {
+                    setPhoneVerified(true);
+                    setOtpStep('none');
+                    clearError('phone');
+                    alert.success('OTP Verified', 'Phone number verified successfully');
+                },
+                onError: (error: ApiError) => {
+                    setOtpError(error?.message || 'Invalid OTP. Please try again.');
+                },
+            },
+        );
     };
 
     // ── Submit ────────────────────────────────────────────────────────────────
@@ -154,13 +271,12 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
             Animated.spring(btnScale, { toValue: 1, useNativeDriver: true, speed: 20 }),
         ]).start();
 
-        // Build payload based on role
         const base = {
             name: fullName,
             email,
             phone,
             password,
-            referralCode: referralCode || undefined,
+            referralCode: referralCode.trim() || undefined,
         };
 
         const registerData =
@@ -168,10 +284,10 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
                 ? { ...base, role: 'customer' as const, city, state }
                 : role === 'vendor'
                 ? { ...base, role: 'vendor' as const, city, state, accountType, vendorCategory }
-                : { ...base, role: 'owner' as const }; // owner
+                : { ...base, role: 'owner' as const };
 
-        setLoading(true); 
-         
+        setLoading(true);
+
         register(registerData, {
             onSuccess: data => {
                 setLoading(false);
@@ -185,151 +301,317 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
         });
     };
 
+    // ── OTP Modal ─────────────────────────────────────────────────────────────
+    const isOtpModalVisible = otpStep !== 'none';
+    const otpIsPending = otpStep === 'email' ? verifyingEmailOtp : verifyingPhoneOtp;
+
+    const handleOtpConfirm = () => {
+        if (otpStep === 'email') handleVerifyEmailOtp();
+        else if (otpStep === 'phone') handleVerifyPhoneOtp();
+    };
+
+    const handleResendOtp = () => {
+        if (otpStep === 'email') handleSendEmailOtp();
+        else if (otpStep === 'phone') handleSendPhoneOtp();
+    };
+
     // ── Render ────────────────────────────────────────────────────────────────
     return (
-        <KeyboardAvoidingView
-            style={{ flex: 1 }}
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-            <ScrollView
-                style={styles.container}
-                contentContainerStyle={styles.scrollContent}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
+        <>
+            {/* OTP Verification Modal */}
+            <Modal
+                visible={isOtpModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setOtpStep('none')}
             >
-                <View style={styles.arcTop} />
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalCard}>
+                        <View style={styles.modalHeader}>
+                            <Ionicons
+                                name={
+                                    otpStep === 'email' ? 'mail-outline' : 'phone-portrait-outline'
+                                }
+                                size={28}
+                                color={Colors.primary}
+                            />
+                            <Text style={styles.modalTitle}>
+                                Verify {otpStep === 'email' ? 'Email' : 'Phone'}
+                            </Text>
+                            <Text style={styles.modalSubtitle}>
+                                Enter the OTP sent to{' '}
+                                <Text
+                                    style={{ fontWeight: Typography.bold, color: Colors.charcoal }}
+                                >
+                                    {otpStep === 'email' ? email : phone}
+                                </Text>
+                            </Text>
+                        </View>
 
-                {/* Top nav */}
-                <Animated.View style={[styles.topBar, { opacity: fadeAnim }]}>
-                    <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-                        <Ionicons name="arrow-back" size={20} color={Colors.charcoal} />
-                    </TouchableOpacity>
-                    <Text style={styles.topBarTitle}>Create Account</Text>
-                    <View style={{ width: 44 }} />
-                </Animated.View>
+                        <TextInput
+                            style={[styles.otpInput, !!otpError && styles.otpInputError]}
+                            value={otpValue}
+                            onChangeText={t => {
+                                setOtpValue(t.replace(/\D/g, ''));
+                                setOtpError('');
+                            }}
+                            keyboardType="number-pad"
+                            maxLength={6}
+                            placeholder="------"
+                            placeholderTextColor={Colors.charcoalLight}
+                            textAlign="center"
+                        />
+                        {!!otpError && (
+                            <View style={[styles.errorRow, { marginBottom: Spacing.sm }]}>
+                                <Ionicons name="alert-circle" size={12} color={Colors.danger} />
+                                <Text style={styles.errorText}>{otpError}</Text>
+                            </View>
+                        )}
 
-                {/* Role pill */}
-                <Animated.View style={[styles.rolePillWrap, { opacity: fadeAnim }]}>
-                    <View
+                        <TouchableOpacity
+                            style={[styles.registerBtn, otpIsPending && { opacity: 0.7 }]}
+                            onPress={handleOtpConfirm}
+                            disabled={otpIsPending}
+                            activeOpacity={0.9}
+                        >
+                            {otpIsPending ? (
+                                <LoadingDots />
+                            ) : (
+                                <Text style={styles.registerBtnText}>Verify OTP</Text>
+                            )}
+                        </TouchableOpacity>
+
+                        <View style={styles.modalFooterRow}>
+                            <TouchableOpacity
+                                onPress={handleResendOtp}
+                                disabled={sendingEmailOtp || sendingPhoneOtp}
+                            >
+                                <Text style={styles.resendText}>Resend OTP</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setOtpStep('none')}>
+                                <Text style={[styles.resendText, { color: Colors.danger }]}>
+                                    Cancel
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            >
+                <ScrollView
+                    style={styles.container}
+                    contentContainerStyle={styles.scrollContent}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                >
+                    <View style={styles.arcTop} />
+
+                    {/* Top nav */}
+                    <Animated.View style={[styles.topBar, { opacity: fadeAnim }]}>
+                        <TouchableOpacity
+                            style={styles.backBtn}
+                            onPress={() => navigation.goBack()}
+                        >
+                            <Ionicons name="arrow-back" size={20} color={Colors.charcoal} />
+                        </TouchableOpacity>
+                        <Text style={styles.topBarTitle}>Create Account</Text>
+                        <View style={{ width: 44 }} />
+                    </Animated.View>
+
+                    {/* Role pill */}
+                    <Animated.View style={[styles.rolePillWrap, { opacity: fadeAnim }]}>
+                        <View
+                            style={[
+                                styles.rolePill,
+                                { backgroundColor: meta.bg, borderColor: meta.color + '55' },
+                            ]}
+                        >
+                            <View
+                                style={[
+                                    styles.rolePillIcon,
+                                    { backgroundColor: meta.color + '22' },
+                                ]}
+                            >
+                                <Ionicons name={meta.icon as any} size={14} color={meta.color} />
+                            </View>
+                            <Text style={[styles.rolePillText, { color: meta.color }]}>
+                                Registering as{' '}
+                                <Text style={{ fontWeight: Typography.extraBold }}>
+                                    {meta.label}
+                                </Text>
+                            </Text>
+                        </View>
+                    </Animated.View>
+
+                    {/* Heading */}
+                    <Animated.View style={[styles.heading, { opacity: fadeAnim }]}>
+                        <Text style={styles.headingTitle}>Let's get{'\n'}you set up</Text>
+                        <Text style={styles.headingSubtitle}>
+                            Fill in your details to create a free account.
+                        </Text>
+                    </Animated.View>
+
+                    {/* Form card */}
+                    <Animated.View
                         style={[
-                            styles.rolePill,
-                            { backgroundColor: meta.bg, borderColor: meta.color + '55' },
+                            styles.card,
+                            {
+                                opacity: fadeAnim,
+                                transform: [{ translateY: slideAnim }, { translateX: shakeAnim }],
+                            },
                         ]}
                     >
-                        <View style={[styles.rolePillIcon, { backgroundColor: meta.color + '22' }]}>
-                            <Ionicons name={meta.icon as any} size={14} color={meta.color} />
-                        </View>
-                        <Text style={[styles.rolePillText, { color: meta.color }]}>
-                            Registering as{' '}
-                            <Text style={{ fontWeight: Typography.extraBold }}>{meta.label}</Text>
-                        </Text>
-                    </View>
-                </Animated.View>
+                        {/* ── Common fields ── */}
+                        <Field
+                            label="Full Name"
+                            placeholder="Sara Patel"
+                            icon="person-outline"
+                            value={fullName}
+                            onChangeText={t => {
+                                setFullName(t);
+                                clearError('fullName');
+                            }}
+                            error={errors.fullName}
+                            autoCapitalize="words"
+                        />
 
-                {/* Heading */}
-                <Animated.View style={[styles.heading, { opacity: fadeAnim }]}>
-                    <Text style={styles.headingTitle}>Let's get{'\n'}you set up</Text>
-                    <Text style={styles.headingSubtitle}>
-                        Fill in your details to create a free account.
-                    </Text>
-                </Animated.View>
+                        {/* Email with verify button */}
+                        <Field
+                            label="Email Address"
+                            placeholder="you@example.com"
+                            icon="mail-outline"
+                            value={email}
+                            onChangeText={t => {
+                                setEmail(t);
+                                setEmailVerified(false); // reset verification if email changes
+                                clearError('email');
+                            }}
+                            error={errors.email}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            trailingIcon={emailVerified ? 'checkmark-circle' : undefined}
+                        />
+                        {!emailVerified && (
+                            <TouchableOpacity
+                                style={styles.verifyBtn}
+                                onPress={handleSendEmailOtp}
+                                disabled={sendingEmailOtp}
+                                activeOpacity={0.8}
+                            >
+                                {sendingEmailOtp ? (
+                                    <LoadingDots />
+                                ) : (
+                                    <Text style={styles.verifyBtnText}>Verify Email</Text>
+                                )}
+                            </TouchableOpacity>
+                        )}
+                        {emailVerified && (
+                            <View style={styles.verifiedBadge}>
+                                <Ionicons
+                                    name="checkmark-circle"
+                                    size={13}
+                                    color={Colors.success}
+                                />
+                                <Text style={styles.verifiedText}>Email verified</Text>
+                            </View>
+                        )}
 
-                {/* Form card */}
-                <Animated.View
-                    style={[
-                        styles.card,
-                        {
-                            opacity: fadeAnim,
-                            transform: [{ translateY: slideAnim }, { translateX: shakeAnim }],
-                        },
-                    ]}
-                >
-                    {/* ── Common fields ── */}
-                    <Field
-                        label="Full Name"
-                        placeholder="Sara Patel"
-                        icon="person-outline"
-                        value={fullName}
-                        onChangeText={t => {
-                            setFullName(t);
-                            clearError('fullName');
-                        }}
-                        error={errors.fullName}
-                        autoCapitalize="words"
-                    />
+                        {/* Phone with verify button */}
+                        {/* FIX: removed maxLength={10} since the field stores raw digits
+                            and placeholder shows formatted number. maxLength now 10 for digits only. */}
+                        <Field
+                            label="Phone Number"
+                            placeholder="9876543210"
+                            icon="call-outline"
+                            value={phone}
+                            onChangeText={t => {
+                                // strip non-digits and cap at 10
+                                const digits = t.replace(/\D/g, '').slice(0, 10);
+                                setPhone(digits);
+                                setPhoneVerified(false); // reset if phone changes
+                                clearError('phone');
+                            }}
+                            error={errors.phone}
+                            keyboardType="phone-pad"
+                            maxLength={10}
+                        />
+                        {!phoneVerified && (
+                            <TouchableOpacity
+                                style={styles.verifyBtn}
+                                onPress={handleSendPhoneOtp}
+                                disabled={sendingPhoneOtp}
+                                activeOpacity={0.8}
+                            >
+                                {sendingPhoneOtp ? (
+                                    <LoadingDots />
+                                ) : (
+                                    <Text style={styles.verifyBtnText}>Verify Phone</Text>
+                                )}
+                            </TouchableOpacity>
+                        )}
+                        {phoneVerified && (
+                            <View style={styles.verifiedBadge}>
+                                <Ionicons
+                                    name="checkmark-circle"
+                                    size={13}
+                                    color={Colors.success}
+                                />
+                                <Text style={styles.verifiedText}>Phone verified</Text>
+                            </View>
+                        )}
 
-                    <Field
-                        label="Email Address"
-                        placeholder="you@example.com"
-                        icon="mail-outline"
-                        value={email}
-                        onChangeText={t => {
-                            setEmail(t);
-                            clearError('email');
-                        }}
-                        error={errors.email}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                    />
+                        <Field
+                            label="Password"
+                            placeholder="Minimum 8 characters"
+                            icon="lock-closed-outline"
+                            value={password}
+                            onChangeText={t => {
+                                setPassword(t);
+                                clearError('password');
+                            }}
+                            error={errors.password}
+                            secureTextEntry={!showPassword}
+                            trailingIcon={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                            onTrailingPress={() => setShowPassword(!showPassword)}
+                        />
 
-                    <Field
-                        label="Phone Number"
-                        placeholder="+91 98765 43210"
-                        icon="call-outline"
-                        value={phone}
-                        onChangeText={t => {
-                            setPhone(t.replace(/[^\d\s+\-()]/g, ''));
-                            clearError('phone');
-                        }}
-                        error={errors.phone}
-                        keyboardType="phone-pad"
-                        maxLength={10}
-                    />
+                        <PasswordStrength password={password} />
 
-                    <Field
-                        label="Password"
-                        placeholder="Minimum 6 characters"
-                        icon="lock-closed-outline"
-                        value={password}
-                        onChangeText={t => {
-                            setPassword(t);
-                            clearError('password');
-                        }}
-                        error={errors.password}
-                        secureTextEntry={!showPassword}
-                        trailingIcon={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                        onTrailingPress={() => setShowPassword(!showPassword)}
-                    />
+                        {password.length > 0 && (
+                            <View style={styles.hintsGrid}>
+                                {[
+                                    // FIX: consistent with validation — 8 chars, not 6
+                                    { ok: password.length >= 8, text: 'Min 8 characters' },
+                                    { ok: /[A-Z]/.test(password), text: 'Uppercase letter' },
+                                    { ok: /[0-9]/.test(password), text: 'Number included' },
+                                    {
+                                        ok: /[^a-zA-Z0-9]/.test(password),
+                                        text: 'Special character',
+                                    },
+                                ].map((h, i) => (
+                                    <View key={i} style={styles.hintItem}>
+                                        <Ionicons
+                                            name={h.ok ? 'checkmark-circle' : 'ellipse-outline'}
+                                            size={13}
+                                            color={h.ok ? Colors.success : Colors.charcoalLight}
+                                        />
+                                        <Text style={[styles.hintText, h.ok && styles.hintTextOk]}>
+                                            {h.text}
+                                        </Text>
+                                    </View>
+                                ))}
+                            </View>
+                        )}
 
-                    <PasswordStrength password={password} />
-
-                    {password.length > 0 && (
-                        <View style={styles.hintsGrid}>
-                            {[
-                                { ok: password.length >= 8, text: 'Min 8 characters' },
-                                { ok: /[A-Z]/.test(password), text: 'Uppercase letter' },
-                                { ok: /[0-9]/.test(password), text: 'Number included' },
-                                { ok: /[^a-zA-Z0-9]/.test(password), text: 'Special character' },
-                            ].map((h, i) => (
-                                <View key={i} style={styles.hintItem}>
-                                    <Ionicons
-                                        name={h.ok ? 'checkmark-circle' : 'ellipse-outline'}
-                                        size={13}
-                                        color={h.ok ? Colors.success : Colors.charcoalLight}
-                                    />
-                                    <Text style={[styles.hintText, h.ok && styles.hintTextOk]}>
-                                        {h.text}
-                                    </Text>
-                                </View>
-                            ))}
-                        </View>
-                    )}
-
-                    {/* ── Location fields (customer + vendor) ── */}
-                    {(role === 'customer' || role === 'vendor') && (
-                        <>
+                        {/* ── Location fields (customer + vendor) ── */}
+                        {(role === 'customer' || role === 'vendor') && (
+                            // FIX: added minWidth:0 on children so they shrink correctly in row
                             <View style={styles.row}>
-                                <View style={{ flex: 1 }}>
+                                <View style={styles.rowItem}>
                                     <Field
                                         label="City"
                                         placeholder="Mumbai"
@@ -343,7 +625,7 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
                                         autoCapitalize="words"
                                     />
                                 </View>
-                                <View style={{ flex: 1 }}>
+                                <View style={styles.rowItem}>
                                     <Field
                                         label="State"
                                         placeholder="Maharashtra"
@@ -358,180 +640,192 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
                                     />
                                 </View>
                             </View>
-                        </>
-                    )}
+                        )}
 
-                    {/* ── Vendor-only fields ── */}
-                    {role === 'vendor' && (
-                        <>
-                            {/* Account type toggle */}
-                            <Text style={styles.fieldLabel}>Account Type</Text>
-                            <View style={styles.toggleRow}>
-                                {(['individual', 'company'] as const).map(type => (
-                                    <TouchableOpacity
-                                        key={type}
-                                        style={[
-                                            styles.toggleBtn,
-                                            accountType === type && styles.toggleBtnActive,
-                                        ]}
-                                        onPress={() => setAccountType(type)}
-                                        activeOpacity={0.8}
-                                    >
-                                        <Ionicons
-                                            name={
-                                                type === 'individual'
-                                                    ? 'person-outline'
-                                                    : 'business-outline'
-                                            }
-                                            size={15}
-                                            color={
-                                                accountType === type
-                                                    ? Colors.white
-                                                    : Colors.charcoalLight
-                                            }
-                                        />
-                                        <Text
-                                            style={[
-                                                styles.toggleBtnText,
-                                                accountType === type && styles.toggleBtnTextActive,
-                                            ]}
-                                        >
-                                            {type.charAt(0).toUpperCase() + type.slice(1)}
-                                        </Text>
-                                    </TouchableOpacity>
-                                ))}
-                            </View>
-
-                            {/* Vendor category */}
-                            <Text style={styles.fieldLabel}>Vendor Category</Text>
-                            <View style={styles.categoryGrid}>
-                                {VENDOR_CATEGORIES.map(cat => {
-                                    const active = vendorCategory === cat;
-                                    return (
+                        {/* ── Vendor-only fields ── */}
+                        {role === 'vendor' && (
+                            <>
+                                <Text style={styles.fieldLabel}>Account Type</Text>
+                                <View style={styles.toggleRow}>
+                                    {(['individual', 'company'] as const).map(type => (
                                         <TouchableOpacity
-                                            key={cat}
+                                            key={type}
                                             style={[
-                                                styles.categoryChip,
-                                                active && styles.categoryChipActive,
+                                                styles.toggleBtn,
+                                                accountType === type && styles.toggleBtnActive,
                                             ]}
-                                            onPress={() => {
-                                                setVendorCategory(cat);
-                                                clearError('vendorCategory');
-                                            }}
+                                            onPress={() => setAccountType(type)}
                                             activeOpacity={0.8}
                                         >
+                                            <Ionicons
+                                                name={
+                                                    type === 'individual'
+                                                        ? 'person-outline'
+                                                        : 'business-outline'
+                                                }
+                                                size={15}
+                                                color={
+                                                    accountType === type
+                                                        ? Colors.white
+                                                        : Colors.charcoalLight
+                                                }
+                                            />
                                             <Text
                                                 style={[
-                                                    styles.categoryChipText,
-                                                    active && styles.categoryChipTextActive,
+                                                    styles.toggleBtnText,
+                                                    accountType === type &&
+                                                        styles.toggleBtnTextActive,
                                                 ]}
                                             >
-                                                {cat}
+                                                {type.charAt(0).toUpperCase() + type.slice(1)}
                                             </Text>
                                         </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
-                            {!!errors.vendorCategory && (
-                                <View style={styles.errorRow}>
-                                    <Ionicons name="alert-circle" size={12} color={Colors.danger} />
-                                    <Text style={styles.errorText}>{errors.vendorCategory}</Text>
+                                    ))}
                                 </View>
-                            )}
-                        </>
-                    )}
 
-                    {/* ── Referral code ── */}
-                    <Field
-                        label="Referral Code (Optional)"
-                        placeholder="Enter referral code if any"
-                        icon="people-outline"
-                        value={referralCode}
-                        onChangeText={setReferralCode}
-                        autoCapitalize="characters"
-                    />
-
-                    <View style={styles.divider} />
-
-                    {/* Terms */}
-                    <TouchableOpacity
-                        style={styles.termsRow}
-                        onPress={() => {
-                            setAgreed(!agreed);
-                            clearError('agreed');
-                        }}
-                        activeOpacity={0.7}
-                    >
-                        <View
-                            style={[
-                                styles.checkbox,
-                                agreed && styles.checkboxOn,
-                                !!errors.agreed && styles.checkboxErr,
-                            ]}
-                        >
-                            {agreed && <Ionicons name="checkmark" size={11} color={Colors.white} />}
-                        </View>
-                        <Text style={styles.termsText}>
-                            I agree to the{' '}
-                            <Text
-                                style={styles.termsLink}
-                                onPress={() => Alert.alert('Terms', 'Coming soon.')}
-                            >
-                                Terms of Service
-                            </Text>{' '}
-                            and{' '}
-                            <Text
-                                style={styles.termsLink}
-                                onPress={() => Alert.alert('Privacy', 'Coming soon.')}
-                            >
-                                Privacy Policy
-                            </Text>
-                        </Text>
-                    </TouchableOpacity>
-                    {!!errors.agreed && (
-                        <View style={[styles.errorRow, { marginTop: 0, marginBottom: Spacing.sm }]}>
-                            <Ionicons name="alert-circle" size={12} color={Colors.danger} />
-                            <Text style={styles.errorText}>{errors.agreed}</Text>
-                        </View>
-                    )}
-
-                    {/* CTA */}
-                    <Animated.View
-                        style={{ transform: [{ scale: btnScale }], marginTop: Spacing.sm }}
-                    >
-                        <TouchableOpacity
-                            style={[styles.registerBtn, loading && { opacity: 0.7 }]}
-                            onPress={handleRegister}
-                            activeOpacity={0.9}
-                            disabled={loading}
-                        >
-                            {loading ? (
-                                <LoadingDots />
-                            ) : (
-                                <>
-                                    <Text style={styles.registerBtnText}>Create Account</Text>
-                                    <View style={styles.registerBtnArrow}>
+                                <Text style={styles.fieldLabel}>Vendor Category</Text>
+                                <View style={styles.categoryGrid}>
+                                    {VENDOR_CATEGORIES.map(cat => {
+                                        const active = vendorCategory === cat;
+                                        return (
+                                            <TouchableOpacity
+                                                key={cat}
+                                                style={[
+                                                    styles.categoryChip,
+                                                    active && styles.categoryChipActive,
+                                                ]}
+                                                onPress={() => {
+                                                    setVendorCategory(cat);
+                                                    clearError('vendorCategory');
+                                                }}
+                                                activeOpacity={0.8}
+                                            >
+                                                <Text
+                                                    style={[
+                                                        styles.categoryChipText,
+                                                        active && styles.categoryChipTextActive,
+                                                    ]}
+                                                >
+                                                    {cat}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                                {!!errors.vendorCategory && (
+                                    <View style={styles.errorRow}>
                                         <Ionicons
-                                            name="arrow-forward"
-                                            size={17}
-                                            color={meta.color}
+                                            name="alert-circle"
+                                            size={12}
+                                            color={Colors.danger}
                                         />
+                                        <Text style={styles.errorText}>
+                                            {errors.vendorCategory}
+                                        </Text>
                                     </View>
-                                </>
-                            )}
+                                )}
+                            </>
+                        )}
+
+                        {/* ── Referral code ── */}
+                        <Field
+                            label="Referral Code (Optional)"
+                            placeholder="Enter referral code if any"
+                            icon="people-outline"
+                            value={referralCode}
+                            onChangeText={setReferralCode}
+                            autoCapitalize="characters"
+                        />
+
+                        <View style={styles.divider} />
+
+                        {/* Terms */}
+                        <TouchableOpacity
+                            style={styles.termsRow}
+                            onPress={() => {
+                                setAgreed(!agreed);
+                                clearError('agreed');
+                            }}
+                            activeOpacity={0.7}
+                        >
+                            <View
+                                style={[
+                                    styles.checkbox,
+                                    agreed && styles.checkboxOn,
+                                    !!errors.agreed && styles.checkboxErr,
+                                ]}
+                            >
+                                {agreed && (
+                                    <Ionicons name="checkmark" size={11} color={Colors.white} />
+                                )}
+                            </View>
+                            <Text style={styles.termsText}>
+                                I agree to the{' '}
+                                <Text
+                                    style={styles.termsLink}
+                                    onPress={() => Alert.alert('Terms', 'Coming soon.')}
+                                >
+                                    Terms of Service
+                                </Text>{' '}
+                                and{' '}
+                                <Text
+                                    style={styles.termsLink}
+                                    onPress={() => Alert.alert('Privacy', 'Coming soon.')}
+                                >
+                                    Privacy Policy
+                                </Text>
+                            </Text>
+                        </TouchableOpacity>
+                        {!!errors.agreed && (
+                            <View
+                                style={[
+                                    styles.errorRow,
+                                    { marginTop: 0, marginBottom: Spacing.sm },
+                                ]}
+                            >
+                                <Ionicons name="alert-circle" size={12} color={Colors.danger} />
+                                <Text style={styles.errorText}>{errors.agreed}</Text>
+                            </View>
+                        )}
+
+                        {/* CTA */}
+                        <Animated.View
+                            style={{ transform: [{ scale: btnScale }], marginTop: Spacing.sm }}
+                        >
+                            <TouchableOpacity
+                                style={[styles.registerBtn, loading && { opacity: 0.7 }]}
+                                onPress={handleRegister}
+                                activeOpacity={0.9}
+                                disabled={loading}
+                            >
+                                {loading ? (
+                                    <LoadingDots />
+                                ) : (
+                                    <>
+                                        <Text style={styles.registerBtnText}>Create Account</Text>
+                                        <View style={styles.registerBtnArrow}>
+                                            <Ionicons
+                                                name="arrow-forward"
+                                                size={17}
+                                                color={meta.color}
+                                            />
+                                        </View>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </Animated.View>
+                    </Animated.View>
+
+                    {/* Sign in link */}
+                    <Animated.View style={[styles.loginRow, { opacity: fadeAnim }]}>
+                        <Text style={styles.loginText}>Already have an account? </Text>
+                        <TouchableOpacity onPress={() => navigation.navigate('login')}>
+                            <Text style={styles.loginLink}>Sign in</Text>
                         </TouchableOpacity>
                     </Animated.View>
-                </Animated.View>
-
-                {/* Sign in link */}
-                <Animated.View style={[styles.loginRow, { opacity: fadeAnim }]}>
-                    <Text style={styles.loginText}>Already have an account? </Text>
-                    <TouchableOpacity onPress={() => navigation.navigate('login')}>
-                        <Text style={styles.loginLink}>Sign in</Text>
-                    </TouchableOpacity>
-                </Animated.View>
-            </ScrollView>
-        </KeyboardAvoidingView>
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </>
     );
 }
 
@@ -610,8 +904,39 @@ const styles = StyleSheet.create({
         ...Shadows.header,
     },
 
-    // Row layout for city + state
+    // FIX: row children need minWidth:0 to shrink properly
     row: { flexDirection: 'row', gap: Spacing.sm },
+    rowItem: { flex: 1, minWidth: 0 },
+
+    // OTP verify buttons
+    verifyBtn: {
+        alignSelf: 'flex-start',
+        marginTop: -Spacing.xs,
+        marginBottom: Spacing.sm,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: 6,
+        backgroundColor: Colors.primaryLight,
+        borderRadius: Radii.full,
+        borderWidth: 1,
+        borderColor: Colors.primary + '44',
+    },
+    verifyBtnText: {
+        fontSize: 12,
+        fontWeight: Typography.semiBold,
+        color: Colors.primary,
+    },
+    verifiedBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginTop: -Spacing.xs,
+        marginBottom: Spacing.sm,
+    },
+    verifiedText: {
+        fontSize: 12,
+        fontWeight: Typography.semiBold,
+        color: Colors.success,
+    },
 
     // Password hints
     hintsGrid: {
@@ -625,7 +950,6 @@ const styles = StyleSheet.create({
     hintText: { fontSize: 11, color: Colors.charcoalLight, fontWeight: Typography.medium },
     hintTextOk: { color: Colors.success, fontWeight: Typography.semiBold },
 
-    // Generic field label
     fieldLabel: {
         fontSize: 12,
         fontWeight: Typography.semiBold,
@@ -724,4 +1048,56 @@ const styles = StyleSheet.create({
     loginLink: { fontSize: 14, color: Colors.primary, fontWeight: Typography.extraBold },
     errorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 },
     errorText: { fontSize: 11, color: Colors.danger, fontWeight: Typography.semiBold },
+
+    // OTP Modal
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.45)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 24,
+    },
+    modalCard: {
+        width: '100%',
+        backgroundColor: Colors.surface,
+        borderRadius: Radii.xxl,
+        padding: Spacing.xl,
+        ...Shadows.floating,
+    },
+    modalHeader: { alignItems: 'center', marginBottom: Spacing.lg, gap: Spacing.sm },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+        letterSpacing: -0.4,
+    },
+    modalSubtitle: {
+        fontSize: 13,
+        color: Colors.charcoalLight,
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    otpInput: {
+        height: 56,
+        borderRadius: Radii.md,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        backgroundColor: Colors.background,
+        fontSize: 22,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+        letterSpacing: 8,
+        marginBottom: Spacing.sm,
+    },
+    otpInputError: { borderColor: Colors.danger },
+    modalFooterRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: Spacing.md,
+    },
+    resendText: {
+        fontSize: 13,
+        fontWeight: Typography.semiBold,
+        color: Colors.primary,
+    },
 });

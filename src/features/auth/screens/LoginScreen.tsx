@@ -249,7 +249,7 @@ export default function LoginScreen({ navigation }: LoginProps) {
 
                     <TouchableOpacity
                         style={styles.forgotRow}
-                        onPress={() => Alert.alert('Reset Password', 'A reset link has been sent.')}
+                        onPress={() =>navigation.navigate('forgotPassword')}
                     >
                         <Text style={styles.forgotText}>Forgot password?</Text>
                     </TouchableOpacity>

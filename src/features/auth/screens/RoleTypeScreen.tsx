@@ -73,7 +73,6 @@ export default function RegisterTypeScreen({ navigation }: registerTypeParams) {
                 style={styles.content}
                 contentContainerStyle={styles.contentPadding}
                 showsVerticalScrollIndicator={false}
-                scrollEnabled={false}
             >
                 {ROLES.map((role, index) => (
                     <RoleCard key={role.id} role={role} index={index} onSelect={handleSelect} />

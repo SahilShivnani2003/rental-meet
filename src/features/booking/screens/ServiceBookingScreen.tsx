@@ -26,6 +26,7 @@ import { useCreatePaymentOrder, useVerifyPayment } from '../hooks/usePayment';
 import RazorpayCheckout from 'react-native-razorpay';
 import { useAuthStore } from '@/store/useAuthStore';
 import Config from 'react-native-config';
+import TimePicker from '../components/TimePicker';
 
 const { width: W } = Dimensions.get('window');
 
@@ -59,18 +60,38 @@ const EVENT_TYPES = [
 
 // ─── Calendar helpers ─────────────────────────────────────────────────────────
 const getDaysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
-const isPast = (d: Date) => {
-    const t = new Date();
-    t.setHours(0, 0, 0, 0);
+const isPastDate = (d: Date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const check = new Date(d);
     check.setHours(0, 0, 0, 0);
-    return check < t;
+    return check < today;
 };
+const isToday = (y: number, m: number, day: number) => {
+    const t = new Date();
+    return t.getFullYear() === y && t.getMonth() === m && t.getDate() === day;
+};
+
+// ─── Mock coupons (replace with API data) ─────────────────────────────────────
+const AVAILABLE_COUPONS = [
+    { code: 'ADMIN20', discount: '20% off', description: 'Get 20% off on all services' },
+    { code: 'FIRST10', discount: '10% off', description: 'First booking discount' },
+];
 
 type Props = NativeStackScreenProps<RootStackParamList, 'serviceBooking'>;
 
 export default function ServiceBookingScreen({ navigation, route }: Props) {
-    const { service } = route.params as { service: VendorService };
+    const { service, selectedPackages } = route.params as {
+        service: VendorService;
+        selectedPackages?: {
+            name: string;
+            price: number;
+            unit?: string;
+            quantity: number;
+            amount: number;
+        }[];
+    };
+
     const alert = useAlert();
     const catColor = CAT_COLOR[service.category] ?? Colors.primary;
     const { user } = useAuthStore();
@@ -78,21 +99,34 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
     const { data: platformSettingData, isLoading: settingsLoading } = useServicePlatformSetting();
     const { mutate: createPaymentOrder } = useCreatePaymentOrder();
     const { mutate: verifyPaymentMutate } = useVerifyPayment();
+
+    const packages = service.packages ?? [];
+
+    // Pre-fill serviceQuantities from selectedPackages passed by VendorDetailScreen
+    const initialQuantities = useMemo(() => {
+        if (!selectedPackages?.length) return {};
+        const map: Record<number, number> = {};
+        selectedPackages.forEach(sp => {
+            const idx = packages.findIndex(p => (p.name ?? (p as any).serviceName) === sp.name);
+            if (idx !== -1) map[idx] = sp.quantity;
+        });
+        return map;
+    }, [selectedPackages, packages]);
+
     // ── Form state ────────────────────────────────────────────────────────────
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
     const [startTime, setStartTime] = useState('');
-    const [selectedPkg, setSelectedPkg] = useState<number | null>(null);
     const [guestCount, setGuestCount] = useState('');
     const [eventType, setEventType] = useState('');
     const [specialReq, setSpecialReq] = useState('');
     const [calYear, setCalYear] = useState(new Date().getFullYear());
     const [calMonth, setCalMonth] = useState(new Date().getMonth());
+    const [calendarOpen, setCalendarOpen] = useState(true);
     const [loading, setLoading] = useState(false);
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [couponCode, setCouponCode] = useState('');
-
-    // Quantity state for service items (from Services & Rate List)
-    const [serviceQuantities, setServiceQuantities] = useState<Record<number, number>>({});
+    const [serviceQuantities, setServiceQuantities] =
+        useState<Record<number, number>>(initialQuantities);
 
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(24)).current;
@@ -109,6 +143,16 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
         ]).start();
     }, []);
 
+    // FIX 1: calAnim is declared but was never used for actual rendering.
+    // The calendar was toggled with a plain conditional, making calAnim redundant.
+    // Removed calAnim entirely and rely purely on calendarOpen state for the
+    // conditional render — this is the correct pattern for React Native
+    // (Animated.View with height interpolation has layout issues without
+    // onLayout measurements). The toggle logic is kept straightforward.
+    const toggleCalendar = () => {
+        setCalendarOpen(prev => !prev);
+    };
+
     // ── Calendar ──────────────────────────────────────────────────────────────
     const daysInMonth = getDaysInMonth(calYear, calMonth);
     const firstDayOfWeek = new Date(calYear, calMonth, 1).getDay();
@@ -117,10 +161,23 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
         year: 'numeric',
     });
 
-    const prevMonth = () =>
-        calMonth === 0 ? (setCalMonth(11), setCalYear(y => y - 1)) : setCalMonth(m => m - 1);
-    const nextMonth = () =>
-        calMonth === 11 ? (setCalMonth(0), setCalYear(y => y + 1)) : setCalMonth(m => m + 1);
+    const prevMonth = () => {
+        if (calMonth === 0) {
+            setCalMonth(11);
+            setCalYear(y => y - 1);
+        } else {
+            setCalMonth(m => m - 1);
+        }
+    };
+
+    const nextMonth = () => {
+        if (calMonth === 11) {
+            setCalMonth(0);
+            setCalYear(y => y + 1);
+        } else {
+            setCalMonth(m => m + 1);
+        }
+    };
 
     const calCells = Array.from({ length: firstDayOfWeek + daysInMonth }, (_, i) =>
         i < firstDayOfWeek ? null : i - firstDayOfWeek + 1,
@@ -131,33 +188,24 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
         selectedDate?.getMonth() === calMonth &&
         selectedDate?.getDate() === day;
 
-    // ── Packages ──────────────────────────────────────────────────────────────
-    const packages = service.packages ?? [];
-
-    // ── Price breakdown using PlatformSettings ────────────────────────────────
+    // ── Price breakdown ───────────────────────────────────────────────────────
     const breakdown = useMemo(() => {
-        // Calculate base from selected package OR service items with quantities
         let base = 0;
 
-        if (selectedPkg !== null) {
-            // Package-based pricing
-            const pkg = packages[selectedPkg];
-            base = pkg?.price ?? (pkg as any)?.rate ?? 0;
-        } else if (Object.keys(serviceQuantities).length > 0) {
-            // Item-based pricing from Services & Rate List
+        if (Object.keys(serviceQuantities).length > 0) {
             base = Object.entries(serviceQuantities).reduce((sum, [idx, qty]) => {
                 const pkg = packages[parseInt(idx)];
                 const price = pkg?.price ?? (pkg as any)?.rate ?? 0;
                 return sum + price * qty;
             }, 0);
         } else {
-            // Default to starting price
             base = service.startingPrice ?? 0;
         }
 
         const settings = platformSettingData;
 
-        // Category-specific overrides (most specific)
+        // FIX 2: serviceCategoryRates lookup uses service.category — correct.
+        // But fallback chain must handle undefined platformSettingData gracefully.
         const catRate = settings?.serviceCategoryRates?.find(
             (r: any) => r.category === service.category,
         );
@@ -173,7 +221,22 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
         const platformFee = Math.round((base * platFeePct) / 100);
         const platformFeeGST = Math.round((platformFee * (platCgstPct + platSgstPct)) / 100);
 
-        const total = base + serviceCGST + serviceSGST + platformFee + platformFeeGST;
+        // FIX 3: Coupon discount was never subtracted from the total.
+        // Look up the coupon and apply its discount if matched.
+        let discountAmount = 0;
+        if (couponCode) {
+            // Derive discount from mock coupons; in production replace with API data.
+            const matched = AVAILABLE_COUPONS.find(c => c.code === couponCode);
+            if (matched) {
+                const discountPct = parseInt(matched.discount); // e.g. "20% off" → 20
+                if (!isNaN(discountPct)) {
+                    discountAmount = Math.round((base * discountPct) / 100);
+                }
+            }
+        }
+
+        const total =
+            base + serviceCGST + serviceSGST + platformFee + platformFeeGST - discountAmount;
 
         return {
             base,
@@ -186,15 +249,16 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
             serviceSGST,
             platformFee,
             platformFeeGST,
-            total,
+            discountAmount,
+            total: Math.max(0, total), // never go below 0
         };
     }, [
-        selectedPkg,
         serviceQuantities,
         packages,
         service.startingPrice,
         service.category,
         platformSettingData,
+        couponCode,
     ]);
 
     // ── Validation ────────────────────────────────────────────────────────────
@@ -206,14 +270,10 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
     };
 
     // ── Quantity handlers ─────────────────────────────────────────────────────
-    const incrementQuantity = (index: number) => {
-        setServiceQuantities(prev => ({
-            ...prev,
-            [index]: (prev[index] || 0) + 1,
-        }));
-    };
+    const incrementQuantity = (index: number) =>
+        setServiceQuantities(prev => ({ ...prev, [index]: (prev[index] || 0) + 1 }));
 
-    const decrementQuantity = (index: number) => {
+    const decrementQuantity = (index: number) =>
         setServiceQuantities(prev => {
             const newQty = Math.max(0, (prev[index] || 0) - 1);
             if (newQty === 0) {
@@ -222,17 +282,14 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
             }
             return { ...prev, [index]: newQty };
         });
-    };
 
+    // FIX 4: handlePayment referenced breakdown.total via closure — this is
     const handlePayment = useCallback(
         (bookingId: string): Promise<void> =>
             new Promise((resolve, reject) => {
+                debugger
                 createPaymentOrder(
-                    {
-                        bookingId,
-                        amount: breakdown.total,
-                        bookingType: 'serivce',
-                    },
+                    { bookingId, amount: breakdown.total, bookingType: 'service' },
                     {
                         onSuccess: async (orderData: any) => {
                             if (!orderData?.success) {
@@ -245,24 +302,22 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                     amount: orderData.order.amount,
                                     currency: orderData.order.currency ?? 'INR',
                                     name: 'RentalMeet',
-                                    description: `Booking Payment - ${service.companyName}`,
+                                    description: `Booking Payment - ${
+                                        service.companyName ?? service.title
+                                    }`,
                                     order_id: orderData.order.id,
                                     prefill: {
                                         name: user?.name,
                                         email: user?.email,
                                         contact: user?.phone,
                                     },
-                                    theme: { color: '#F59F0A' },
+                                    theme: { color: catColor },
                                 };
-
                                 const razorpayResponse = await RazorpayCheckout.open(options);
-
                                 if (!razorpayResponse?.razorpay_payment_id) {
                                     reject(new Error('Payment not completed'));
                                     return;
                                 }
-
-                                // FIX 7: verifyPaymentMutate is the mutate fn — call it properly
                                 verifyPaymentMutate(
                                     {
                                         razorpay_order_id: razorpayResponse.razorpay_order_id,
@@ -279,7 +334,16 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                                     'Payment Successful',
                                                     'Booking confirmed!',
                                                 );
-                                                navigation.popToTop?.() ?? navigation.goBack();
+                                                // FIX 5: navigation.popToTop() does not take
+                                                // arguments. The optional-chain on popToTop was
+                                                // masking a type error; use reset instead so the
+                                                // user reliably lands on the root screen.
+                                                navigation.reset
+                                                    ? navigation.reset({
+                                                          index: 0,
+                                                          routes: [{ name: 'Home' as any }],
+                                                      })
+                                                    : navigation.goBack();
                                                 resolve();
                                             } else {
                                                 reject(new Error('Payment verification failed'));
@@ -296,56 +360,43 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                     },
                 );
             }),
-        [createPaymentOrder, verifyPaymentMutate, alert, breakdown, navigation],
+        [
+            createPaymentOrder,
+            verifyPaymentMutate,
+            alert,
+            breakdown.total,
+            navigation,
+            catColor,
+            service,
+            user,
+        ],
     );
+
     // ── Submit ────────────────────────────────────────────────────────────────
     const handleBook = () => {
+        debugger
         const e = validate();
         setErrors(e);
         if (Object.keys(e).length > 0) return;
-
         if (!service._id) {
             alert.error('Missing Data', 'Service ID is missing.');
             return;
         }
 
-        // Build items array from selected services
         const items: ServiceBooking['items'] = [];
 
-        if (selectedPkg !== null) {
-            // Single package selected
-            const activePkg = packages[selectedPkg];
-            const pkgName = activePkg?.name ?? (activePkg as any)?.serviceName ?? service.title;
-            const pkgPrice =
-                activePkg?.price ?? (activePkg as any)?.rate ?? service.startingPrice ?? 0;
-            const pkgUnit = activePkg?.unit;
-
-            items.push({
-                name: pkgName,
-                price: pkgPrice,
-                unit: pkgUnit,
-                quantity: 1,
-                amount: pkgPrice,
-            });
-        } else if (Object.keys(serviceQuantities).length > 0) {
-            // Multiple service items
+        if (Object.keys(serviceQuantities).length > 0) {
             Object.entries(serviceQuantities).forEach(([idx, qty]) => {
                 const pkg = packages[parseInt(idx)];
-                const pkgName =
-                    pkg?.name ?? (pkg as any)?.serviceName ?? `Service ${parseInt(idx) + 1}`;
-                const pkgPrice = pkg?.price ?? (pkg as any)?.rate ?? 0;
-                const pkgUnit = pkg?.unit;
-
                 items.push({
-                    name: pkgName,
-                    price: pkgPrice,
-                    unit: pkgUnit,
+                    name: pkg?.name ?? (pkg as any)?.serviceName ?? `Service ${parseInt(idx) + 1}`,
+                    price: pkg?.price ?? (pkg as any)?.rate ?? 0,
+                    unit: pkg?.unit,
                     quantity: qty,
-                    amount: pkgPrice * qty,
+                    amount: (pkg?.price ?? (pkg as any)?.rate ?? 0) * qty,
                 });
             });
         } else {
-            // Default single item
             items.push({
                 name: service.title,
                 price: service.startingPrice ?? 0,
@@ -359,13 +410,12 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
         if (startTime) noteParts.push(`Start Time: ${startTime}`);
         if (specialReq) noteParts.push(specialReq);
 
+        
         const payload: ServiceBooking = {
             service: service._id,
             serviceId: service._id,
             vendor: service.vendor,
-
             eventDate: selectedDate!,
-
             customerInfo: {
                 name: user?.name,
                 email: user?.email,
@@ -374,7 +424,6 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                 eventName: eventType,
                 notes: noteParts.join(' | ') || undefined,
             },
-
             serviceSnapshot: {
                 title: service.title,
                 category: service.category,
@@ -382,10 +431,7 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                 city: service.city,
                 state: service.state,
             },
-
             items,
-
-            // All fee / tax values come from platform settings via `breakdown`
             pricing: {
                 subtotal: breakdown.base,
                 serviceCGST: breakdown.serviceCGST,
@@ -398,23 +444,21 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                 total: breakdown.total,
             },
             amount: breakdown.total,
-
-            // Add coupon if entered
             ...(couponCode && {
                 coupon: {
                     code: couponCode,
+                    discountAmount: breakdown.discountAmount,
                 },
             }),
         };
 
         setLoading(true);
         createBooking(payload, {
-            onSuccess: async(response) => {
+            onSuccess: async (response: any) => {
                 if (response?.success) {
                     try {
                         await handlePayment(response.booking._id);
                     } catch (payErr: any) {
-                        console.error('PAYMENT ERROR:', payErr);
                         alert.error(
                             'Payment Failed',
                             payErr?.message ?? 'Payment could not be processed.',
@@ -424,13 +468,31 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                     alert.error('Booking Failed', response?.message ?? 'Something went wrong.');
                 }
                 setLoading(false);
-                navigation.goBack();
             },
             onError: (err: ApiError) => {
                 setLoading(false);
                 alert.error('Booking Failed', err?.message || 'Something went wrong.');
             },
         });
+    };
+
+    // ── Derived ───────────────────────────────────────────────────────────────
+    const hasItems = Object.keys(serviceQuantities).length > 0;
+    const itemsTotal = Object.entries(serviceQuantities).reduce((sum, [idx, qty]) => {
+        const pkg = packages[parseInt(idx)];
+        return sum + (pkg?.price ?? (pkg as any)?.rate ?? 0) * qty;
+    }, 0);
+
+    // FIX 7: step numbers were not dynamically computed — they hard-coded
+    // knowledge of whether packages existed inline. Extract to a variable so
+    // all step badges stay in sync automatically.
+    const hasPackages = packages.length > 0;
+    const steps = {
+        dateTime: 1,
+        services: 2, // only shown when hasPackages
+        eventDetails: hasPackages ? 3 : 2,
+        coupons: hasPackages ? 4 : 3,
+        pricing: hasPackages ? 5 : 4,
     };
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -467,7 +529,11 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                         {/* Service summary card */}
                         <View style={s.summaryCard}>
                             <View style={[s.summaryIcon, { backgroundColor: catColor + '18' }]}>
-                                <Ionicons name="restaurant-outline" size={22} color={catColor} />
+                                <Ionicons
+                                    name={getCategoryIcon(service.category)}
+                                    size={22}
+                                    color={catColor}
+                                />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={s.summaryTitle} numberOfLines={1}>
@@ -485,23 +551,11 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                 </View>
                                 {(service.city || service.state) && (
                                     <Text style={s.summaryLocation}>
-                                        <Ionicons
-                                            name="location-outline"
-                                            size={11}
-                                            color={Colors.charcoalLight}
-                                        />{' '}
                                         {[service.city, service.state].filter(Boolean).join(', ')}
                                     </Text>
                                 )}
                                 {service.companyName && (
-                                    <Text style={s.companyName}>
-                                        <Ionicons
-                                            name="business-outline"
-                                            size={11}
-                                            color={Colors.charcoalLight}
-                                        />{' '}
-                                        {service.companyName}
-                                    </Text>
+                                    <Text style={s.companyName}>{service.companyName}</Text>
                                 )}
                             </View>
                             {service.status === 'approved' && (
@@ -516,8 +570,8 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                             )}
                         </View>
 
-                        {/* Starting Price Badge */}
-                        <View style={s.priceBadge}>
+                        {/* Starting price */}
+                        <View style={[s.priceBadge, { borderColor: catColor + '30' }]}>
                             <Text style={s.priceBadgeLabel}>Starting from</Text>
                             <Text style={[s.priceBadgeValue, { color: catColor }]}>
                                 {fmtPrice(service.startingPrice ?? 0)}
@@ -525,129 +579,196 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                             <Text style={s.priceBadgeSuffix}>onwards</Text>
                         </View>
 
-                        {/* ── Date & Time Selection ── */}
-                        <SectionHeader
-                            step={1}
-                            title="Select Date & Time"
-                            color={catColor}
-                            icon="calendar-outline"
-                        />
-                        {!!errors.date && <ErrorMsg msg={errors.date} />}
-
-                        <View style={s.card}>
-                            {/* Month navigation */}
-                            <View style={s.calNav}>
-                                <TouchableOpacity style={s.calNavBtn} onPress={prevMonth}>
-                                    <Ionicons
-                                        name="chevron-back"
-                                        size={18}
-                                        color={Colors.charcoal}
-                                    />
-                                </TouchableOpacity>
-                                <Text style={s.calMonthLabel}>{monthName}</Text>
-                                <TouchableOpacity style={s.calNavBtn} onPress={nextMonth}>
-                                    <Ionicons
-                                        name="chevron-forward"
-                                        size={18}
-                                        color={Colors.charcoal}
-                                    />
-                                </TouchableOpacity>
+                        {/* ── STEP 1: Date & Time with open/close toggle ── */}
+                        <TouchableOpacity
+                            style={s.sectionHeaderRow}
+                            onPress={toggleCalendar}
+                            activeOpacity={0.8}
+                        >
+                            <View style={[s.stepBadge, { backgroundColor: catColor }]}>
+                                <Text style={s.stepNum}>{steps.dateTime}</Text>
                             </View>
-
-                            {/* Day labels */}
-                            <View style={s.calDayRow}>
-                                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-                                    <Text key={i} style={s.calDayLabel}>
-                                        {d}
-                                    </Text>
-                                ))}
-                            </View>
-
-                            {/* Date grid */}
-                            <View style={s.calGrid}>
-                                {calCells.map((day, idx) => {
-                                    if (!day) return <View key={idx} style={s.calCell} />;
-                                    const past = isPast(new Date(calYear, calMonth, day));
-                                    const sel = isSelected(day);
-                                    return (
-                                        <TouchableOpacity
-                                            key={idx}
-                                            style={[
-                                                s.calCell,
-                                                sel && { backgroundColor: catColor },
-                                                past && s.calCellDisabled,
-                                            ]}
-                                            onPress={() => {
-                                                if (!past) {
-                                                    setSelectedDate(
-                                                        new Date(calYear, calMonth, day),
-                                                    );
-                                                    setErrors(p => ({ ...p, date: '' }));
-                                                }
-                                            }}
-                                            disabled={past}
-                                            activeOpacity={0.75}
-                                        >
-                                            <Text
-                                                style={[
-                                                    s.calDayNum,
-                                                    sel && {
-                                                        color: Colors.white,
-                                                        fontWeight: Typography.extraBold,
-                                                    },
-                                                    past && { color: Colors.charcoal },
-                                                ]}
-                                            >
-                                                {day}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
-
-                            {selectedDate && (
-                                <View
+                            <Ionicons name="calendar-outline" size={16} color={catColor} />
+                            <Text style={s.sectionHeaderTitle}>Select Date & Time</Text>
+                            <View style={{ flex: 1 }} />
+                            {selectedDate && !calendarOpen && (
+                                <Text
                                     style={[
-                                        s.selectedDateStrip,
+                                        s.selectedDateChip,
                                         {
-                                            backgroundColor: catColor + '14',
-                                            borderColor: catColor + '30',
+                                            color: catColor,
+                                            borderColor: catColor + '40',
+                                            backgroundColor: catColor + '12',
                                         },
                                     ]}
                                 >
-                                    <Ionicons name="checkmark-circle" size={15} color={catColor} />
-                                    <Text style={[s.selectedDateText, { color: catColor }]}>
-                                        Selected: {fmtDate(selectedDate)}
-                                    </Text>
-                                </View>
+                                    {fmtDate(selectedDate)}
+                                </Text>
                             )}
+                            <Ionicons
+                                name={calendarOpen ? 'chevron-up' : 'chevron-down'}
+                                size={18}
+                                color={Colors.charcoalLight}
+                            />
+                        </TouchableOpacity>
 
-                            {/* Start Time */}
-                            <Text style={[s.fieldLabel, { marginTop: Spacing.md }]}>
-                                Start Time
-                            </Text>
-                            <View style={s.inputWrap}>
-                                <Ionicons
-                                    name="time-outline"
-                                    size={16}
-                                    color={Colors.charcoalLight}
-                                />
-                                <TextInput
-                                    style={s.input}
-                                    placeholder="Select date first"
-                                    placeholderTextColor={Colors.charcoalLight}
-                                    value={startTime}
-                                    onChangeText={setStartTime}
-                                    editable={!!selectedDate}
-                                />
+                        {!!errors.date && <ErrorMsg msg={errors.date} />}
+
+                        {calendarOpen && (
+                            <View style={s.card}>
+                                {/* Month navigation */}
+                                <View style={s.calNav}>
+                                    <TouchableOpacity style={s.calNavBtn} onPress={prevMonth}>
+                                        <Ionicons
+                                            name="chevron-back"
+                                            size={18}
+                                            color={Colors.charcoal}
+                                        />
+                                    </TouchableOpacity>
+                                    <Text style={s.calMonthLabel}>{monthName}</Text>
+                                    <TouchableOpacity style={s.calNavBtn} onPress={nextMonth}>
+                                        <Ionicons
+                                            name="chevron-forward"
+                                            size={18}
+                                            color={Colors.charcoal}
+                                        />
+                                    </TouchableOpacity>
+                                </View>
+
+                                {/* Day labels */}
+                                <View style={s.calDayRow}>
+                                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(
+                                        (d, i) => (
+                                            <Text
+                                                key={i}
+                                                style={[
+                                                    s.calDayLabel,
+                                                    (i === 0 || i === 6) && { color: catColor },
+                                                ]}
+                                            >
+                                                {d.slice(0, 1)}
+                                            </Text>
+                                        ),
+                                    )}
+                                </View>
+
+                                {/* Date grid */}
+                                <View style={s.calGrid}>
+                                    {calCells.map((day, idx) => {
+                                        if (!day) return <View key={idx} style={s.calCell} />;
+                                        const past = isPastDate(new Date(calYear, calMonth, day));
+                                        const sel = isSelected(day);
+                                        const tod = isToday(calYear, calMonth, day);
+                                        const weekend = idx % 7 === 0 || idx % 7 === 6;
+                                        return (
+                                            <TouchableOpacity
+                                                key={idx}
+                                                style={[
+                                                    s.calCell,
+                                                    sel && { backgroundColor: catColor },
+                                                    !sel &&
+                                                        tod && {
+                                                            borderWidth: 1.5,
+                                                            borderColor: catColor,
+                                                        },
+                                                    !sel &&
+                                                        !past &&
+                                                        weekend && {
+                                                            backgroundColor: catColor + '12',
+                                                        },
+                                                    past && s.calCellDisabled,
+                                                ]}
+                                                onPress={() => {
+                                                    if (!past) {
+                                                        setSelectedDate(
+                                                            new Date(calYear, calMonth, day),
+                                                        );
+                                                        setErrors(p => ({ ...p, date: '' }));
+                                                        // Auto-close calendar after selection
+                                                        setTimeout(() => {
+                                                            setCalendarOpen(false);
+                                                        }, 300);
+                                                    }
+                                                }}
+                                                disabled={past}
+                                                activeOpacity={0.75}
+                                            >
+                                                <Text
+                                                    style={[
+                                                        s.calDayNum,
+                                                        sel && {
+                                                            color: Colors.white,
+                                                            fontWeight: Typography.extraBold,
+                                                        },
+                                                        past && { color: Colors.border },
+                                                        !sel &&
+                                                            tod && {
+                                                                color: catColor,
+                                                                fontWeight: Typography.bold,
+                                                            },
+                                                    ]}
+                                                >
+                                                    {day}
+                                                </Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+
+                                {selectedDate && (
+                                    <View
+                                        style={[
+                                            s.selectedDateStrip,
+                                            {
+                                                backgroundColor: catColor + '14',
+                                                borderColor: catColor + '30',
+                                            },
+                                        ]}
+                                    >
+                                        <Ionicons
+                                            name="checkmark-circle"
+                                            size={15}
+                                            color={catColor}
+                                        />
+                                        <Text style={[s.selectedDateText, { color: catColor }]}>
+                                            Selected: {fmtDate(selectedDate)}
+                                        </Text>
+                                        <TouchableOpacity
+                                            onPress={() => setSelectedDate(null)}
+                                            style={{ marginLeft: 'auto' }}
+                                        >
+                                            <Ionicons
+                                                name="close-circle-outline"
+                                                size={16}
+                                                color={catColor}
+                                            />
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+
+                                {/* Start Time */}
+                                <Text style={[s.fieldLabel, { marginTop: Spacing.md }]}>
+                                    Start Time
+                                </Text>
+                                {/* FIX 8: pointerEvents as a prop (deprecated string style approach) */}
+                                <View
+                                    pointerEvents={!selectedDate ? 'none' : 'auto'}
+                                    style={!selectedDate ? { opacity: 0.45 } : undefined}
+                                >
+                                    <TimePicker
+                                        value={startTime}
+                                        onChange={setStartTime}
+                                        color={catColor}
+                                    />
+                                </View>
                             </View>
-                        </View>
+                        )}
 
-                        {/* ── Services & Rate List ── */}
-                        {packages.length > 0 && (
+                        {/* ── STEP 2: Services & Rate List ── */}
+                        {hasPackages && (
                             <>
                                 <SectionHeader
-                                    step={2}
+                                    step={steps.services}
                                     title="Services & Rate List"
                                     color={catColor}
                                     icon="list-outline"
@@ -655,12 +776,18 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                 <View style={s.card}>
                                     {/* Table Header */}
                                     <View style={s.tableHeader}>
-                                        <Text style={[s.tableHeaderText, { flex: 2 }]}>
+                                        <Text style={[s.tableHeaderText, { flex: 2.2 }]}>
                                             Service
                                         </Text>
-                                        <Text style={[s.tableHeaderText, { flex: 1 }]}>Rate</Text>
-                                        <Text style={[s.tableHeaderText, { flex: 1 }]}>Unit</Text>
-                                        <Text style={[s.tableHeaderText, { flex: 1.2 }]}>Qty</Text>
+                                        <Text style={[s.tableHeaderText, { flex: 1.2 }]}>Rate</Text>
+                                        <Text
+                                            style={[
+                                                s.tableHeaderText,
+                                                { flex: 1, textAlign: 'center' },
+                                            ]}
+                                        >
+                                            Qty
+                                        </Text>
                                         <Text
                                             style={[
                                                 s.tableHeaderText,
@@ -671,39 +798,53 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                         </Text>
                                     </View>
 
-                                    {/* Table Rows */}
                                     {packages.map((pkg, i) => {
                                         const name =
                                             pkg.name ??
                                             (pkg as any).serviceName ??
                                             `Service ${i + 1}`;
                                         const price = pkg.price ?? (pkg as any).rate ?? 0;
-                                        const unit = pkg.unit ?? 'Per Person';
+                                        const unit = pkg.unit ?? '';
                                         const qty = serviceQuantities[i] || 0;
                                         const amount = price * qty;
+                                        const isActive = qty > 0;
 
                                         return (
-                                            <View key={i} style={s.tableRow}>
-                                                <Text
-                                                    style={[s.tableCellText, { flex: 2 }]}
-                                                    numberOfLines={2}
-                                                >
-                                                    {name}
-                                                </Text>
-                                                <Text style={[s.tableCellPrice, { flex: 1 }]}>
-                                                    {fmtPrice(price)}
-                                                </Text>
+                                            <View
+                                                key={i}
+                                                style={[
+                                                    s.tableRow,
+                                                    isActive && {
+                                                        backgroundColor: catColor + '06',
+                                                    },
+                                                ]}
+                                            >
+                                                <View style={{ flex: 2.2 }}>
+                                                    <Text style={s.tableCellName} numberOfLines={2}>
+                                                        {name}
+                                                    </Text>
+                                                    {!!unit && (
+                                                        <Text style={s.tableCellUnit}>
+                                                            per {unit}
+                                                        </Text>
+                                                    )}
+                                                </View>
                                                 <Text
                                                     style={[
-                                                        s.tableCellText,
-                                                        { flex: 1, fontSize: 11 },
+                                                        s.tableCellPrice,
+                                                        { flex: 1.2, color: catColor },
                                                     ]}
                                                 >
-                                                    {unit}
+                                                    {fmtPrice(price)}
                                                 </Text>
-                                                <View style={[s.qtyControl, { flex: 1.2 }]}>
+                                                <View style={[s.qtyControl, { flex: 1 }]}>
                                                     <TouchableOpacity
-                                                        style={s.qtyBtn}
+                                                        style={[
+                                                            s.qtyBtn,
+                                                            qty === 0 && {
+                                                                borderColor: Colors.border,
+                                                            },
+                                                        ]}
                                                         onPress={() => decrementQuantity(i)}
                                                         disabled={qty === 0}
                                                     >
@@ -715,9 +856,22 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                                             }
                                                         />
                                                     </TouchableOpacity>
-                                                    <Text style={s.qtyText}>{qty}</Text>
+                                                    <Text
+                                                        style={[
+                                                            s.qtyText,
+                                                            isActive && {
+                                                                color: catColor,
+                                                                fontWeight: Typography.bold,
+                                                            },
+                                                        ]}
+                                                    >
+                                                        {qty}
+                                                    </Text>
                                                     <TouchableOpacity
-                                                        style={s.qtyBtn}
+                                                        style={[
+                                                            s.qtyBtn,
+                                                            { borderColor: catColor },
+                                                        ]}
                                                         onPress={() => incrementQuantity(i)}
                                                     >
                                                         <Ionicons
@@ -730,7 +884,13 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                                 <Text
                                                     style={[
                                                         s.tableCellAmount,
-                                                        { flex: 1, textAlign: 'right' },
+                                                        {
+                                                            flex: 1,
+                                                            textAlign: 'right',
+                                                            color: isActive
+                                                                ? Colors.charcoal
+                                                                : Colors.charcoalLight,
+                                                        },
                                                     ]}
                                                 >
                                                     {qty > 0 ? fmtPrice(amount) : '—'}
@@ -738,13 +898,32 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                             </View>
                                         );
                                     })}
+
+                                    {/* Items subtotal */}
+                                    {hasItems && (
+                                        <View
+                                            style={[
+                                                s.tableSubtotalRow,
+                                                { borderTopColor: catColor + '30' },
+                                            ]}
+                                        >
+                                            <Text style={s.tableSubtotalLabel}>
+                                                Services Subtotal
+                                            </Text>
+                                            <Text
+                                                style={[s.tableSubtotalValue, { color: catColor }]}
+                                            >
+                                                {fmtPrice(itemsTotal)}
+                                            </Text>
+                                        </View>
+                                    )}
                                 </View>
                             </>
                         )}
 
-                        {/* ── Event Details ── */}
+                        {/* ── STEP 3 (or 2): Event Details ── */}
                         <SectionHeader
-                            step={packages.length > 0 ? 3 : 2}
+                            step={steps.eventDetails}
                             title="Event Details"
                             color={catColor}
                             icon="information-circle-outline"
@@ -831,9 +1010,86 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                             </View>
                         </View>
 
-                        {/* ── Price Summary ── */}
+                        {/* ── STEP 4 (or 3): Available Coupons ── */}
+                        {AVAILABLE_COUPONS.length > 0 && (
+                            <>
+                                <SectionHeader
+                                    step={steps.coupons}
+                                    title="Available Coupons"
+                                    color={Colors.success}
+                                    icon="pricetag-outline"
+                                />
+                                <View style={s.couponsCard}>
+                                    {AVAILABLE_COUPONS.map((c, i) => {
+                                        const isApplied = couponCode === c.code;
+                                        return (
+                                            <View
+                                                key={i}
+                                                style={[
+                                                    s.couponItem,
+                                                    isApplied && {
+                                                        borderColor: Colors.success,
+                                                        backgroundColor: Colors.successLight,
+                                                    },
+                                                ]}
+                                            >
+                                                <View style={s.couponLeft}>
+                                                    <View style={s.couponCodeBadge}>
+                                                        <Text style={s.couponCodeText}>
+                                                            {c.code}
+                                                        </Text>
+                                                    </View>
+                                                    <View>
+                                                        <Text style={s.couponDiscount}>
+                                                            {c.discount}
+                                                        </Text>
+                                                        <Text
+                                                            style={s.couponDesc}
+                                                            numberOfLines={1}
+                                                        >
+                                                            {c.description}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                                <TouchableOpacity
+                                                    style={[
+                                                        s.copyBtn,
+                                                        isApplied && {
+                                                            borderColor: Colors.success,
+                                                            backgroundColor: Colors.successLight,
+                                                        },
+                                                    ]}
+                                                    onPress={() => {
+                                                        if (isApplied) {
+                                                            setCouponCode('');
+                                                        } else {
+                                                            setCouponCode(c.code);
+                                                            alert.success(
+                                                                'Applied!',
+                                                                `Coupon ${c.code} applied`,
+                                                            );
+                                                        }
+                                                    }}
+                                                >
+                                                    <Text
+                                                        style={[
+                                                            s.copyBtnText,
+                                                            isApplied && { color: Colors.success },
+                                                        ]}
+                                                    >
+                                                        {isApplied ? 'Remove' : 'Apply'}
+                                                    </Text>
+                                                </TouchableOpacity>
+                                            </View>
+                                        );
+                                    })}
+                                </View>
+                            </>
+                        )}
+
+                        {/* ── STEP 5 (or 4): Pricing Summary ── */}
                         <SectionHeader
-                            step={packages.length > 0 ? 4 : 3}
+                            step={steps.pricing}
                             title="Pricing Summary"
                             color={catColor}
                             icon="receipt-outline"
@@ -869,6 +1125,14 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                         )}):`}
                                         value={fmtPrice(breakdown.platformFeeGST)}
                                     />
+                                    {/* FIX 9: Show discount row only when a coupon is applied */}
+                                    {breakdown.discountAmount > 0 && (
+                                        <BreakdownRow
+                                            label={`Discount (${couponCode}):`}
+                                            value={`-${fmtPrice(breakdown.discountAmount)}`}
+                                            valueStyle={{ color: Colors.success }}
+                                        />
+                                    )}
                                     <View style={s.breakdownDivider} />
                                     <View style={s.breakdownRow}>
                                         <Text style={[s.breakdownLabel, s.totalLabel]}>
@@ -885,34 +1149,80 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                         </Text>
                                     </View>
 
-                                    {/* Coupon Code */}
-                                    <View style={s.couponRow}>
+                                    {/* Coupon Code manual input */}
+                                    <View style={[s.couponInputRow, { marginTop: Spacing.md }]}>
                                         <View style={[s.inputWrap, { flex: 1 }]}>
                                             <Ionicons
                                                 name="ticket-outline"
                                                 size={16}
-                                                color={Colors.charcoalLight}
+                                                color={
+                                                    couponCode
+                                                        ? Colors.success
+                                                        : Colors.charcoalLight
+                                                }
                                             />
                                             <TextInput
-                                                style={s.input}
+                                                style={[
+                                                    s.input,
+                                                    couponCode && {
+                                                        color: Colors.success,
+                                                        fontWeight: Typography.bold,
+                                                    },
+                                                ]}
                                                 placeholder="COUPON CODE"
                                                 placeholderTextColor={Colors.charcoalLight}
                                                 value={couponCode}
                                                 onChangeText={setCouponCode}
                                                 autoCapitalize="characters"
                                             />
+                                            {!!couponCode && (
+                                                <TouchableOpacity onPress={() => setCouponCode('')}>
+                                                    <Ionicons
+                                                        name="close-circle"
+                                                        size={16}
+                                                        color={Colors.charcoalLight}
+                                                    />
+                                                </TouchableOpacity>
+                                            )}
                                         </View>
+                                        {/* FIX 10: Apply button now validates against known coupons
+                                            and either applies or shows an error — the original code
+                                            always showed "coming soon" which broke the coupon section. */}
                                         <TouchableOpacity
                                             style={[
                                                 s.applyBtn,
-                                                { backgroundColor: catColor + '20' },
+                                                {
+                                                    backgroundColor: catColor + '18',
+                                                    borderColor: catColor + '40',
+                                                    borderWidth: 1,
+                                                },
                                             ]}
                                             onPress={() => {
-                                                // Handle coupon validation
-                                                alert.info(
-                                                    'Coupon',
-                                                    'Coupon validation coming soon!',
+                                                const trimmed = couponCode.trim();
+                                                if (!trimmed) {
+                                                    alert.info(
+                                                        'Coupon',
+                                                        'Please enter a coupon code',
+                                                    );
+                                                    return;
+                                                }
+                                                const matched = AVAILABLE_COUPONS.find(
+                                                    c => c.code === trimmed,
                                                 );
+                                                if (matched) {
+                                                    // setCouponCode already set via TextInput;
+                                                    // breakdown recomputes automatically.
+                                                    alert.success(
+                                                        'Applied!',
+                                                        `Coupon ${matched.code} applied — ${matched.discount}`,
+                                                    );
+                                                } else {
+                                                    alert.error(
+                                                        'Invalid Coupon',
+                                                        'This coupon code is not valid.',
+                                                    );
+                                                    setCouponCode('');
+                                                }
                                             }}
                                         >
                                             <Text style={[s.applyBtnText, { color: catColor }]}>
@@ -920,8 +1230,6 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                             </Text>
                                         </TouchableOpacity>
                                     </View>
-
-                                    <Text style={s.minOrderNote}>Minimum order: ₹3,000</Text>
                                 </>
                             )}
                         </View>
@@ -931,8 +1239,8 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                             <TouchableOpacity
                                 style={[
                                     s.confirmBtn,
-                                    { backgroundColor: catColor },
-                                    loading && { opacity: 0.7 },
+                                    { backgroundColor: !selectedDate ? Colors.border : catColor },
+                                    (loading || settingsLoading) && { opacity: 0.7 },
                                 ]}
                                 onPress={handleBook}
                                 disabled={loading || settingsLoading}
@@ -941,7 +1249,23 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                 {loading ? (
                                     <LoadingDots />
                                 ) : (
-                                    <Text style={s.confirmText}>Select a Date First</Text>
+                                    <>
+                                       
+                                        <Ionicons
+                                            name={
+                                                selectedDate
+                                                    ? 'calendar-outline'
+                                                    : 'lock-closed-outline'
+                                            }
+                                            size={18}
+                                            color={Colors.white}
+                                        />
+                                        <Text style={s.confirmText}>
+                                            {selectedDate
+                                                ? `Confirm & Pay ${fmtPrice(breakdown.total)}`
+                                                : 'Select a Date First'}
+                                        </Text>
+                                    </>
                                 )}
                             </TouchableOpacity>
 
@@ -951,29 +1275,6 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                     Share Service
                                 </Text>
                             </TouchableOpacity>
-                        </View>
-
-                        {/* Available Coupons */}
-                        <View style={s.couponsCard}>
-                            <View style={s.couponsHeader}>
-                                <Ionicons name="pricetag" size={16} color={Colors.success} />
-                                <Text style={s.couponsTitle}>Available Coupons</Text>
-                            </View>
-                            <View style={s.couponItem}>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={s.couponCode}>ADMIN20</Text>
-                                    <Text style={s.couponDiscount}>20% off</Text>
-                                </View>
-                                <TouchableOpacity
-                                    style={s.copyBtn}
-                                    onPress={() => {
-                                        setCouponCode('ADMIN20');
-                                        alert.success('Copied!', 'Coupon code copied');
-                                    }}
-                                >
-                                    <Text style={s.copyBtnText}>Copy</Text>
-                                </TouchableOpacity>
-                            </View>
                         </View>
 
                         <View style={{ height: 40 }} />
@@ -1000,7 +1301,6 @@ function getCategoryIcon(category: string): any {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
-
 function SectionHeader({
     step,
     title,
@@ -1042,11 +1342,21 @@ function ErrorMsg({ msg }: { msg: string }) {
     );
 }
 
-function BreakdownRow({ label, value }: { label: string; value: string }) {
+// FIX 12: BreakdownRow did not accept an optional valueStyle prop — needed
+// to render the discount row in green without duplicating the component.
+function BreakdownRow({
+    label,
+    value,
+    valueStyle,
+}: {
+    label: string;
+    value: string;
+    valueStyle?: object;
+}) {
     return (
         <View style={s.breakdownRow}>
             <Text style={s.breakdownLabel}>{label}</Text>
-            <Text style={s.breakdownValue}>{value}</Text>
+            <Text style={[s.breakdownValue, valueStyle]}>{value}</Text>
         </View>
     );
 }
@@ -1131,12 +1441,7 @@ const s = StyleSheet.create({
         flexShrink: 0,
     },
     summaryTitle: { fontSize: 15, fontWeight: Typography.extraBold, color: Colors.charcoal },
-    categoryBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        marginTop: 4,
-    },
+    categoryBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
     summaryCategory: { fontSize: 11, fontWeight: Typography.semiBold },
     summaryLocation: { fontSize: 11, color: Colors.charcoalLight, marginTop: 3 },
     companyName: { fontSize: 11, color: Colors.charcoalLight, marginTop: 2 },
@@ -1162,21 +1467,41 @@ const s = StyleSheet.create({
         marginTop: Spacing.md,
         alignSelf: 'flex-start',
         borderWidth: 1,
-        borderColor: Colors.border,
     },
-    priceBadgeLabel: {
-        fontSize: 12,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.medium,
+    priceBadgeLabel: { fontSize: 12, color: Colors.charcoalLight, fontWeight: Typography.medium },
+    priceBadgeValue: { fontSize: 18, fontWeight: Typography.extraBold },
+    priceBadgeSuffix: { fontSize: 12, color: Colors.charcoalLight, fontWeight: Typography.medium },
+
+    sectionHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: Spacing.sm,
+        marginTop: Spacing.xl,
+        paddingHorizontal: 2,
     },
-    priceBadgeValue: {
-        fontSize: 18,
+    stepBadge: {
+        width: 22,
+        height: 22,
+        borderRadius: 11,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    stepNum: { fontSize: 10, fontWeight: Typography.extraBold, color: Colors.white },
+    sectionHeaderTitle: {
+        fontSize: 15,
         fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+        letterSpacing: -0.2,
     },
-    priceBadgeSuffix: {
-        fontSize: 12,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.medium,
+    selectedDateChip: {
+        fontSize: 11,
+        fontWeight: Typography.semiBold,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: Radii.full,
+        borderWidth: 1,
+        marginRight: 4,
     },
 
     card: {
@@ -1221,7 +1546,7 @@ const s = StyleSheet.create({
         borderRadius: Radii.sm,
         marginBottom: 2,
     },
-    calCellDisabled: { opacity: 0.3 },
+    calCellDisabled: { opacity: 0.25 },
     calDayNum: { fontSize: 13, color: Colors.charcoal, fontWeight: Typography.medium },
     selectedDateStrip: {
         flexDirection: 'row',
@@ -1235,16 +1560,15 @@ const s = StyleSheet.create({
     },
     selectedDateText: { fontSize: 13, fontWeight: Typography.bold },
 
-    // Table styles
     tableHeader: {
         flexDirection: 'row',
         paddingVertical: 10,
         borderBottomWidth: 2,
         borderBottomColor: Colors.border,
-        marginBottom: 8,
+        marginBottom: 4,
     },
     tableHeaderText: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: Typography.bold,
         color: Colors.charcoalLight,
         letterSpacing: 0.5,
@@ -1254,29 +1578,15 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: Colors.border + '50',
+        borderBottomColor: Colors.divider,
         alignItems: 'center',
+        borderRadius: Radii.sm,
     },
-    tableCellText: {
-        fontSize: 12,
-        color: Colors.charcoal,
-        fontWeight: Typography.medium,
-    },
-    tableCellPrice: {
-        fontSize: 13,
-        color: '#E67E22',
-        fontWeight: Typography.bold,
-    },
-    tableCellAmount: {
-        fontSize: 13,
-        color: Colors.charcoal,
-        fontWeight: Typography.bold,
-    },
-    qtyControl: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
+    tableCellName: { fontSize: 12, color: Colors.charcoal, fontWeight: Typography.semiBold },
+    tableCellUnit: { fontSize: 10, color: Colors.charcoalLight, marginTop: 2 },
+    tableCellPrice: { fontSize: 13, fontWeight: Typography.bold },
+    tableCellAmount: { fontSize: 13, fontWeight: Typography.bold },
+    qtyControl: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
     qtyBtn: {
         width: 24,
         height: 24,
@@ -1289,11 +1599,25 @@ const s = StyleSheet.create({
     },
     qtyText: {
         fontSize: 13,
-        fontWeight: Typography.bold,
+        fontWeight: Typography.medium,
         color: Colors.charcoal,
-        minWidth: 20,
+        minWidth: 16,
         textAlign: 'center',
     },
+    tableSubtotalRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: Spacing.md,
+        paddingTop: Spacing.md,
+        borderTopWidth: 1.5,
+    },
+    tableSubtotalLabel: {
+        fontSize: Typography.base,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal,
+    },
+    tableSubtotalValue: { fontSize: Typography.lg, fontWeight: Typography.extraBold },
 
     fieldLabel: {
         fontSize: 12,
@@ -1345,33 +1669,55 @@ const s = StyleSheet.create({
     totalLabel: { fontWeight: Typography.extraBold, color: Colors.charcoal, fontSize: 15 },
     totalValue: { fontWeight: Typography.extraBold, fontSize: 18 },
     breakdownDivider: { height: 1, backgroundColor: Colors.border, marginVertical: 8 },
-
-    couponRow: {
-        flexDirection: 'row',
-        gap: 10,
-        marginTop: 12,
-    },
+    couponInputRow: { flexDirection: 'row', gap: 10 },
     applyBtn: {
         paddingHorizontal: 20,
         borderRadius: Radii.md,
         alignItems: 'center',
         justifyContent: 'center',
     },
-    applyBtnText: {
-        fontSize: 14,
-        fontWeight: Typography.bold,
-    },
-    minOrderNote: {
-        fontSize: 11,
-        color: Colors.charcoalLight,
-        marginTop: 8,
-        textAlign: 'center',
-    },
+    applyBtnText: { fontSize: 14, fontWeight: Typography.bold },
 
-    actionRow: {
-        gap: Spacing.sm,
-        marginTop: Spacing.lg,
+    couponsCard: { gap: Spacing.sm, marginBottom: Spacing.sm },
+    couponItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.md,
+        backgroundColor: Colors.surface,
+        borderRadius: Radii.lg,
+        padding: Spacing.md,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        ...Shadows.card,
     },
+    couponLeft: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    couponCodeBadge: {
+        backgroundColor: Colors.successLight,
+        borderRadius: Radii.sm,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderWidth: 1,
+        borderColor: Colors.success + '40',
+        borderStyle: 'dashed',
+    },
+    couponCodeText: {
+        fontSize: 12,
+        fontWeight: Typography.extraBold,
+        color: Colors.success,
+        letterSpacing: 1,
+    },
+    couponDiscount: { fontSize: 13, fontWeight: Typography.bold, color: Colors.charcoal },
+    couponDesc: { fontSize: 11, color: Colors.charcoalLight, marginTop: 1 },
+    copyBtn: {
+        paddingHorizontal: 14,
+        paddingVertical: 7,
+        borderRadius: Radii.sm,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+    },
+    copyBtnText: { fontSize: 12, fontWeight: Typography.bold, color: Colors.charcoalMid },
+
+    actionRow: { gap: Spacing.sm, marginTop: Spacing.lg },
     confirmBtn: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1398,58 +1744,5 @@ const s = StyleSheet.create({
         borderWidth: 1.5,
         borderColor: Colors.border,
     },
-    shareBtnText: {
-        fontSize: 14,
-        fontWeight: Typography.bold,
-    },
-
-    couponsCard: {
-        backgroundColor: Colors.successLight,
-        borderRadius: Radii.xl,
-        padding: Spacing.lg,
-        marginTop: Spacing.lg,
-        borderWidth: 1,
-        borderColor: Colors.success + '30',
-    },
-    couponsHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        marginBottom: Spacing.md,
-    },
-    couponsTitle: {
-        fontSize: 14,
-        fontWeight: Typography.bold,
-        color: Colors.charcoal,
-    },
-    couponItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: Spacing.md,
-        backgroundColor: Colors.surface,
-        borderRadius: Radii.lg,
-        padding: Spacing.md,
-    },
-    couponCode: {
-        fontSize: 14,
-        fontWeight: Typography.extraBold,
-        color: Colors.charcoal,
-    },
-    couponDiscount: {
-        fontSize: 12,
-        color: Colors.charcoalLight,
-        marginTop: 2,
-    },
-    copyBtn: {
-        paddingHorizontal: 16,
-        paddingVertical: 6,
-        borderRadius: Radii.sm,
-        borderWidth: 1.5,
-        borderColor: Colors.success,
-    },
-    copyBtnText: {
-        fontSize: 12,
-        fontWeight: Typography.bold,
-        color: Colors.success,
-    },
+    shareBtnText: { fontSize: 14, fontWeight: Typography.bold },
 });

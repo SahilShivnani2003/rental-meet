@@ -27,6 +27,7 @@ import GetQuotationScreen from '@/features/quotation/screens/GetQuotationScreen'
 import { updateVendorService } from '@/features/vendor/service/vendorService';
 import UpdateServiceScreen from '@/features/vendor/screens/UpdateServiceScreen';
 import ServiceBookingDetailScreen from '@/features/booking/screens/ServiceBookingDetailScreen';
+import ForgotPasswordScreen from '@/features/auth/screens/ForgotPasswordScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -43,6 +44,7 @@ export default function RootNavigator() {
                         <Stack.Screen name="login" component={LoginScreen} />
                         <Stack.Screen name="registerType" component={RegisterTypeScreen} />
                         <Stack.Screen name="register" component={RegisterScreen} />
+                        <Stack.Screen name="forgotPassword" component={ForgotPasswordScreen} />
                         <Stack.Screen
                             name="client"
                             component={ClientTabNavigation}

@@ -11,6 +11,7 @@ export type RootStackParamList = {
     splash: undefined;
     login: undefined;
     registerType: undefined;
+    forgotPassword: undefined;
     client: NavigatorScreenParams<ClientTabParamList> | undefined;
     owner: NavigatorScreenParams<OwnerTabParamList> | undefined;
     vendor: NavigatorScreenParams<VendorTabParamList> | undefined;
@@ -34,7 +35,7 @@ export type RootStackParamList = {
     onBoarding: undefined;
     addVenue: undefined;
     updateVenue: {
-        venueId: string ;
+        venueId: string;
     };
     modifyVenueBooking: {
         bookingId: string;
@@ -45,12 +46,19 @@ export type RootStackParamList = {
     };
     serviceBooking: {
         service: any;
+        selectedPackages?: {
+            name: string;
+            price: number;
+            unit?: string;
+            quantity: number;
+            amount: number;
+        }[];
     };
     getServiceQuotation: {
         service: any;
     };
     addVendorService: undefined;
-    updateVendorService:{
+    updateVendorService: {
         serviceId: string;
         initialData: VendorService;
     };

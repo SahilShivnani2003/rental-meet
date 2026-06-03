@@ -10,6 +10,7 @@ import {
     Image,
     Share,
     StatusBar,
+    TextInput,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -47,6 +48,14 @@ export default function VendorDetailScreen({ navigation, route }: Props) {
     const { service } = route.params as { service: VendorService };
     const { isAuthenticated } = useAuthStore();
     const alert = useAlert();
+
+    // FIX 1: useGetVendorProfile fetches the *logged-in user's* vendor profile,
+    // not the service vendor's profile. For a customer-facing detail page the
+    // authoritative source for ALL content is the `service` object passed via
+    // route params. We still call the hook (it may enrich some fields for
+    // vendor-owner views), but we only fall back to profileData when the service
+    // field is explicitly absent — and we never use profile.availability or
+    // profile.pricing for a service that belongs to someone else.
     const { data: profileData, isLoading } = useGetVendorProfile({
         enabled: isAuthenticated,
     });
@@ -57,10 +66,11 @@ export default function VendorDetailScreen({ navigation, route }: Props) {
     const [activeTab, setActiveTab] = useState<Tab>('overview');
     const [imgIndex, setImgIndex] = useState(0);
     const [saved, setSaved] = useState(false);
+    // FIX 2: index -> quantity map for selected packages
+    const [selectedPackages, setSelectedPackages] = useState<Record<number, number>>({});
 
     const headerFade = useRef(new Animated.Value(0)).current;
     const btnScale = useRef(new Animated.Value(1)).current;
-    const scrollY = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
         StatusBar.setBarStyle('light-content');
@@ -88,6 +98,9 @@ export default function VendorDetailScreen({ navigation, route }: Props) {
         ...(service.featuredImage ? [service.featuredImage] : []),
         ...(service.images ?? []),
     ].filter(Boolean);
+
+    // FIX 3: packages always come from service, never from the logged-in user's profile
+    const servicePackages = service.packages ?? [];
 
     // ── Tabs ──────────────────────────────────────────────────────────────────
     const TABS: { key: Tab; label: string; icon: string }[] = [
@@ -123,8 +136,24 @@ export default function VendorDetailScreen({ navigation, route }: Props) {
 
     const handleBooking = () => {
         if (isAuthenticated) {
+            // FIX 4: Build selectedItems only from servicePackages (service object),
+            // never from the logged-in vendor's profile packages.
+            const selectedItems = Object.entries(selectedPackages).map(([idx, qty]) => {
+                const pkg = servicePackages[parseInt(idx)] as any;
+                return {
+                    name: pkg?.name ?? pkg?.serviceName ?? `Package ${parseInt(idx) + 1}`,
+                    price: pkg?.price ?? pkg?.rate ?? 0,
+                    unit: pkg?.unit,
+                    quantity: qty,
+                    amount: (pkg?.price ?? pkg?.rate ?? 0) * qty,
+                };
+            });
+
             navigation.navigate('serviceBooking', {
                 service,
+                // Pass selectedItems only when the user has actually chosen packages;
+                // pass undefined otherwise so ServiceBookingScreen uses its own defaults.
+                selectedPackages: selectedItems.length > 0 ? selectedItems : undefined,
             });
         } else {
             alert.show({
@@ -137,17 +166,22 @@ export default function VendorDetailScreen({ navigation, route }: Props) {
                         onPress: () => navigation.navigate('login'),
                         style: 'primary',
                     },
-                    {
-                        label: 'Cancel',
-                        onPress: alert.dismiss,
-                        style: 'ghost',
-                    },
+                    { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },
                 ],
             });
         }
     };
-    // ── Availability helpers ──────────────────────────────────────────────────
-    const avail = service.availability ?? profile.availability ?? [];
+
+    // FIX 5: availability always comes from the service object.
+    // Falling back to profile.availability would show the logged-in user's
+    // schedule, which is unrelated to this vendor's service.
+    const avail = service.availability ?? [];
+
+    // ── Selected packages total ───────────────────────────────────────────────
+    const selectedTotal = Object.entries(selectedPackages).reduce((sum, [idx, qty]) => {
+        const pkg = servicePackages[parseInt(idx)] as any;
+        return sum + (pkg?.price ?? pkg?.rate ?? 0) * qty;
+    }, 0);
 
     return (
         <View style={s.root}>
@@ -190,7 +224,6 @@ export default function VendorDetailScreen({ navigation, route }: Props) {
                             <Ionicons name="image-outline" size={52} color={catColor} />
                         </View>
                     )}
-                    {/* Dark gradient overlay at bottom */}
                     <View style={s.heroOverlay} />
 
                     {/* Category + verified badges */}
@@ -240,11 +273,10 @@ export default function VendorDetailScreen({ navigation, route }: Props) {
                             <Text style={s.vendorTitle} numberOfLines={2}>
                                 {service.title}
                             </Text>
-                            {(profile.businessInfo?.companyName ||
-                                profile.businessInfo?.brandName) && (
+                            {/* FIX 6: use service.companyName / service.brandName directly */}
+                            {(service.companyName || service.brandName) && (
                                 <Text style={s.companyName}>
-                                    {profile.businessInfo?.brandName ??
-                                        profile.businessInfo?.companyName}
+                                    {service.brandName ?? service.companyName}
                                 </Text>
                             )}
                         </View>
@@ -264,16 +296,14 @@ export default function VendorDetailScreen({ navigation, route }: Props) {
                                 </Text>
                             </View>
                         )}
-                        {profile.businessInfo?.experienceYears ? (
+                        {service.experienceYears ? (
                             <View style={s.metaItem}>
                                 <Ionicons
                                     name="time-outline"
                                     size={13}
                                     color={Colors.charcoalLight}
                                 />
-                                <Text style={s.metaText}>
-                                    {profile.businessInfo.experienceYears}+ yrs exp
-                                </Text>
+                                <Text style={s.metaText}>{service.experienceYears}+ yrs exp</Text>
                             </View>
                         ) : null}
                         {service.totalBookings ? (
@@ -373,8 +403,8 @@ export default function VendorDetailScreen({ navigation, route }: Props) {
                     {/* OVERVIEW */}
                     {activeTab === 'overview' && (
                         <View style={s.section}>
-                            {/* Description */}
-                            {service.description || profile.businessInfo?.description ? (
+                            {/* Description — service is authoritative */}
+                            {service.description ? (
                                 <View style={s.infoCard}>
                                     <View style={s.infoCardHeader}>
                                         <Ionicons
@@ -384,40 +414,30 @@ export default function VendorDetailScreen({ navigation, route }: Props) {
                                         />
                                         <Text style={s.infoCardTitle}>About</Text>
                                     </View>
-                                    <Text style={s.bodyText}>
-                                        {service.description ?? profile.businessInfo?.description}
-                                    </Text>
+                                    <Text style={s.bodyText}>{service.description}</Text>
                                 </View>
                             ) : null}
 
                             {/* Specialization */}
-                            {service.specialization ?? profile.businessInfo?.specialization ? (
+                            {service.specialization ? (
                                 <View style={s.infoCard}>
                                     <View style={s.infoCardHeader}>
                                         <Ionicons name="star-outline" size={16} color={catColor} />
                                         <Text style={s.infoCardTitle}>Specialization</Text>
                                     </View>
-                                    <Text style={s.bodyText}>
-                                        {service.specialization ??
-                                            profile.businessInfo?.specialization}
-                                    </Text>
+                                    <Text style={s.bodyText}>{service.specialization}</Text>
                                 </View>
                             ) : null}
 
                             {/* Serviceable areas */}
-                            {(service.serviceableAreas ?? profile.address?.serviceableAreas ?? [])
-                                .length > 0 && (
+                            {(service.serviceableAreas ?? []).length > 0 && (
                                 <View style={s.infoCard}>
                                     <View style={s.infoCardHeader}>
                                         <Ionicons name="map-outline" size={16} color={catColor} />
                                         <Text style={s.infoCardTitle}>Serviceable Areas</Text>
                                     </View>
                                     <View style={s.areaChipRow}>
-                                        {(
-                                            service.serviceableAreas ??
-                                            profile.address?.serviceableAreas ??
-                                            []
-                                        ).map((a, i) => (
+                                        {(service.serviceableAreas ?? []).map((a, i) => (
                                             <View
                                                 key={i}
                                                 style={[
@@ -437,57 +457,48 @@ export default function VendorDetailScreen({ navigation, route }: Props) {
                                 </View>
                             )}
 
-                            {/* Contact / online */}
-                            {service.website ??
-                            profile.online?.website ??
-                            service.instagram ??
-                            profile.online?.instagram ? (
+                            {/* Online presence */}
+                            {service.website || service.instagram || service.facebook ? (
                                 <View style={s.infoCard}>
                                     <View style={s.infoCardHeader}>
                                         <Ionicons name="link-outline" size={16} color={catColor} />
                                         <Text style={s.infoCardTitle}>Online Presence</Text>
                                     </View>
-                                    {service.website ?? profile.online?.website ? (
+                                    {service.website ? (
                                         <View style={s.onlineRow}>
                                             <Ionicons
                                                 name="globe-outline"
                                                 size={14}
                                                 color={Colors.info}
                                             />
-                                            <Text style={s.onlineLink}>
-                                                {service.website ?? profile.online?.website}
-                                            </Text>
+                                            <Text style={s.onlineLink}>{service.website}</Text>
                                         </View>
                                     ) : null}
-                                    {service.instagram ?? profile.online?.instagram ? (
+                                    {service.instagram ? (
                                         <View style={s.onlineRow}>
                                             <Ionicons
                                                 name="logo-instagram"
                                                 size={14}
                                                 color="#E1306C"
                                             />
-                                            <Text style={s.onlineLink}>
-                                                {service.instagram ?? profile.online?.instagram}
-                                            </Text>
+                                            <Text style={s.onlineLink}>{service.instagram}</Text>
                                         </View>
                                     ) : null}
-                                    {service.facebook ?? profile.online?.facebook ? (
+                                    {service.facebook ? (
                                         <View style={s.onlineRow}>
                                             <Ionicons
                                                 name="logo-facebook"
                                                 size={14}
                                                 color="#1877F2"
                                             />
-                                            <Text style={s.onlineLink}>
-                                                {service.facebook ?? profile.online?.facebook}
-                                            </Text>
+                                            <Text style={s.onlineLink}>{service.facebook}</Text>
                                         </View>
                                     ) : null}
                                 </View>
                             ) : null}
 
                             {/* Booking policy */}
-                            {service.advanceBooking ?? profile.bookingPolicy?.advanceBooking ? (
+                            {service.advanceBooking ? (
                                 <View style={s.infoCard}>
                                     <View style={s.infoCardHeader}>
                                         <Ionicons name="alarm-outline" size={16} color={catColor} />
@@ -507,8 +518,7 @@ export default function VendorDetailScreen({ navigation, route }: Props) {
                                                     color: Colors.charcoal,
                                                 }}
                                             >
-                                                {service.advanceBooking ??
-                                                    profile.bookingPolicy?.advanceBooking}
+                                                {service.advanceBooking}
                                             </Text>
                                         </Text>
                                     </View>
@@ -545,9 +555,8 @@ export default function VendorDetailScreen({ navigation, route }: Props) {
                                 </View>
                             )}
 
-                            {/* Video links */}
-                            {(service.videoLinks ?? profile.portfolio?.videoLinks ?? []).length >
-                                0 && (
+                            {/* Video links — from service object */}
+                            {(service.videoLinks ?? []).length > 0 && (
                                 <View style={s.infoCard}>
                                     <View style={s.infoCardHeader}>
                                         <Ionicons
@@ -557,11 +566,7 @@ export default function VendorDetailScreen({ navigation, route }: Props) {
                                         />
                                         <Text style={s.infoCardTitle}>Video Work</Text>
                                     </View>
-                                    {(
-                                        service.videoLinks ??
-                                        profile.portfolio?.videoLinks ??
-                                        []
-                                    ).map((link, i) => (
+                                    {(service.videoLinks ?? []).map((link, i) => (
                                         <View key={i} style={s.onlineRow}>
                                             <Ionicons
                                                 name="play-circle-outline"
@@ -581,56 +586,308 @@ export default function VendorDetailScreen({ navigation, route }: Props) {
                     {/* PACKAGES */}
                     {activeTab === 'packages' && (
                         <View style={s.section}>
-                            {(service.packages ?? profile.pricing?.packages ?? []).length === 0 ? (
+                            {servicePackages.length === 0 ? (
                                 <EmptyTab
                                     icon="pricetag-outline"
                                     message="No packages listed yet"
                                 />
                             ) : (
-                                (service.packages ?? profile.pricing?.packages ?? []).map(
-                                    (pkg, i) => (
-                                        <View
-                                            key={i}
-                                            style={[s.pkgCard, { borderLeftColor: catColor }]}
-                                        >
-                                            <View style={s.pkgHeader}>
+                                <>
+                                    {servicePackages.map((pkg, i) => {
+                                        const isSelected = !!selectedPackages[i];
+                                        const qty = selectedPackages[i] || 0;
+                                        const pkgAny = pkg as any;
+                                        const price = pkgAny?.price ?? pkgAny?.rate ?? 0;
+
+                                        return (
+                                            <View
+                                                key={i}
+                                                style={[
+                                                    s.pkgCard,
+                                                    { borderLeftColor: catColor },
+                                                    isSelected && {
+                                                        backgroundColor: catColor + '08',
+                                                        borderWidth: 1.5,
+                                                        borderColor: catColor,
+                                                    },
+                                                ]}
+                                            >
+                                                {/* Header */}
+                                                <View style={s.pkgHeader}>
+                                                    {/* Checkbox */}
+                                                    <TouchableOpacity
+                                                        style={[
+                                                            s.checkbox,
+                                                            isSelected && {
+                                                                backgroundColor: catColor,
+                                                                borderColor: catColor,
+                                                            },
+                                                        ]}
+                                                        onPress={() => {
+                                                            if (isSelected) {
+                                                                setSelectedPackages(prev => {
+                                                                    const updated = { ...prev };
+                                                                    delete updated[i];
+                                                                    return updated;
+                                                                });
+                                                            } else {
+                                                                setSelectedPackages(prev => ({
+                                                                    ...prev,
+                                                                    [i]: 1,
+                                                                }));
+                                                            }
+                                                        }}
+                                                    >
+                                                        {isSelected && (
+                                                            <Ionicons
+                                                                name="checkmark"
+                                                                size={16}
+                                                                color={Colors.white}
+                                                            />
+                                                        )}
+                                                    </TouchableOpacity>
+
+                                                    {/* Package Number Badge */}
+                                                    <View
+                                                        style={[
+                                                            s.pkgNum,
+                                                            { backgroundColor: catColor },
+                                                        ]}
+                                                    >
+                                                        <Text style={s.pkgNumText}>{i + 1}</Text>
+                                                    </View>
+
+                                                    {/* Package Name */}
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={s.pkgName}>
+                                                            {pkgAny.name ??
+                                                                pkgAny.serviceName ??
+                                                                `Package ${i + 1}`}
+                                                        </Text>
+                                                    </View>
+
+                                                    {/* Price */}
+                                                    <Text style={[s.pkgPrice, { color: catColor }]}>
+                                                        {fmtPrice(price)}
+                                                        {pkgAny.unit ? (
+                                                            <Text style={s.pkgUnit}>
+                                                                /{pkgAny.unit}
+                                                            </Text>
+                                                        ) : null}
+                                                    </Text>
+                                                </View>
+
+                                                {/* Quantity controls — shown when selected */}
+                                                {isSelected && (
+                                                    <View style={s.pkgQtySection}>
+                                                        <View style={s.pkgQtyRow}>
+                                                            <Text style={s.qtyLabel}>Qty</Text>
+                                                            <View style={s.pkgQtyControl}>
+                                                                <TouchableOpacity
+                                                                    style={[
+                                                                        s.qtyBtn,
+                                                                        { borderColor: catColor },
+                                                                    ]}
+                                                                    onPress={() => {
+                                                                        setSelectedPackages(
+                                                                            prev => {
+                                                                                const updated = {
+                                                                                    ...prev,
+                                                                                };
+                                                                                if (
+                                                                                    updated[i] &&
+                                                                                    updated[i] > 1
+                                                                                ) {
+                                                                                    updated[i]--;
+                                                                                } else {
+                                                                                    delete updated[
+                                                                                        i
+                                                                                    ];
+                                                                                }
+                                                                                return updated;
+                                                                            },
+                                                                        );
+                                                                    }}
+                                                                >
+                                                                    <Ionicons
+                                                                        name="remove"
+                                                                        size={16}
+                                                                        color={catColor}
+                                                                    />
+                                                                </TouchableOpacity>
+
+                                                                <TextInput
+                                                                    style={[
+                                                                        s.qtyInput,
+                                                                        {
+                                                                            borderColor:
+                                                                                catColor + '60',
+                                                                            color: catColor,
+                                                                        },
+                                                                    ]}
+                                                                    value={qty.toString()}
+                                                                    onChangeText={text => {
+                                                                        const num =
+                                                                            parseInt(text) || 0;
+                                                                        if (num > 0) {
+                                                                            setSelectedPackages(
+                                                                                prev => ({
+                                                                                    ...prev,
+                                                                                    [i]: num,
+                                                                                }),
+                                                                            );
+                                                                        } else {
+                                                                            setSelectedPackages(
+                                                                                prev => {
+                                                                                    const updated =
+                                                                                        { ...prev };
+                                                                                    delete updated[
+                                                                                        i
+                                                                                    ];
+                                                                                    return updated;
+                                                                                },
+                                                                            );
+                                                                        }
+                                                                    }}
+                                                                    keyboardType="number-pad"
+                                                                    placeholder="1"
+                                                                    maxLength={3}
+                                                                />
+
+                                                                <TouchableOpacity
+                                                                    style={[
+                                                                        s.qtyBtn,
+                                                                        {
+                                                                            borderColor: catColor,
+                                                                            backgroundColor:
+                                                                                catColor + '14',
+                                                                        },
+                                                                    ]}
+                                                                    onPress={() =>
+                                                                        setSelectedPackages(
+                                                                            prev => ({
+                                                                                ...prev,
+                                                                                [i]:
+                                                                                    (prev[i] || 0) +
+                                                                                    1,
+                                                                            }),
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    <Ionicons
+                                                                        name="add"
+                                                                        size={16}
+                                                                        color={catColor}
+                                                                    />
+                                                                </TouchableOpacity>
+                                                            </View>
+                                                            {qty > 0 && (
+                                                                <Text
+                                                                    style={[
+                                                                        s.qtyAmountText,
+                                                                        { color: catColor },
+                                                                    ]}
+                                                                >
+                                                                    {fmtPrice(price * qty)}
+                                                                </Text>
+                                                            )}
+                                                        </View>
+                                                    </View>
+                                                )}
+
+                                                {/* Available quantity note */}
+                                                {pkgAny.quantity ? (
+                                                    <Text style={s.pkgMeta}>
+                                                        Available: {pkgAny.quantity}
+                                                    </Text>
+                                                ) : null}
+                                            </View>
+                                        );
+                                    })}
+
+                                    {/* Summary of selected packages */}
+                                    {Object.keys(selectedPackages).length > 0 && (
+                                        <View style={s.pkgSummary}>
+                                            <View style={s.summaryHeader}>
+                                                <Ionicons
+                                                    name="cart-outline"
+                                                    size={16}
+                                                    color={Colors.charcoal}
+                                                />
+                                                <Text style={s.summaryLabel}>
+                                                    Selected Packages
+                                                </Text>
+                                                {/* FIX 7: use catColor for the count badge */}
                                                 <View
                                                     style={[
-                                                        s.pkgNum,
+                                                        s.summaryCountBadge,
                                                         { backgroundColor: catColor },
                                                     ]}
                                                 >
-                                                    <Text style={s.pkgNumText}>{i + 1}</Text>
+                                                    <Text style={s.summaryCountText}>
+                                                        {Object.keys(selectedPackages).length}
+                                                    </Text>
                                                 </View>
-                                                <Text style={s.pkgName}>
-                                                    {(pkg as any).name ??
-                                                        (pkg as any).serviceName ??
-                                                        `Package ${i + 1}`}
+                                            </View>
+
+                                            <View style={s.selectedList}>
+                                                {Object.entries(selectedPackages).map(
+                                                    ([idx, qty]) => {
+                                                        const pkg = servicePackages[
+                                                            parseInt(idx)
+                                                        ] as any;
+                                                        const price = pkg?.price ?? pkg?.rate ?? 0;
+                                                        const total = price * qty;
+                                                        return (
+                                                            <View
+                                                                key={idx}
+                                                                style={s.selectedItemRow}
+                                                            >
+                                                                <View style={s.selectedItemDot} />
+                                                                {/* FIX 8: flex:1 so name doesn't overflow */}
+                                                                <Text
+                                                                    style={s.selectedItem}
+                                                                    numberOfLines={1}
+                                                                >
+                                                                    {pkg?.name ??
+                                                                        pkg?.serviceName ??
+                                                                        `Package ${
+                                                                            parseInt(idx) + 1
+                                                                        }`}
+                                                                </Text>
+                                                                <Text style={s.selectedItemQty}>
+                                                                    ×{qty}
+                                                                </Text>
+                                                                <Text style={s.selectedItemTotal}>
+                                                                    {fmtPrice(total)}
+                                                                </Text>
+                                                            </View>
+                                                        );
+                                                    },
+                                                )}
+                                            </View>
+
+                                            <View style={s.summaryTotalRow}>
+                                                <Text style={s.summaryTotalLabel}>
+                                                    Estimated Total
                                                 </Text>
-                                                <Text style={[s.pkgPrice, { color: catColor }]}>
-                                                    {fmtPrice(
-                                                        (pkg as any).price ?? (pkg as any).rate,
-                                                    )}
-                                                    {(pkg as any).unit ? (
-                                                        <Text style={s.pkgUnit}>
-                                                            /{(pkg as any).unit}
-                                                        </Text>
-                                                    ) : null}
+                                                <Text
+                                                    style={[
+                                                        s.summaryTotalValue,
+                                                        { color: catColor },
+                                                    ]}
+                                                >
+                                                    {fmtPrice(selectedTotal)}
                                                 </Text>
                                             </View>
-                                            {(pkg as any).quantity ? (
-                                                <Text style={s.pkgMeta}>
-                                                    Quantity: {(pkg as any).quantity}
-                                                </Text>
-                                            ) : null}
                                         </View>
-                                    ),
-                                )
+                                    )}
+                                </>
                             )}
                         </View>
                     )}
 
-                    {/* AVAILABILITY */}
+                    {/* AVAILABILITY — always from service, never from profile */}
                     {activeTab === 'availability' && (
                         <View style={s.section}>
                             {avail.length === 0 ? (
@@ -757,11 +1014,7 @@ const s = StyleSheet.create({
     heroWrap: { width: W, height: HERO_H, position: 'relative' },
     heroImage: { width: '100%', height: '100%' },
     heroPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-    heroOverlay: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'transparent',
-        // gradient simulation with bottom-heavy opacity
-    },
+    heroOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'transparent' },
     heroBadges: { position: 'absolute', bottom: 14, left: 14, flexDirection: 'row', gap: 8 },
     catBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radii.full },
     catBadgeText: { fontSize: 11, fontWeight: Typography.bold, color: Colors.white },
@@ -917,21 +1170,170 @@ const s = StyleSheet.create({
         padding: Spacing.lg,
         borderLeftWidth: 4,
         ...Shadows.card,
-        gap: 6,
+        gap: 10,
     },
-    pkgHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    pkgHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+    checkbox: {
+        width: 24,
+        height: 24,
+        borderRadius: Radii.md,
+        borderWidth: 2,
+        borderColor: Colors.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+    },
     pkgNum: {
         width: 26,
         height: 26,
         borderRadius: 13,
         alignItems: 'center',
         justifyContent: 'center',
+        flexShrink: 0,
     },
     pkgNumText: { fontSize: 12, fontWeight: Typography.extraBold, color: Colors.white },
     pkgName: { flex: 1, fontSize: 14, fontWeight: Typography.bold, color: Colors.charcoal },
     pkgPrice: { fontSize: 16, fontWeight: Typography.extraBold },
     pkgUnit: { fontSize: 11, color: Colors.charcoalLight },
-    pkgMeta: { fontSize: 12, color: Colors.charcoalLight, marginLeft: 34 },
+    pkgMeta: { fontSize: 12, color: Colors.charcoalLight, marginLeft: 50 },
+
+    pkgQtySection: {
+        paddingTop: Spacing.lg,
+        borderTopWidth: 1,
+        borderTopColor: Colors.border,
+    },
+    pkgQtyRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.md,
+    },
+    qtyLabel: {
+        fontSize: 16,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalLight,
+        width: 28,
+    },
+    pkgQtyControl: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        flex: 1,
+    },
+    qtyBtn: {
+        width: 35,
+        height: 45,
+        borderRadius: Radii.sm,
+        backgroundColor: Colors.background,
+        borderWidth: 1.5,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    qtyInput: {
+        flex: 1,
+        height: 45,
+        borderRadius: Radii.sm,
+        borderWidth: 1.5,
+        backgroundColor: Colors.background,
+        paddingHorizontal: Spacing.sm,
+        fontSize: 14,
+        fontWeight: Typography.bold,
+        textAlign: 'center',
+    },
+    qtyAmountText: {
+        fontSize: 17,
+        fontWeight: Typography.extraBold,
+        minWidth: 60,
+        textAlign: 'right',
+    },
+
+    // FIX 9: pkgSummary borderTopColor was missing — added explicitly
+    pkgSummary: {
+        marginTop: Spacing.lg,
+        paddingVertical: Spacing.lg,
+        paddingHorizontal: Spacing.lg,
+        borderTopWidth: 1.5,
+        borderTopColor: Colors.border,
+        backgroundColor: Colors.surface,
+        borderRadius: Radii.lg,
+        ...Shadows.card,
+    },
+    summaryHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: Spacing.md,
+    },
+    summaryLabel: {
+        fontSize: 14,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal,
+    },
+    summaryCountBadge: {
+        borderRadius: Radii.full,
+        width: 20,
+        height: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    summaryCountText: {
+        fontSize: Typography.xs,
+        fontWeight: Typography.bold,
+        color: Colors.white,
+    },
+    selectedList: { gap: 6 },
+    selectedItemRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        paddingVertical: 5,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.divider,
+    },
+    selectedItemDot: {
+        width: 5,
+        height: 5,
+        borderRadius: 3,
+        backgroundColor: Colors.primaryBorder,
+        flexShrink: 0,
+    },
+    // FIX 8: flex:1 so long names don't push qty/total off screen
+    selectedItem: {
+        flex: 1,
+        fontSize: Typography.sm,
+        fontWeight: Typography.medium,
+        color: Colors.charcoalMid,
+    },
+    selectedItemQty: {
+        fontSize: Typography.sm,
+        color: Colors.charcoalLight,
+        fontWeight: Typography.medium,
+    },
+    selectedItemTotal: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal,
+        minWidth: 60,
+        textAlign: 'right',
+    },
+    summaryTotalRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: Spacing.sm,
+        paddingTop: Spacing.sm,
+        borderTopWidth: 1.5,
+        borderTopColor: Colors.divider,
+    },
+    summaryTotalLabel: {
+        fontSize: Typography.base,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal,
+    },
+    summaryTotalValue: {
+        fontSize: Typography.lg,
+        fontWeight: Typography.extraBold,
+        letterSpacing: -0.3,
+    },
 
     availRow: {
         flexDirection: 'row',
@@ -985,3 +1387,4 @@ const s = StyleSheet.create({
     },
     bookBtnText: { fontSize: 15, fontWeight: Typography.extraBold, color: Colors.white },
 });
+    
