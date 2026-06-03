@@ -1,10 +1,28 @@
-import { useQuery } from "@tanstack/react-query"
-import { getAllVenues, VenueParams } from "../services/VenueService"
+import { useInfiniteQuery } from "@tanstack/react-query";
+import { getAllVenues, VenueParams } from "../services/VenueService";
 
-export const useGetAllVenue = (params?: VenueParams,options?: { enabled?: boolean } ) => {
-  return useQuery({
-    queryKey: ['get-venue', params],
-    queryFn: () => getAllVenues(params),
-    enabled: options?.enabled ,
-  })
-}
+const PAGE_SIZE = 10;
+
+type FilterParams = Omit<VenueParams, 'page' | 'limit'>;
+
+export const useGetAllVenue = (
+    params?: FilterParams,
+    options?: { enabled?: boolean }
+) => {
+    return useInfiniteQuery({
+        queryKey: ['get-venue', params],
+        queryFn: ({ pageParam }) =>
+            getAllVenues({
+                ...params,
+                page: String(pageParam),
+                limit: String(PAGE_SIZE),
+            }),
+        initialPageParam: 1,
+        getNextPageParam: (lastPage, allPages) => {
+            const total: number = lastPage?.total ?? lastPage?.totalCount ?? 0;
+            const fetched = allPages.flatMap(p => p.venues ?? []).length;
+            return fetched < total ? allPages.length + 1 : undefined;
+        },
+        enabled: options?.enabled,
+    });
+};

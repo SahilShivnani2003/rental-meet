@@ -1,11 +1,17 @@
 import { privateClient } from "@/service/apiClient";
 import { Booking, ModifyBookingPayload } from "../types/Booking";
 
-export const getAllBookings = async () => {
+export interface BookingParasms {
+    status?: string;
+    search?: string;
+    page: number;
+    limit: number;
+}
+export const getAllBookings = async (params: BookingParasms) => {
     try {
         console.log('Fetching bookings....');
 
-        const response = await privateClient.get('/bookings');
+        const response = await privateClient.get('/bookings', { params });
 
         console.log('Booking response :', response.data);
 

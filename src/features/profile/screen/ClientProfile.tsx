@@ -176,10 +176,17 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
         isLoading: bookingsLoading,
         isRefetching: bookingsRefetching,
         refetch: refetchBookings,
-    } = useGetAllBookings({
-        enabled: isAuthenticated,
-    });
-    const bookings: Booking[] = bookingData?.bookings ?? [];
+    } = useGetAllBookings(
+        { enabled: isAuthenticated },
+        {}, // params
+    );
+    const bookingsStats: {
+        total: number;
+        cancelled: number;
+        completed: number;
+        confirmed: number;
+        pending: number;
+    }= bookingData?.pages[0]?.stats ?? {};
 
     const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -219,22 +226,12 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
 
     // ── Stats derived from API bookings ───────────────────────────────────────
     const stats: StatItem[] = useMemo(() => {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const upcoming = bookings.filter(b => {
-            const d = new Date(b.bookingDate);
-            d.setHours(0, 0, 0, 0);
-            return (b.status === 'confirmed' || b.status === 'pending') && d >= today;
-        }).length;
-        const completed = bookings.filter(b => b.status === 'completed').length;
-        const cancelled = bookings.filter(b => b.status === 'cancelled').length;
 
         return [
             {
                 id: 'total',
                 label: 'Total',
-                value: bookings.length,
+                value: bookingsStats.total ?? 0,
                 icon: 'calendar',
                 color: Colors.info,
                 bg: Colors.infoLight,
@@ -242,7 +239,7 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
             {
                 id: 'upcoming',
                 label: 'Upcoming',
-                value: upcoming,
+                value: bookingsStats.confirmed ?? 0,
                 icon: 'time',
                 color: Colors.primary,
                 bg: Colors.primaryLight,
@@ -250,7 +247,7 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
             {
                 id: 'done',
                 label: 'Completed',
-                value: completed,
+                value: bookingsStats.completed ?? 0,
                 icon: 'checkmark-circle',
                 color: Colors.success,
                 bg: Colors.successLight,
@@ -258,13 +255,13 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
             {
                 id: 'cancel',
                 label: 'Cancelled',
-                value: cancelled,
+                value: bookingsStats.cancelled ?? 0,
                 icon: 'close-circle',
                 color: Colors.danger,
                 bg: Colors.dangerLight,
             },
         ];
-    }, [bookings]);
+    }, [bookingsStats]);
 
     // ── Logout ────────────────────────────────────────────────────────────────
     const handleLogout = () => {

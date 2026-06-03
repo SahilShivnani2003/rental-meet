@@ -1,4 +1,6 @@
-import React, { useRef, useEffect, useState } from 'react';
+// ClientDashboard.tsx
+
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import {
     View,
     Text,
@@ -11,6 +13,7 @@ import {
     Modal,
     Image,
     RefreshControl,
+    ActivityIndicator,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
@@ -38,6 +41,9 @@ const CAPACITY_OPTIONS = [
     { label: '200–300', value: '200-300' },
     { label: '300+', value: '300-400' },
 ];
+
+// ── Limit for the homepage preview ───────────────────────────────────────────
+const HOME_VENUE_LIMIT = 6;
 
 function getDaysInMonth(year: number, month: number) {
     return new Date(year, month + 1, 0).getDate();
@@ -74,9 +80,7 @@ function SkeletonBox({ style }: { style?: object }) {
     );
 }
 
-/** 4-column row skeleton for categories */
 function CategorySkeleton() {
-    // 8 placeholder cards (2 rows of 4)
     return (
         <View style={s.catGrid}>
             {Array.from({ length: 8 }).map((_, i) => (
@@ -89,7 +93,6 @@ function CategorySkeleton() {
     );
 }
 
-/** Horizontal scroll skeleton for featured venues */
 function VenueSkeleton() {
     return (
         <View style={s.hScroll}>
@@ -129,26 +132,33 @@ export default function ClientDashboard({ navigation }: landingProps) {
     const {
         data: venueData,
         isLoading: venuesLoading,
+        isFetchingNextPage: venuesFetchingNext,
+        hasNextPage: venuesHasMore,
+        fetchNextPage: fetchMoreVenues,
         isRefetching: venuesRefetching,
         refetch: refetchVenues,
-    } = useGetAllVenue({ limit: '6' });
+    } = useGetAllVenue(
+        {  }, 
+        { enabled: true },
+    );
 
-    const {
-        data: citiesData,
-        isLoading: citiesLoading,
-        isRefetching: citiesRefetching,
-        refetch: refetchCities,
-    } = useGetVenueLoc();
+    const { data: citiesData, isLoading: citiesLoading, refetch: refetchCities } = useGetVenueLoc();
 
     const {
         data: venueTypeData,
         isLoading: typesLoading,
-        isRefetching: typesRefetching,
         refetch: refetchTypes,
     } = useGetVenueType();
 
-    // ── Derive data safely ────────────────────────────────────────────────────
-    const venues: Venue[] = venueData?.venues ?? [];
+    // ── Flatten paginated pages → flat venues array ───────────────────────────
+    // On the home screen we only render the first page (HOME_VENUE_LIMIT items).
+    // We still expose fetchMoreVenues / hasNextPage so the "View All" CTA can
+    // navigate with context, or you can add a load-more button here if desired.
+    const venues: Venue[] = useMemo(
+        () => venueData?.pages.flatMap(page => page.venues ?? []) ?? [],
+        [venueData],
+    );
+
     const cities: string[] = citiesData?.cities ?? [];
     const categories: VenueType[] = venueTypeData?.venueTypes ?? [];
 
@@ -184,14 +194,12 @@ export default function ClientDashboard({ navigation }: landingProps) {
     const closeDropdown = () => setOpenDropdown(null);
 
     const goToVenues = () => {
-        debugger;
         if (search || selectedCapacity || selectedCity) {
             navigation.navigate('venues', {
-                search: search,
+                search,
                 capacity: selectedCapacity?.value,
                 city: selectedCity ?? '',
             });
-
             setSearch('');
             setSelectedCity(null);
             setSelectedCapacity(null);
@@ -199,6 +207,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
             navigation.navigate('venues');
         }
     };
+
     const goToProfile = () => navigation.navigate('profile');
 
     const goToVenueDetail = (venue: Venue) => {
@@ -329,7 +338,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
                                 key={opt.label}
                                 style={[ds.optionRow, isActive && ds.optionRowActive]}
                                 onPress={() => {
-                                    setSelectedCapacity(opt.value === null ? null : opt);
+                                    setSelectedCapacity(isActive ? null : opt);
                                     closeDropdown();
                                 }}
                             >
@@ -640,7 +649,6 @@ export default function ClientDashboard({ navigation }: landingProps) {
                         </TouchableOpacity>
                     </View>
 
-                    {/* ── Category skeleton or real grid ── */}
                     {typesLoading ? (
                         <CategorySkeleton />
                     ) : categories.length === 0 ? (
@@ -658,9 +666,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
                                     key={cat._id}
                                     style={s.catCard}
                                     onPress={() =>
-                                        navigation.navigate('venues', {
-                                            venueType: cat.name,
-                                        })
+                                        navigation.navigate('venues', { venueType: cat.name })
                                     }
                                     activeOpacity={0.8}
                                 >
@@ -687,7 +693,6 @@ export default function ClientDashboard({ navigation }: landingProps) {
                     </View>
                     <Text style={s.sectionSub}>Handpicked premium spaces for your events</Text>
 
-                    {/* ── Venue skeleton or real list ── */}
                     {venuesLoading ? (
                         <VenueSkeleton />
                     ) : venues.length === 0 ? (
@@ -706,17 +711,42 @@ export default function ClientDashboard({ navigation }: landingProps) {
                             </TouchableOpacity>
                         </View>
                     ) : (
-                        <View style={s.hScroll}>
-                            {venues.map((v, i) => (
-                                <FeaturedCard
-                                    key={v._id}
-                                    v={v}
-                                    index={i}
-                                    role={currentRole}
-                                    onPress={goToVenueDetail}
-                                />
-                            ))}
-                        </View>
+                        <>
+                            <View style={s.hScroll}>
+                                {venues.map((v, i) => (
+                                    <FeaturedCard
+                                        key={v._id}
+                                        v={v}
+                                        index={i}
+                                        role={currentRole}
+                                        onPress={goToVenueDetail}
+                                    />
+                                ))}
+                            </View>
+
+                            {/* Load-more inline (optional — shows when there are more pages) */}
+                            {venuesHasMore && (
+                                <TouchableOpacity
+                                    style={s.loadMoreBtn}
+                                    onPress={() => fetchMoreVenues()}
+                                    disabled={venuesFetchingNext}
+                                    activeOpacity={0.8}
+                                >
+                                    {venuesFetchingNext ? (
+                                        <ActivityIndicator size="small" color={Colors.primary} />
+                                    ) : (
+                                        <>
+                                            <Ionicons
+                                                name="chevron-down"
+                                                size={14}
+                                                color={Colors.primary}
+                                            />
+                                            <Text style={s.loadMoreText}>Load more venues</Text>
+                                        </>
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                        </>
                     )}
 
                     <TouchableOpacity
@@ -796,7 +826,12 @@ const ds = StyleSheet.create({
         borderColor: 'transparent',
     },
     optionRowActive: { borderColor: Colors.primaryBorder, backgroundColor: Colors.primaryLight },
-    optionText: { flex: 1, fontSize: 14, color: Colors.charcoalMid, fontWeight: Typography.medium },
+    optionText: {
+        flex: 1,
+        fontSize: 14,
+        color: Colors.charcoalMid,
+        fontWeight: Typography.medium,
+    },
     optionTextActive: { color: Colors.primary, fontWeight: Typography.bold },
     calNav: {
         flexDirection: 'row',
@@ -850,7 +885,6 @@ const ds = StyleSheet.create({
     clearDateText: { fontSize: 13, color: Colors.charcoalLight, fontWeight: Typography.medium },
 });
 
-// ─── 4-column category card width ─────────────────────────────────────────────
 const CAT_W = (W - Spacing.lg * 2 - Spacing.sm * 3) / 4;
 
 const s = StyleSheet.create({
@@ -1026,8 +1060,6 @@ const s = StyleSheet.create({
     },
     seeAll: { fontSize: 13, fontWeight: Typography.bold, color: Colors.primary },
     hScroll: { paddingBottom: 4, gap: Spacing.lg, width: '100%' },
-
-    // ── 4-column category grid ────────────────────────────────────────────────
     catGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
     catCard: {
         width: CAT_W,
@@ -1057,7 +1089,6 @@ const s = StyleSheet.create({
         color: Colors.charcoal,
         textAlign: 'center',
     },
-    catCount: { fontSize: 10.5, color: Colors.charcoalLight, fontWeight: Typography.medium },
     viewAllBtn: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1069,6 +1100,24 @@ const s = StyleSheet.create({
         marginTop: Spacing.lg,
     },
     viewAllBtnText: { fontSize: 14, fontWeight: Typography.extraBold, color: Colors.white },
+    // ── Load more ─────────────────────────────────────────────────────────────
+    loadMoreBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 12,
+        marginTop: Spacing.sm,
+        borderRadius: Radii.full,
+        borderWidth: 1.5,
+        borderColor: Colors.primaryBorder,
+        backgroundColor: Colors.primaryLight,
+    },
+    loadMoreText: {
+        fontSize: 13,
+        fontWeight: Typography.bold,
+        color: Colors.primary,
+    },
     emptyState: {
         width: '100%',
         alignItems: 'center',

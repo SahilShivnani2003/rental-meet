@@ -924,7 +924,7 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
                             }
                             try {
                                 const options = {
-                                    key: orderData.key ?? Config.RAZORPAY_KEY,
+                                    key: Config.RAZORPAY_KEY_TEST ?? '',
                                     amount: orderData.order.amount,
                                     currency: orderData.order.currency ?? 'INR',
                                     name: 'RentalMeet',

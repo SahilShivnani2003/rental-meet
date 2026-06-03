@@ -25,7 +25,7 @@ export function ServiceCard({
     const displayName = service.brandName ?? service.companyName ?? 'Vendor';
 
     return (
-        <View style={sv.card} onTouchMove={onViewProfile}>
+        <View style={sv.card} onTouchEnd={onViewProfile} >
             {/* Image */}
             <View style={sv.imageWrap}>
                 {service.featuredImage ? (

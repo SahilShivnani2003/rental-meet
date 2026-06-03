@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+// BookingsScreen.tsx
+
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
     View,
     Text,
@@ -8,6 +10,7 @@ import {
     FlatList,
     RefreshControl,
     ListRenderItemInfo,
+    ActivityIndicator,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
@@ -23,10 +26,6 @@ import { StatusConfig, Colors, Radii, Shadows, Spacing, Typography } from '@/the
 import { RootStackParamList } from '@/types/RootStackParamList';
 import { Booking } from '../types/Booking';
 import { useGetCustomerServicebookings } from '../hooks/useVendorBooking';
-import QuotationModal from '@/features/quotation/screens/QuotationModal';
-
-// ─── Layout constant (must be before component for getItemLayout) ─────────────
-const BOOKING_CARD_HEIGHT = 148;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -55,25 +54,70 @@ const EMPTY_DESC: Record<string, string> = {
 export default function BookingsScreen({ navigation }: BookingsProps) {
     const { user, isAuthenticated } = useAuthStore();
 
+    const [refreshing, setRefreshing] = useState(false);
+    const [activeTab, setActiveTab] = useState<string>('all');
+    const [bookingType, setBookingType] = useState<'venue' | 'service'>('venue');
+
+    // ── Pass status filter to the query so the server filters ─────────────────
+    const statusParam = activeTab === 'all' ? undefined : activeTab;
+
     const {
         data: bookingData,
         isLoading,
-        isRefetching,
+        isFetchingNextPage,
+        hasNextPage,
+        fetchNextPage,
         refetch,
-    } = useGetAllBookings({
-        enabled: isAuthenticated,
-    });
-    const bookings = bookingData?.bookings ?? [];
-    const { data: serviceBookingData , refetch:serviceBookingRefetch} = useGetCustomerServicebookings();
-    const serviceBookings = serviceBookingData?.bookings ?? [];
-    const [refreshing, setRefreshing] = useState(false);
-    const [activeTab, setActiveTab] = useState<string>('all');
+        isRefetching,
+    } = useGetAllBookings(
+        { enabled: isAuthenticated && bookingType === 'venue' },
+        { status: statusParam },
+    );
 
-    // ── Sync refreshing state with react-query's isRefetching ─────────────────
+    const { data: serviceBookingData, refetch: serviceBookingRefetch } =
+        useGetCustomerServicebookings();
+    const serviceBookings = serviceBookingData?.bookings ?? [];
+
+    // ── Flatten paginated pages into a single array ────────────────────────────
+    const bookings = useMemo(
+        () => bookingData?.pages.flatMap(page => page.bookings ?? []) ?? [],
+        [bookingData],
+    );
+
+    const activeBookings = bookingType === 'venue' ? bookings : serviceBookings;
+
+    // ── For service bookings, filter client-side (no pagination support yet) ───
+    const filtered =
+        bookingType === 'service' && activeTab !== 'all'
+            ? activeBookings.filter((b: Booking) => b.status === activeTab)
+            : activeBookings;
+
+    // ── Counts: use total from last page for venue, length for service ─────────
+    const totalVenueCount = bookingData?.pages[0]?.total ?? bookingData?.pages[0]?.totalCount ?? 0;
+
+    const counts = useMemo(() => {
+        return TABS.reduce<Record<string, number>>((acc, t) => {
+            if (bookingType === 'venue') {
+                // For venue, "all" shows server total; per-status counts are local
+                // (accurate only for loaded pages — you can extend this if your API
+                //  returns per-status counts in the response envelope)
+                acc[t] =
+                    t === 'all'
+                        ? totalVenueCount
+                        : bookings.filter((b: Booking) => b.status === t).length;
+            } else {
+                acc[t] =
+                    t === 'all'
+                        ? serviceBookings.length
+                        : serviceBookings.filter((b: Booking) => b.status === t).length;
+            }
+            return acc;
+        }, {});
+    }, [bookingType, bookings, serviceBookings, totalVenueCount]);
+
+    // ── Sync refreshing with react-query's isRefetching ───────────────────────
     useEffect(() => {
-        if (!isRefetching) {
-            setRefreshing(false);
-        }
+        if (!isRefetching) setRefreshing(false);
     }, [isRefetching]);
 
     // ── Actions ────────────────────────────────────────────────────────────────
@@ -82,27 +126,13 @@ export default function BookingsScreen({ navigation }: BookingsProps) {
         setRefreshing(true);
         refetch();
         serviceBookingRefetch();
-    }, [refetch]);
+    }, [refetch, serviceBookingRefetch]);
 
-    // ── Derived data ───────────────────────────────────────────────────────────
-
-    const [bookingType, setBookingType] = useState<'venue' | 'service'>('venue');
-
-    // ─── Switch active data source based on bookingType ──────────────────────────
-    const activeBookings = bookingType === 'venue' ? bookings : serviceBookings;
-
-    const filtered =
-        activeTab === 'all'
-            ? activeBookings
-            : activeBookings.filter((b: Booking) => b.status === activeTab);
-
-    const counts = TABS.reduce<Record<string, number>>((acc, t) => {
-        acc[t] =
-            t === 'all'
-                ? activeBookings.length
-                : activeBookings.filter((b: Booking) => b.status === t).length;
-        return acc;
-    }, {});
+    const handleEndReached = useCallback(() => {
+        if (hasNextPage && !isFetchingNextPage && bookingType === 'venue') {
+            fetchNextPage();
+        }
+    }, [hasNextPage, isFetchingNextPage, fetchNextPage, bookingType]);
 
     // ── FlatList render helpers ────────────────────────────────────────────────
 
@@ -130,7 +160,18 @@ export default function BookingsScreen({ navigation }: BookingsProps) {
 
     const ListHeaderComponent = useCallback(() => <View style={styles.listTopSpacer} />, []);
 
-    const ListFooterComponent = useCallback(() => <View style={styles.listBottomSpacer} />, []);
+    const ListFooterComponent = useCallback(
+        () =>
+            isFetchingNextPage ? (
+                <View style={styles.paginationLoader}>
+                    <ActivityIndicator size="small" color={Colors.primary} />
+                    <Text style={styles.paginationLoaderText}>Loading more…</Text>
+                </View>
+            ) : (
+                <View style={styles.listBottomSpacer} />
+            ),
+        [isFetchingNextPage],
+    );
 
     const ListEmptyComponent = useCallback(
         () =>
@@ -167,7 +208,7 @@ export default function BookingsScreen({ navigation }: BookingsProps) {
                         <Text style={styles.headerTitle}>My Bookings</Text>
                     </View>
                     <View style={styles.totalBadge}>
-                        <Text style={styles.totalBadgeNum}>{bookings.length}</Text>
+                        <Text style={styles.totalBadgeNum}>{totalVenueCount}</Text>
                         <Text style={styles.totalBadgeLabel}>Total</Text>
                     </View>
                 </View>
@@ -187,6 +228,7 @@ export default function BookingsScreen({ navigation }: BookingsProps) {
                         </View>
                     ))}
                 </ScrollView>
+
                 {/* ── Booking type tabs (customer only) ── */}
                 {user?.role === 'customer' && (
                     <View style={styles.typeTabsWrapper}>
@@ -198,7 +240,7 @@ export default function BookingsScreen({ navigation }: BookingsProps) {
                                     style={[styles.typeTab, isActive && styles.typeTabActive]}
                                     onPress={() => {
                                         setBookingType(type);
-                                        setActiveTab('all'); // reset status filter on switch
+                                        setActiveTab('all');
                                     }}
                                     activeOpacity={0.75}
                                 >
@@ -278,7 +320,7 @@ export default function BookingsScreen({ navigation }: BookingsProps) {
                 </ScrollView>
             </View>
 
-            {/* ── Loader overlay (initial load only) ── */}
+            {/* ── Initial load overlay ── */}
             {isLoading && <Loader size="md" label="Loading bookings…" style={styles.loader} />}
 
             {/* ── Bookings FlatList ── */}
@@ -292,6 +334,8 @@ export default function BookingsScreen({ navigation }: BookingsProps) {
                 ItemSeparatorComponent={ItemSeparatorComponent}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.flatListContent}
+                onEndReached={handleEndReached}
+                onEndReachedThreshold={0.4}
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
@@ -303,11 +347,6 @@ export default function BookingsScreen({ navigation }: BookingsProps) {
                 initialNumToRender={8}
                 maxToRenderPerBatch={8}
                 windowSize={10}
-                getItemLayout={(_data, index) => ({
-                    length: BOOKING_CARD_HEIGHT,
-                    offset: BOOKING_CARD_HEIGHT * index,
-                    index,
-                })}
             />
         </View>
     );
@@ -384,7 +423,7 @@ const styles = StyleSheet.create({
         letterSpacing: Typography.normal,
     },
 
-    // ── Type tabs ──────────────────────────────────────────────────────────────
+    // Type tabs
     typeTabsWrapper: {
         flexDirection: 'row',
         paddingHorizontal: Spacing.xl,
@@ -411,9 +450,8 @@ const styles = StyleSheet.create({
         fontWeight: Typography.semiBold,
         color: Colors.charcoalMid,
     },
-    typeTabTextActive: {
-        color: Colors.white,
-    },
+    typeTabTextActive: { color: Colors.white },
+
     // Filter tabs
     tabsWrapper: { paddingVertical: 14 },
     tabsContainer: { paddingHorizontal: Spacing.xl, gap: Spacing.sm },
@@ -454,6 +492,18 @@ const styles = StyleSheet.create({
     listTopSpacer: { height: Spacing.sm },
     listBottomSpacer: { height: 110 },
     separator: { height: Spacing.sm },
+    paginationLoader: {
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: Spacing.sm,
+        paddingVertical: Spacing.lg,
+        paddingBottom: 110,
+    },
+    paginationLoaderText: {
+        fontSize: Typography.sm,
+        color: Colors.charcoalLight,
+    },
 
     loader: { paddingTop: 64 },
 });

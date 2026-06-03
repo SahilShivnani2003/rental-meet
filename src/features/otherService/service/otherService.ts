@@ -1,10 +1,18 @@
 import { publicClient } from "@/service/apiClient";
 
-export const getOtherService = async () => {
+export interface OtherServiceParams {
+    category?: string;
+    city?: string;
+    search?: string;
+    limit: string;
+    page: string;
+    maxPrice?: string;
+}
+export const getOtherService = async (params?: OtherServiceParams) => {
     try {
         console.log('Fetching other services...');
 
-        const response = await publicClient.get('/vendor-services');
+        const response = await publicClient.get('/vendor-services', { params });
 
         console.log('Other service response : ', response.data);
 
