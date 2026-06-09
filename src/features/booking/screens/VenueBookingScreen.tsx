@@ -903,17 +903,13 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
         guestNum,
         maxCapacity,
     ]);
-
-    // ── Payment flow ──────────────────────────────────────────────────────────
-    // FIX 6 & 7: handlePayment now properly calls createPaymentOrder mutation,
-    // then verifyPaymentMutate — neither was hooked up before.
     const handlePayment = useCallback(
         (bookingId: string): Promise<void> =>
             new Promise((resolve, reject) => {
                 createPaymentOrder(
                     {
                         bookingId,
-                        amount: Math.round(total * 100),
+                        amount: total,
                         bookingType: toBookingType(selectedDuration!.type),
                     },
                     {

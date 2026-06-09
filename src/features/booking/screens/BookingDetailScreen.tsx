@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import {
     View,
     Text,
@@ -19,6 +19,9 @@ import { ApiError } from '@/types/ApiError';
 import { useAlert } from '@/context/AlertContext';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Colors, Spacing, Radii, Typography, Shadows, StatusConfig } from '@/theme/theme';
+import { useCreatePaymentOrder, useVerifyPayment } from '../hooks/usePayment';
+import { Config } from 'react-native-config';
+import RazorpayCheckout from 'react-native-razorpay';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -351,6 +354,8 @@ export default function BookingDetailScreen({ route, navigation }: BookingDetail
     const { mutate: updateStatus } = useUpdateStatus();
     const { mutate: cancelBooking } = useCancelBooking();
     const { mutate: approveSoon } = useApproveBooking();
+    const { mutate: createPaymentOrder } = useCreatePaymentOrder();
+    const { mutate: verifyPaymentMutate } = useVerifyPayment();
     const alert = useAlert();
 
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -431,6 +436,82 @@ export default function BookingDetailScreen({ route, navigation }: BookingDetail
         }
     };
 
+    const handlePayment = useCallback(
+        (bookingId: string): Promise<void> =>
+            new Promise((resolve, reject) => {
+                createPaymentOrder(
+                    {
+                        bookingId,
+                        amount: priceBreakdown?.total ,
+                        bookingType: booking.bookingType,
+                    },
+                    {
+                        onSuccess: async (orderData: any) => {
+                            if (!orderData?.success) {
+                                reject(new Error('Failed to create payment order'));
+                                return;
+                            }
+                            try {
+                                const options = {
+                                    key: Config.RAZORPAY_KEY_TEST ?? '',
+                                    amount: orderData.order.amount,
+                                    currency: orderData.order.currency ?? 'INR',
+                                    name: 'RentalMeet',
+                                    description: `Booking Payment - ${venueName}`,
+                                    order_id: orderData.order.id,
+                                    prefill: { name: customerDetails?.fullName, email: customerDetails?.email, contact: customerDetails?.phone },
+                                    theme: { color: '#F59F0A' },
+                                };
+
+                                const razorpayResponse = await RazorpayCheckout.open(options);
+
+                                if (!razorpayResponse?.razorpay_payment_id) {
+                                    reject(new Error('Payment not completed'));
+                                    return;
+                                }
+
+                                // FIX 7: verifyPaymentMutate is the mutate fn — call it properly
+                                verifyPaymentMutate(
+                                    {
+                                        razorpay_order_id: razorpayResponse.razorpay_order_id,
+                                        razorpay_payment_id: razorpayResponse.razorpay_payment_id,
+                                        razorpay_signature: razorpayResponse.razorpay_signature,
+                                        bookingId,
+                                        paidAmount: priceBreakdown?.total,
+                                        bookingType: booking.bookingType,
+                                    },
+                                    {
+                                        onSuccess: (verifyData: any) => {
+                                            if (verifyData?.success) {
+                                                alert.success(
+                                                    'Payment Successful',
+                                                    'Booking confirmed!',
+                                                );
+                                                navigation.popToTop?.() ?? navigation.goBack();
+                                                resolve();
+                                            } else {
+                                                reject(new Error('Payment verification failed'));
+                                            }
+                                        },
+                                        onError: (err: any) => reject(err),
+                                    },
+                                );
+                            } catch (err) {
+                                reject(err);
+                            }
+                        },
+                        onError: (err: any) => reject(err),
+                    },
+                );
+            }),
+        [
+            createPaymentOrder,
+            verifyPaymentMutate,
+            alert,
+            navigation,
+        ],
+    );
+
     // ── Render ───────────────────────────────────────────────────────────────
 
     return (
@@ -499,9 +580,9 @@ export default function BookingDetailScreen({ route, navigation }: BookingDetail
                             <TouchableOpacity
                                 style={styles.modifyBtn}
                                 onPress={() =>
-                                    navigation.navigate('modifyBooking', {
+                                    navigation.navigate('modifyVenueBooking', {
                                         bookingId: routeBookingId,
-                                        booking,
+                                        booking: booking,
                                     })
                                 }
                                 activeOpacity={0.8}
@@ -564,6 +645,42 @@ export default function BookingDetailScreen({ route, navigation }: BookingDetail
                             booking.paymentStatus === 'paid' ? Colors.success : Colors.warning
                         }
                     />
+                    {user?.role === 'customer' &&
+                        booking.paymentStatus === 'pending' &&
+                        booking.status !== 'cancelled' && (
+                            <>
+                                <View style={styles.divider} />
+                                <TouchableOpacity
+                                    style={styles.payNowRow}
+                                    onPress={() => handlePayment(routeBookingId)}
+                                    activeOpacity={0.8}
+                                >
+                                    <View style={styles.payNowLeft}>
+                                        <View style={styles.payNowIconWrap}>
+                                            <Ionicons
+                                                name="card-outline"
+                                                size={16}
+                                                color={Colors.white}
+                                            />
+                                        </View>
+                                        <View>
+                                            <Text style={styles.payNowLabel}>PAYMENT DUE</Text>
+                                            <Text style={styles.payNowValue}>
+                                                {formatCurrency(priceBreakdown?.total)}
+                                            </Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.payNowBtn}>
+                                        <Text style={styles.payNowBtnText}>Pay Now</Text>
+                                        <Ionicons
+                                            name="arrow-forward"
+                                            size={14}
+                                            color={Colors.white}
+                                        />
+                                    </View>
+                                </TouchableOpacity>
+                            </>
+                        )}
                     {/* Cancellation reason */}
                     {!!booking.cancellationReason && (
                         <>
@@ -1151,5 +1268,53 @@ const styles = StyleSheet.create({
         fontWeight: Typography.bold,
         color: Colors.white,
         letterSpacing: Typography.normal,
+    },
+    payNowRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingVertical: Spacing.sm,
+        gap: Spacing.md,
+    },
+    payNowLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.md,
+        flex: 1,
+    },
+    payNowIconWrap: {
+        width: 36,
+        height: 36,
+        borderRadius: Radii.sm,
+        backgroundColor: Colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    payNowLabel: {
+        fontSize: Typography.xs,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalLight,
+        letterSpacing: Typography.wide,
+        textTransform: 'uppercase',
+        marginBottom: 3,
+    },
+    payNowValue: {
+        fontSize: Typography.md,
+        fontWeight: Typography.semiBold,
+        color: Colors.warning,
+    },
+    payNowBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        backgroundColor: Colors.primary,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
+        borderRadius: Radii.full,
+    },
+    payNowBtnText: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.white,
     },
 });

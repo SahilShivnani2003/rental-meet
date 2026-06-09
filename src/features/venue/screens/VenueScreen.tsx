@@ -258,10 +258,22 @@ type OwnerStatConfig = {
     borderColor: string;
 };
 
-function OwnerStatCard({ stat, active, onPress }: { stat: OwnerStatConfig; active: boolean; onPress: () => void }) {
+function OwnerStatCard({
+    stat,
+    active,
+    onPress,
+}: {
+    stat: OwnerStatConfig;
+    active: boolean;
+    onPress: () => void;
+}) {
     return (
         <TouchableOpacity
-            style={[styles.ownerStatCard, { borderColor: active ? stat.color : Colors.border }, active && { backgroundColor: stat.bg }]}
+            style={[
+                styles.ownerStatCard,
+                { borderColor: active ? stat.color : Colors.border },
+                active && { backgroundColor: stat.bg },
+            ]}
             onPress={onPress}
             activeOpacity={0.75}
         >
@@ -281,7 +293,15 @@ interface DropdownModalProps {
     searchable?: boolean;
 }
 
-function DropdownModal({ visible, title, options, selectedValue, onSelect, onClose, searchable = false }: DropdownModalProps) {
+function DropdownModal({
+    visible,
+    title,
+    options,
+    selectedValue,
+    onSelect,
+    onClose,
+    searchable = false,
+}: DropdownModalProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const filteredOptions = searchable
         ? options.filter(opt => opt.label.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -295,7 +315,12 @@ function DropdownModal({ visible, title, options, selectedValue, onSelect, onClo
                 <Text style={styles.dropdownTitle}>{title}</Text>
                 {searchable && (
                     <View style={styles.dropdownSearchWrap}>
-                        <Ionicons name="search" size={16} color={Colors.charcoalLight} style={{ marginRight: 8 }} />
+                        <Ionicons
+                            name="search"
+                            size={16}
+                            color={Colors.charcoalLight}
+                            style={{ marginRight: 8 }}
+                        />
                         <TextInput
                             style={styles.dropdownSearchInput}
                             placeholder="Search..."
@@ -305,7 +330,11 @@ function DropdownModal({ visible, title, options, selectedValue, onSelect, onClo
                         />
                         {searchQuery.length > 0 && (
                             <TouchableOpacity onPress={() => setSearchQuery('')}>
-                                <Ionicons name="close-circle" size={16} color={Colors.charcoalLight} />
+                                <Ionicons
+                                    name="close-circle"
+                                    size={16}
+                                    color={Colors.charcoalLight}
+                                />
                             </TouchableOpacity>
                         )}
                     </View>
@@ -319,13 +348,26 @@ function DropdownModal({ visible, title, options, selectedValue, onSelect, onClo
                         const isActive = item.value === selectedValue;
                         return (
                             <TouchableOpacity
-                                style={[styles.dropdownOption, isActive && styles.dropdownOptionActive]}
-                                onPress={() => { onSelect(item.value); onClose(); }}
+                                style={[
+                                    styles.dropdownOption,
+                                    isActive && styles.dropdownOptionActive,
+                                ]}
+                                onPress={() => {
+                                    onSelect(item.value);
+                                    onClose();
+                                }}
                             >
-                                <Text style={[styles.dropdownOptionText, isActive && styles.dropdownOptionTextActive]}>
+                                <Text
+                                    style={[
+                                        styles.dropdownOptionText,
+                                        isActive && styles.dropdownOptionTextActive,
+                                    ]}
+                                >
                                     {item.label}
                                 </Text>
-                                {isActive && <Ionicons name="checkmark" size={18} color={Colors.primary} />}
+                                {isActive && (
+                                    <Ionicons name="checkmark" size={18} color={Colors.primary} />
+                                )}
                             </TouchableOpacity>
                         );
                     }}
@@ -382,13 +424,24 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
     const { data: venueTypeData } = useGetVenueType();
 
     // ★ Build query params — uses debounced search + applied filters
-    const clientQueryParams = useMemo(() => ({
-        ...(debouncedSearch    && { search: debouncedSearch }),
-        ...(appliedVenueType   && { venueType: appliedVenueType }),
-        ...(appliedCity        && { city: appliedCity }),
-        ...(appliedCapacity    && { capacity: appliedCapacity }),
-        ...(appliedPriceActive && { minPrice: appliedPriceLow, maxPrice: appliedPriceHigh }),
-    }), [debouncedSearch, appliedVenueType, appliedCity, appliedCapacity, appliedPriceLow, appliedPriceHigh, appliedPriceActive]);
+    const clientQueryParams = useMemo(
+        () => ({
+            ...(debouncedSearch && { search: debouncedSearch }),
+            ...(appliedVenueType && { venueType: appliedVenueType }),
+            ...(appliedCity && { city: appliedCity }),
+            ...(appliedCapacity && { capacity: appliedCapacity }),
+            ...(appliedPriceActive && { minPrice: appliedPriceLow, maxPrice: appliedPriceHigh }),
+        }),
+        [
+            debouncedSearch,
+            appliedVenueType,
+            appliedCity,
+            appliedCapacity,
+            appliedPriceLow,
+            appliedPriceHigh,
+            appliedPriceActive,
+        ],
+    );
 
     // ★ useInfiniteQuery via updated hook
     const {
@@ -418,15 +471,15 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
         refetch: refetchOwnerVenues,
     } = useGetOwnerVenue({ enabled: isOwner });
 
-    const { mutate: deleteVenue }       = useDeleteVenue();
-    const { mutate: resubmitVenue }     = useResubmitVenue();
-    const { mutate: toggleActive }      = useToggleActive();
-    const { mutate: createBlockDates }  = useCreateBlockDates();
+    const { mutate: deleteVenue } = useDeleteVenue();
+    const { mutate: resubmitVenue } = useResubmitVenue();
+    const { mutate: toggleActive } = useToggleActive();
+    const { mutate: createBlockDates } = useCreateBlockDates();
 
-    const ownerVenues: Venue[]  = ownerVenueData?.venues ?? [];
-    const isLoading             = isOwner ? isOwnerVenueLoading : isClientVenueLoading;
-    const isRefetching          = isOwner ? isOwnerRefetching   : isClientRefetching;
-    const refetch               = isOwner ? refetchOwnerVenues  : refetchClientVenues;
+    const ownerVenues: Venue[] = ownerVenueData?.venues ?? [];
+    const isLoading = isOwner ? isOwnerVenueLoading : isClientVenueLoading;
+    const isRefetching = isOwner ? isOwnerRefetching : isClientRefetching;
+    const refetch = isOwner ? refetchOwnerVenues : refetchClientVenues;
 
     const rawVenueTypes: VenueType[] = venueTypeData?.venueTypes ?? [];
 
@@ -453,25 +506,41 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
     }, [isLoading]);
 
     // ── Handlers ──────────────────────────────────────────────────────────────
-    const handleDeleteVenue = useCallback((id: string) => {
-        if (!id) return;
-        setOperationLoading('Deleting venue…');
-        deleteVenue(id, {
-            onSuccess: () => { alert.success('Deleted', 'Venue deleted successfully'); refetch(); },
-            onError: (error: ApiError) => { alert.error('Error', error?.message || 'Something went wrong'); },
-            onSettled: () => setOperationLoading(null),
-        });
-    }, [deleteVenue, refetch, alert]);
+    const handleDeleteVenue = useCallback(
+        (id: string) => {
+            if (!id) return;
+            setOperationLoading('Deleting venue…');
+            deleteVenue(id, {
+                onSuccess: () => {
+                    alert.success('Deleted', 'Venue deleted successfully');
+                    refetch();
+                },
+                onError: (error: ApiError) => {
+                    alert.error('Error', error?.message || 'Something went wrong');
+                },
+                onSettled: () => setOperationLoading(null),
+            });
+        },
+        [deleteVenue, refetch, alert],
+    );
 
-    const handleResubmitVenue = useCallback((id: string) => {
-        if (!id) return;
-        setOperationLoading('Re-submitting venue…');
-        resubmitVenue(id, {
-            onSuccess: () => { alert.success('Re-submitted', 'Venue re-submitted successfully'); refetch(); },
-            onError: (error: ApiError) => { alert.error('Error', error?.message || 'Something went wrong'); },
-            onSettled: () => setOperationLoading(null),
-        });
-    }, [resubmitVenue, refetch, alert]);
+    const handleResubmitVenue = useCallback(
+        (id: string) => {
+            if (!id) return;
+            setOperationLoading('Re-submitting venue…');
+            resubmitVenue(id, {
+                onSuccess: () => {
+                    alert.success('Re-submitted', 'Venue re-submitted successfully');
+                    refetch();
+                },
+                onError: (error: ApiError) => {
+                    alert.error('Error', error?.message || 'Something went wrong');
+                },
+                onSettled: () => setOperationLoading(null),
+            });
+        },
+        [resubmitVenue, refetch, alert],
+    );
 
     const handleOpenAvailabilityModal = useCallback((venue: Venue) => {
         setSelectedVenue(venue);
@@ -482,22 +551,31 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
 
     const handleCloseAvailabilityModal = useCallback(() => {
         setAvailabilityModalVisible(false);
-        setTimeout(() => { setSelectedVenue(null); setBlockDate(null); setReason(''); }, 300);
+        setTimeout(() => {
+            setSelectedVenue(null);
+            setBlockDate(null);
+            setReason('');
+        }, 300);
     }, []);
 
     const handleToggleActive = useCallback(() => {
         if (!selectedVenue?._id) return;
-        if(!selectedVenue.isActive) return;
+        if (!selectedVenue.isActive) return;
         setOperationLoading(selectedVenue.isActive ? 'Disabling venue…' : 'Enabling venue…');
         toggleActive(
             { id: selectedVenue._id, payload: { currentIsActive: selectedVenue?.isActive } },
             {
                 onSuccess: () => {
-                    alert.success('Success', `Venue ${selectedVenue.isActive ? 'disabled' : 'enabled'} successfully`);
+                    alert.success(
+                        'Success',
+                        `Venue ${selectedVenue.isActive ? 'disabled' : 'enabled'} successfully`,
+                    );
                     refetch();
                     handleCloseAvailabilityModal();
                 },
-                onError: (error: ApiError) => { alert.error('Error', error.message || 'Something went wrong'); },
+                onError: (error: ApiError) => {
+                    alert.error('Error', error.message || 'Something went wrong');
+                },
                 onSettled: () => setOperationLoading(null),
             },
         );
@@ -509,12 +587,26 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
         createBlockDates(
             { id: selectedVenue._id, payload: { date: blockDate, reason: reason.trim() } },
             {
-                onSuccess: () => { alert.success('Success', 'Dates blocked successfully'); refetch(); handleCloseAvailabilityModal(); },
-                onError: (error: ApiError) => { alert.error('Error', error.message || 'Something went wrong'); },
+                onSuccess: () => {
+                    alert.success('Success', 'Dates blocked successfully');
+                    refetch();
+                    handleCloseAvailabilityModal();
+                },
+                onError: (error: ApiError) => {
+                    alert.error('Error', error.message || 'Something went wrong');
+                },
                 onSettled: () => setOperationLoading(null),
             },
         );
-    }, [selectedVenue, blockDate, reason, createBlockDates, refetch, alert, handleCloseAvailabilityModal]);
+    }, [
+        selectedVenue,
+        blockDate,
+        reason,
+        createBlockDates,
+        refetch,
+        alert,
+        handleCloseAvailabilityModal,
+    ]);
 
     const handleClearFilters = useCallback(() => {
         setSearch('');
@@ -551,30 +643,68 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
     }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
     // ── Computed ──────────────────────────────────────────────────────────────
-    const activeFilterCount = [appliedVenueType, appliedCity, appliedCapacity, appliedPriceActive ? 'price' : ''].filter(Boolean).length;
+    const activeFilterCount = [
+        appliedVenueType,
+        appliedCity,
+        appliedCapacity,
+        appliedPriceActive ? 'price' : '',
+    ].filter(Boolean).length;
 
     const ownerStats: OwnerStatConfig[] = [
-        { label: 'All Venues', value: ownerVenues.length, color: Colors.primary, bg: Colors.primaryLight, borderColor: Colors.primary },
-        { label: 'Approved',   value: ownerVenues.filter(v => v.status === 'approved').length, color: Colors.success, bg: Colors.successLight, borderColor: Colors.success },
-        { label: 'Pending',    value: ownerVenues.filter(v => v.status === 'pending').length,  color: Colors.warning, bg: Colors.warningLight, borderColor: Colors.warning },
-        { label: 'Rejected',   value: ownerVenues.filter(v => v.status === 'rejected').length, color: Colors.danger, bg: Colors.dangerLight, borderColor: Colors.danger },
+        {
+            label: 'All Venues',
+            value: ownerVenues.length,
+            color: Colors.primary,
+            bg: Colors.primaryLight,
+            borderColor: Colors.primary,
+        },
+        {
+            label: 'Approved',
+            value: ownerVenues.filter(v => v.status === 'approved').length,
+            color: Colors.success,
+            bg: Colors.successLight,
+            borderColor: Colors.success,
+        },
+        {
+            label: 'Pending',
+            value: ownerVenues.filter(v => v.status === 'pending').length,
+            color: Colors.warning,
+            bg: Colors.warningLight,
+            borderColor: Colors.warning,
+        },
+        {
+            label: 'Rejected',
+            value: ownerVenues.filter(v => v.status === 'rejected').length,
+            color: Colors.danger,
+            bg: Colors.dangerLight,
+            borderColor: Colors.danger,
+        },
     ];
 
     const ownerFilterKeys = ['all', 'approved', 'pending', 'rejected'];
-    const displayedOwnerVenues = ownerFilter !== 'all' ? ownerVenues.filter(v => v.status === ownerFilter) : ownerVenues;
+    const displayedOwnerVenues =
+        ownerFilter !== 'all' ? ownerVenues.filter(v => v.status === ownerFilter) : ownerVenues;
 
-    const venueTypeOptions  = rawVenueTypes.map(c => ({ label: c.name, value: c.name }));
+    const venueTypeOptions = rawVenueTypes.map(c => ({ label: c.name, value: c.name }));
     const cityOptions = [
-        { label: 'Mumbai', value: 'Mumbai' }, { label: 'Delhi', value: 'Delhi' },
-        { label: 'Bangalore', value: 'Bangalore' }, { label: 'Hyderabad', value: 'Hyderabad' },
-        { label: 'Chennai', value: 'Chennai' }, { label: 'Pune', value: 'Pune' },
-        { label: 'Kolkata', value: 'Kolkata' }, { label: 'Ahmedabad', value: 'Ahmedabad' },
-        { label: 'Bhopal', value: 'Bhopal' }, { label: 'Indore', value: 'Indore' },
+        { label: 'Mumbai', value: 'Mumbai' },
+        { label: 'Delhi', value: 'Delhi' },
+        { label: 'Bangalore', value: 'Bangalore' },
+        { label: 'Hyderabad', value: 'Hyderabad' },
+        { label: 'Chennai', value: 'Chennai' },
+        { label: 'Pune', value: 'Pune' },
+        { label: 'Kolkata', value: 'Kolkata' },
+        { label: 'Ahmedabad', value: 'Ahmedabad' },
+        { label: 'Bhopal', value: 'Bhopal' },
+        { label: 'Indore', value: 'Indore' },
     ];
     const capacityOptions = [
-        { label: '10–20', value: '10-20' }, { label: '20–30', value: '20-30' },
-        { label: '30–50', value: '30-50' }, { label: '50–100', value: '50-100' },
-        { label: '100–200', value: '100-200' }, { label: '200–300', value: '200-300' },
+        { label: '10–20', value: '10-20' },
+        { label: '20–30', value: '20-30' },
+        { label: '30–50', value: '30-50' },
+        { label: '50–100', value: '50-100' },
+        { label: '100–200', value: '100-200' },
+        { label: '200–300', value: '200-300' },
         { label: '300+', value: '300-400' },
     ];
 
@@ -582,181 +712,303 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
 
     // ── Client FlatList parts ─────────────────────────────────────────────────
 
-    const clientListHeader = useMemo(() => (
-        <View>
-            {/* Animated header */}
-            <Animated.View style={[styles.header, { opacity: headerFade, transform: [{ translateY: headerSlide }] }]}>
-                <View style={styles.headerAccentBar} />
-                <View style={styles.headerContent}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.headerEyebrow}>BROWSE VENUES</Text>
-                        <Text style={styles.headerTitle}>Browse All Venues</Text>
-                        <Text style={styles.headerSub}>
-                            Find the perfect venue for your next meeting, conference, or corporate event.
-                        </Text>
-                    </View>
-                </View>
-            </Animated.View>
-
-            {/* Search */}
-            <View style={styles.clientSearchWrap}>
-                <View style={styles.searchContainer}>
-                    <Ionicons name="search" size={18} color={Colors.charcoalLight} style={{ marginRight: 10 }} />
-                    <TextInput
-                        style={styles.searchInput}
-                        placeholder="Search venues, cities..."
-                        placeholderTextColor={Colors.charcoalLight}
-                        value={searchQuery}
-                        onChangeText={setSearch}
-                        returnKeyType="search"
-                    />
-                    {searchQuery.length > 0 && (
-                        <TouchableOpacity onPress={() => setSearch('')}>
-                            <Ionicons name="close-circle" size={16} color={Colors.charcoalLight} />
-                        </TouchableOpacity>
-                    )}
-                </View>
-            </View>
-
-            {/* Filter toggle */}
-            <View style={styles.filtersToggleWrap}>
-                <TouchableOpacity
-                    style={[styles.filtersToggleBtn, filtersExpanded && styles.filtersToggleBtnActive]}
-                    onPress={() => setFiltersExpanded(prev => !prev)}
-                    activeOpacity={0.8}
+    const clientListHeader = useMemo(
+        () => (
+            <>
+                {/* Animated header */}
+                <Animated.View
+                    style={[
+                        styles.header,
+                        { opacity: headerFade, transform: [{ translateY: headerSlide }] },
+                    ]}
                 >
-                    <Ionicons name="options-outline" size={16} color={filtersExpanded || activeFilterCount > 0 ? Colors.primary : Colors.charcoalMid} />
-                    <Text style={[styles.filtersToggleText, (filtersExpanded || activeFilterCount > 0) && styles.filtersToggleTextActive]}>
-                        Filters
-                    </Text>
-                    {activeFilterCount > 0 && (
-                        <View style={styles.filterCountBadge}>
-                            <Text style={styles.filterCountText}>{activeFilterCount}</Text>
-                        </View>
-                    )}
-                    <Ionicons name={filtersExpanded ? 'chevron-up' : 'chevron-down'} size={14} color={Colors.charcoalLight} />
-                </TouchableOpacity>
-                {activeFilterCount > 0 && (
-                    <TouchableOpacity style={styles.clearAllBtn} onPress={handleClearFilters} activeOpacity={0.8}>
-                        <Text style={styles.clearAllText}>Clear All</Text>
-                    </TouchableOpacity>
-                )}
-            </View>
-
-            {/* Expandable filter panel */}
-            {filtersExpanded && (
-                <View style={styles.filtersSection}>
-                    <View style={styles.filterRow}>
-                        <View style={styles.filterCol}>
-                            <Text style={styles.filterLabel}>Venue Type</Text>
-                            <TouchableOpacity
-                                style={[styles.filterInput, selectedVenueType && styles.filterInputActive]}
-                                onPress={() => setVenueTypeModalVisible(true)}
-                                activeOpacity={0.8}
-                            >
-                                <Text style={[styles.filterInputText, !selectedVenueType && styles.filterInputPlaceholder]} numberOfLines={1}>
-                                    {selectedVenueType || 'Select type'}
-                                </Text>
-                                <Ionicons name="chevron-down" size={14} color={Colors.charcoalLight} />
-                            </TouchableOpacity>
-                        </View>
-                        <View style={styles.filterCol}>
-                            <Text style={styles.filterLabel}>City</Text>
-                            <TouchableOpacity
-                                style={[styles.filterInput, selectedCity && styles.filterInputActive]}
-                                onPress={() => setCityModalVisible(true)}
-                                activeOpacity={0.8}
-                            >
-                                <Text style={[styles.filterInputText, !selectedCity && styles.filterInputPlaceholder]} numberOfLines={1}>
-                                    {selectedCity || 'Select city'}
-                                </Text>
-                                <Ionicons name="chevron-down" size={14} color={Colors.charcoalLight} />
-                            </TouchableOpacity>
+                    <View style={styles.headerAccentBar} />
+                    <View style={styles.headerContent}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.headerEyebrow}>BROWSE VENUES</Text>
+                            <Text style={styles.headerTitle}>Browse All Venues</Text>
+                            <Text style={styles.headerSub}>
+                                Find the perfect venue for your next meeting, conference, or
+                                corporate event.
+                            </Text>
                         </View>
                     </View>
+                </Animated.View>
 
-                    <View style={styles.filterRowSingle}>
-                        <Text style={styles.filterLabel}>Capacity</Text>
+                {/* Search */}
+                <View style={styles.clientSearchWrap}>
+                    <View style={styles.searchContainer}>
+                        <Ionicons
+                            name="search"
+                            size={18}
+                            color={Colors.charcoalLight}
+                            style={{ marginRight: 10 }}
+                        />
+                        <TextInput
+                            style={styles.searchInput}
+                            placeholder="Search venues, cities..."
+                            placeholderTextColor={Colors.charcoalLight}
+                            value={searchQuery}
+                            onChangeText={setSearch}
+                            returnKeyType="search"
+                        />
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity onPress={() => setSearch('')}>
+                                <Ionicons
+                                    name="close-circle"
+                                    size={16}
+                                    color={Colors.charcoalLight}
+                                />
+                            </TouchableOpacity>
+                        )}
+                    </View>
+                </View>
+
+                {/* Filter toggle */}
+                <View style={styles.filtersToggleWrap}>
+                    <TouchableOpacity
+                        style={[
+                            styles.filtersToggleBtn,
+                            filtersExpanded && styles.filtersToggleBtnActive,
+                        ]}
+                        onPress={() => setFiltersExpanded(prev => !prev)}
+                        activeOpacity={0.8}
+                    >
+                        <Ionicons
+                            name="options-outline"
+                            size={16}
+                            color={
+                                filtersExpanded || activeFilterCount > 0
+                                    ? Colors.primary
+                                    : Colors.charcoalMid
+                            }
+                        />
+                        <Text
+                            style={[
+                                styles.filtersToggleText,
+                                (filtersExpanded || activeFilterCount > 0) &&
+                                    styles.filtersToggleTextActive,
+                            ]}
+                        >
+                            Filters
+                        </Text>
+                        {activeFilterCount > 0 && (
+                            <View style={styles.filterCountBadge}>
+                                <Text style={styles.filterCountText}>{activeFilterCount}</Text>
+                            </View>
+                        )}
+                        <Ionicons
+                            name={filtersExpanded ? 'chevron-up' : 'chevron-down'}
+                            size={14}
+                            color={Colors.charcoalLight}
+                        />
+                    </TouchableOpacity>
+                    {activeFilterCount > 0 && (
                         <TouchableOpacity
-                            style={[styles.filterInput, selectedCapacity && styles.filterInputActive]}
-                            onPress={() => setCapacityModalVisible(true)}
+                            style={styles.clearAllBtn}
+                            onPress={handleClearFilters}
                             activeOpacity={0.8}
                         >
-                            <Text style={[styles.filterInputText, !selectedCapacity && styles.filterInputPlaceholder]} numberOfLines={1}>
-                                {selectedCapacity || 'Select capacity'}
-                            </Text>
-                            <Ionicons name="chevron-down" size={14} color={Colors.charcoalLight} />
+                            <Text style={styles.clearAllText}>Clear All</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
+
+                {/* Expandable filter panel */}
+                {filtersExpanded && (
+                    <View style={styles.filtersSection}>
+                        <View style={styles.filterRow}>
+                            <View style={styles.filterCol}>
+                                <Text style={styles.filterLabel}>Venue Type</Text>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.filterInput,
+                                        selectedVenueType && styles.filterInputActive,
+                                    ]}
+                                    onPress={() => setVenueTypeModalVisible(true)}
+                                    activeOpacity={0.8}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.filterInputText,
+                                            !selectedVenueType && styles.filterInputPlaceholder,
+                                        ]}
+                                        numberOfLines={1}
+                                    >
+                                        {selectedVenueType || 'Select type'}
+                                    </Text>
+                                    <Ionicons
+                                        name="chevron-down"
+                                        size={14}
+                                        color={Colors.charcoalLight}
+                                    />
+                                </TouchableOpacity>
+                            </View>
+                            <View style={styles.filterCol}>
+                                <Text style={styles.filterLabel}>City</Text>
+                                <TouchableOpacity
+                                    style={[
+                                        styles.filterInput,
+                                        selectedCity && styles.filterInputActive,
+                                    ]}
+                                    onPress={() => setCityModalVisible(true)}
+                                    activeOpacity={0.8}
+                                >
+                                    <Text
+                                        style={[
+                                            styles.filterInputText,
+                                            !selectedCity && styles.filterInputPlaceholder,
+                                        ]}
+                                        numberOfLines={1}
+                                    >
+                                        {selectedCity || 'Select city'}
+                                    </Text>
+                                    <Ionicons
+                                        name="chevron-down"
+                                        size={14}
+                                        color={Colors.charcoalLight}
+                                    />
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        <View style={styles.filterRowSingle}>
+                            <Text style={styles.filterLabel}>Capacity</Text>
+                            <TouchableOpacity
+                                style={[
+                                    styles.filterInput,
+                                    selectedCapacity && styles.filterInputActive,
+                                ]}
+                                onPress={() => setCapacityModalVisible(true)}
+                                activeOpacity={0.8}
+                            >
+                                <Text
+                                    style={[
+                                        styles.filterInputText,
+                                        !selectedCapacity && styles.filterInputPlaceholder,
+                                    ]}
+                                    numberOfLines={1}
+                                >
+                                    {selectedCapacity || 'Select capacity'}
+                                </Text>
+                                <Ionicons
+                                    name="chevron-down"
+                                    size={14}
+                                    color={Colors.charcoalLight}
+                                />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Price Range Slider */}
+                        <View style={styles.filterRowSingle}>
+                            <View style={styles.priceLabelRow}>
+                                <Text style={styles.filterLabel}>Price Range</Text>
+                                {priceActive && (
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            setPriceLow(PRICE_MIN);
+                                            setPriceHigh(PRICE_MAX);
+                                        }}
+                                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                    >
+                                        <Text style={styles.priceResetLink}>Reset</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                            <View
+                                style={[styles.sliderWrap, priceActive && styles.sliderWrapActive]}
+                            >
+                                <RangeSlider
+                                    min={PRICE_MIN}
+                                    max={PRICE_MAX}
+                                    step={PRICE_STEP}
+                                    low={priceLow}
+                                    high={priceHigh}
+                                    onValueChange={(lo, hi) => {
+                                        setPriceLow(lo);
+                                        setPriceHigh(hi);
+                                    }}
+                                />
+                            </View>
+                        </View>
+
+                        <TouchableOpacity
+                            style={styles.applyFiltersBtn}
+                            onPress={handleApplyFilters}
+                            activeOpacity={0.85}
+                        >
+                            <Ionicons name="checkmark-circle" size={16} color={Colors.charcoal} />
+                            <Text style={styles.applyFiltersBtnText}>Apply Filters</Text>
                         </TouchableOpacity>
                     </View>
+                )}
 
-                    {/* Price Range Slider */}
-                    <View style={styles.filterRowSingle}>
-                        <View style={styles.priceLabelRow}>
-                            <Text style={styles.filterLabel}>Price Range</Text>
-                            {priceActive && (
-                                <TouchableOpacity onPress={() => { setPriceLow(PRICE_MIN); setPriceHigh(PRICE_MAX); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                                    <Text style={styles.priceResetLink}>Reset</Text>
-                                </TouchableOpacity>
-                            )}
-                        </View>
-                        <View style={[styles.sliderWrap, priceActive && styles.sliderWrapActive]}>
-                            <RangeSlider
-                                min={PRICE_MIN} max={PRICE_MAX} step={PRICE_STEP}
-                                low={priceLow} high={priceHigh}
-                                onValueChange={(lo, hi) => { setPriceLow(lo); setPriceHigh(hi); }}
-                            />
-                        </View>
+                {/* Active filter strip */}
+                {(activeFilterCount > 0 || searchQuery) && (
+                    <View style={styles.activeFilterStrip}>
+                        <Ionicons name="funnel" size={13} color={Colors.primaryDark} />
+                        <Text style={styles.activeFilterText} numberOfLines={1}>
+                            {[
+                                searchQuery && `"${searchQuery}"`,
+                                appliedCity,
+                                appliedVenueType,
+                                appliedCapacity && `Cap: ${appliedCapacity}`,
+                                appliedPriceActive &&
+                                    `₹${appliedPriceLow / 1000}k – ₹${
+                                        appliedPriceHigh >= PRICE_MAX
+                                            ? '1L+'
+                                            : `${appliedPriceHigh / 1000}k`
+                                    }`,
+                            ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                        </Text>
+                        <TouchableOpacity onPress={handleClearFilters}>
+                            <Text style={styles.clearLink}>Clear</Text>
+                        </TouchableOpacity>
                     </View>
+                )}
 
-                    <TouchableOpacity style={styles.applyFiltersBtn} onPress={handleApplyFilters} activeOpacity={0.85}>
-                        <Ionicons name="checkmark-circle" size={16} color={Colors.charcoal} />
-                        <Text style={styles.applyFiltersBtnText}>Apply Filters</Text>
-                    </TouchableOpacity>
+                {/* Section header */}
+                <View style={styles.sectionHeader}>
+                    <View style={styles.sectionTitleRow}>
+                        <View style={styles.sectionAccent} />
+                        <Text style={styles.sectionTitle}>All Venues</Text>
+                    </View>
+                    <Text style={styles.venueCount}>{clientTotalCount} spaces</Text>
                 </View>
-            )}
 
-            {/* Active filter strip */}
-            {(activeFilterCount > 0 || searchQuery) && (
-                <View style={styles.activeFilterStrip}>
-                    <Ionicons name="funnel" size={13} color={Colors.primaryDark} />
-                    <Text style={styles.activeFilterText} numberOfLines={1}>
-                        {[
-                            searchQuery && `"${searchQuery}"`,
-                            appliedCity,
-                            appliedVenueType,
-                            appliedCapacity && `Cap: ${appliedCapacity}`,
-                            appliedPriceActive && `₹${appliedPriceLow / 1000}k – ₹${appliedPriceHigh >= PRICE_MAX ? '1L+' : `${appliedPriceHigh / 1000}k`}`,
-                        ].filter(Boolean).join(' · ')}
-                    </Text>
-                    <TouchableOpacity onPress={handleClearFilters}>
-                        <Text style={styles.clearLink}>Clear</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
-
-            {/* Section header */}
-            <View style={styles.sectionHeader}>
-                <View style={styles.sectionTitleRow}>
-                    <View style={styles.sectionAccent} />
-                    <Text style={styles.sectionTitle}>All Venues</Text>
-                </View>
-                <Text style={styles.venueCount}>{clientTotalCount} spaces</Text>
-            </View>
-
-            {/* Skeleton while first page loads */}
-            {isClientVenueLoading && (
-                <View style={styles.loaderWrap}>
-                    <ActivityIndicator size="large" color={Colors.primary} />
-                    <Text style={styles.loaderText}>Finding spaces...</Text>
-                </View>
-            )}
-        </View>
-    ), [
-        headerFade, headerSlide, searchQuery, filtersExpanded, activeFilterCount,
-        selectedVenueType, selectedCity, selectedCapacity, priceLow, priceHigh, priceActive,
-        appliedCity, appliedVenueType, appliedCapacity, appliedPriceActive, appliedPriceLow, appliedPriceHigh,
-        clientTotalCount, isClientVenueLoading,
-    ]);
+                {/* Skeleton while first page loads */}
+                {isClientVenueLoading && (
+                    <View style={styles.loaderWrap}>
+                        <ActivityIndicator size="large" color={Colors.primary} />
+                        <Text style={styles.loaderText}>Finding spaces...</Text>
+                    </View>
+                )}
+            </>
+        ),
+        [
+            headerFade,
+            headerSlide,
+            searchQuery,
+            filtersExpanded,
+            activeFilterCount,
+            selectedVenueType,
+            selectedCity,
+            selectedCapacity,
+            priceLow,
+            priceHigh,
+            priceActive,
+            appliedCity,
+            appliedVenueType,
+            appliedCapacity,
+            appliedPriceActive,
+            appliedPriceLow,
+            appliedPriceHigh,
+            clientTotalCount,
+            isClientVenueLoading,
+        ],
+    );
 
     const clientListFooter = isFetchingNextPage ? (
         <View style={styles.footerLoader}>
@@ -778,27 +1030,24 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
 
     const renderClientItem = useCallback(
         ({ item: v }: { item: Venue }) => (
-            <FeaturedCard
-                key={v._id}
-                v={v}
-                index={0}
-                role={user?.role}
-                onPress={() => rootNav.navigate('venueDetail', { venue: v })}
-            />
+            <Animated.View style={[styles.venuesGrid, { opacity: fadeAnim }]}>
+                <FeaturedCard
+                    key={v._id}
+                    v={v}
+                    index={0}
+                    role={user?.role}
+                    onPress={() => rootNav.navigate('venueDetail', { venue: v })}
+                />
+            </Animated.View>
         ),
         [user?.role, rootNav],
     );
 
-    const clientKeyExtractor = useCallback(
-        (v: Venue, i: number) => v._id ?? i.toString(),
-        [],
-    );
+    const clientKeyExtractor = useCallback((v: Venue, i: number) => v._id ?? i.toString(), []);
 
     // ── Render ────────────────────────────────────────────────────────────────
     return (
         <View style={styles.container}>
-
-            {/* ══════════════ OWNER VIEW (ScrollView — small list, no pagination needed) ══════════════ */}
             {isOwner && (
                 <>
                     <View style={styles.header}>
@@ -808,13 +1057,19 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
                                 <Text style={styles.greetingLabel}>MANAGE</Text>
                                 <Text style={styles.greeting}>My Venues</Text>
                             </View>
-                            <TouchableOpacity style={styles.addVenueButton} onPress={handleAddVenue} activeOpacity={0.85}>
+                            <TouchableOpacity
+                                style={styles.addVenueButton}
+                                onPress={handleAddVenue}
+                                activeOpacity={0.85}
+                            >
                                 <Ionicons name="add" size={18} color={Colors.charcoal} />
                                 <Text style={styles.addVenueLabel}>Add Venue</Text>
                             </TouchableOpacity>
                         </View>
                         <Text style={styles.headerSubtitle}>
-                            {`${ownerVenues.length} venue${ownerVenues.length !== 1 ? 's' : ''} listed`}
+                            {`${ownerVenues.length} venue${
+                                ownerVenues.length !== 1 ? 's' : ''
+                            } listed`}
                         </Text>
                     </View>
 
@@ -822,18 +1077,32 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
                         style={styles.content}
                         showsVerticalScrollIndicator={false}
                         refreshControl={
-                            <RefreshControl refreshing={isOwnerRefetching} onRefresh={refetchOwnerVenues} tintColor={Colors.primary} />
+                            <RefreshControl
+                                refreshing={isOwnerRefetching}
+                                onRefresh={refetchOwnerVenues}
+                                tintColor={Colors.primary}
+                            />
                         }
                     >
                         <View style={styles.ownerStatsRow}>
                             {ownerStats.map((stat, i) => (
-                                <OwnerStatCard key={stat.label} stat={stat} active={ownerFilter === ownerFilterKeys[i]} onPress={() => setOwnerFilter(ownerFilterKeys[i])} />
+                                <OwnerStatCard
+                                    key={stat.label}
+                                    stat={stat}
+                                    active={ownerFilter === ownerFilterKeys[i]}
+                                    onPress={() => setOwnerFilter(ownerFilterKeys[i])}
+                                />
                             ))}
                         </View>
 
                         <View style={styles.ownerSearchWrap}>
                             <View style={styles.searchContainer}>
-                                <Ionicons name="search" size={18} color={Colors.charcoalLight} style={{ marginRight: 10 }} />
+                                <Ionicons
+                                    name="search"
+                                    size={18}
+                                    color={Colors.charcoalLight}
+                                    style={{ marginRight: 10 }}
+                                />
                                 <TextInput
                                     style={styles.searchInput}
                                     placeholder="Search by name or city..."
@@ -844,7 +1113,11 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
                                 />
                                 {searchQuery.length > 0 && (
                                     <TouchableOpacity onPress={() => setSearch('')}>
-                                        <Ionicons name="close-circle" size={16} color={Colors.charcoalLight} />
+                                        <Ionicons
+                                            name="close-circle"
+                                            size={16}
+                                            color={Colors.charcoalLight}
+                                        />
                                     </TouchableOpacity>
                                 )}
                             </View>
@@ -855,10 +1128,18 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
                                 <View style={styles.sectionTitleRow}>
                                     <View style={styles.sectionAccent} />
                                     <Text style={styles.sectionTitle}>
-                                        {ownerFilter === 'all' ? 'All Venues' : ownerFilter === 'approved' ? 'Approved Venues' : ownerFilter === 'pending' ? 'Pending Review' : 'Rejected Venues'}
+                                        {ownerFilter === 'all'
+                                            ? 'All Venues'
+                                            : ownerFilter === 'approved'
+                                            ? 'Approved Venues'
+                                            : ownerFilter === 'pending'
+                                            ? 'Pending Review'
+                                            : 'Rejected Venues'}
                                     </Text>
                                 </View>
-                                <Text style={styles.venueCount}>{displayedOwnerVenues.length} spaces</Text>
+                                <Text style={styles.venueCount}>
+                                    {displayedOwnerVenues.length} spaces
+                                </Text>
                             </View>
 
                             {isOwnerVenueLoading ? (
@@ -869,16 +1150,32 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
                             ) : displayedOwnerVenues.length === 0 ? (
                                 <View style={styles.emptyState}>
                                     <View style={styles.emptyIconWrap}>
-                                        <Ionicons name="business-outline" size={32} color={Colors.primaryBorder} />
+                                        <Ionicons
+                                            name="business-outline"
+                                            size={32}
+                                            color={Colors.primaryBorder}
+                                        />
                                     </View>
                                     <Text style={styles.emptyTitle}>No venues found</Text>
                                     <Text style={styles.emptySubtitle}>
-                                        {ownerFilter === 'all' ? 'Start by adding your first venue.' : `No ${ownerFilter} venues yet.`}
+                                        {ownerFilter === 'all'
+                                            ? 'Start by adding your first venue.'
+                                            : `No ${ownerFilter} venues yet.`}
                                     </Text>
                                     {ownerFilter === 'all' && (
-                                        <TouchableOpacity style={styles.emptyAddBtn} onPress={handleAddVenue} activeOpacity={0.85}>
-                                            <Ionicons name="add" size={16} color={Colors.charcoal} />
-                                            <Text style={styles.emptyAddBtnText}>Add Your First Venue</Text>
+                                        <TouchableOpacity
+                                            style={styles.emptyAddBtn}
+                                            onPress={handleAddVenue}
+                                            activeOpacity={0.85}
+                                        >
+                                            <Ionicons
+                                                name="add"
+                                                size={16}
+                                                color={Colors.charcoal}
+                                            />
+                                            <Text style={styles.emptyAddBtnText}>
+                                                Add Your First Venue
+                                            </Text>
                                         </TouchableOpacity>
                                     )}
                                 </View>
@@ -886,8 +1183,13 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
                                 <Animated.View style={[styles.venuesGrid, { opacity: fadeAnim }]}>
                                     {displayedOwnerVenues.map((v, i) => (
                                         <FeaturedCard
-                                            key={v._id} v={v} index={i} role={user?.role}
-                                            onPress={() => rootNav.navigate('venueDetail', { venue: v })}
+                                            key={v._id}
+                                            v={v}
+                                            index={i}
+                                            role={user?.role}
+                                            onPress={() =>
+                                                rootNav.navigate('venueDetail', { venue: v })
+                                            }
                                             onDelete={() => v._id && handleDeleteVenue(v._id)}
                                             onResubmit={() => v._id && handleResubmitVenue(v._id)}
                                             onDisable={() => handleOpenAvailabilityModal(v)}
@@ -927,9 +1229,32 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
             )}
 
             {/* ── Shared modals ── */}
-            <DropdownModal visible={venueTypeModalVisible} title="Select Venue Type" options={venueTypeOptions} selectedValue={selectedVenueType} onSelect={setSelectedVenueType} onClose={() => setVenueTypeModalVisible(false)} searchable />
-            <DropdownModal visible={cityModalVisible} title="Select City" options={cityOptions} selectedValue={selectedCity} onSelect={setSelectedCity} onClose={() => setCityModalVisible(false)} searchable />
-            <DropdownModal visible={capacityModalVisible} title="Select Capacity" options={capacityOptions} selectedValue={selectedCapacity} onSelect={setSelectedCapacity} onClose={() => setCapacityModalVisible(false)} />
+            <DropdownModal
+                visible={venueTypeModalVisible}
+                title="Select Venue Type"
+                options={venueTypeOptions}
+                selectedValue={selectedVenueType}
+                onSelect={setSelectedVenueType}
+                onClose={() => setVenueTypeModalVisible(false)}
+                searchable
+            />
+            <DropdownModal
+                visible={cityModalVisible}
+                title="Select City"
+                options={cityOptions}
+                selectedValue={selectedCity}
+                onSelect={setSelectedCity}
+                onClose={() => setCityModalVisible(false)}
+                searchable
+            />
+            <DropdownModal
+                visible={capacityModalVisible}
+                title="Select Capacity"
+                options={capacityOptions}
+                selectedValue={selectedCapacity}
+                onSelect={setSelectedCapacity}
+                onClose={() => setCapacityModalVisible(false)}
+            />
 
             <ManageAvailabilityModal
                 visible={availabilityModalVisible}
@@ -939,10 +1264,17 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
                 sections={[
                     {
                         icon: selectedVenue?.isActive ? 'ban-outline' : 'checkmark-circle-outline',
-                        title: selectedVenue?.isActive ? 'Disable Until Re-enabled' : 'Enable Venue',
-                        subtitle: selectedVenue?.isActive ? 'Venue will be hidden from public listing until you manually enable it.' : 'Venue will become visible and bookable again.',
+                        title: selectedVenue?.isActive
+                            ? 'Disable Until Re-enabled'
+                            : 'Enable Venue',
+                        subtitle: selectedVenue?.isActive
+                            ? 'Venue will be hidden from public listing until you manually enable it.'
+                            : 'Venue will become visible and bookable again.',
                         variant: selectedVenue?.isActive ? 'danger' : 'primary',
-                        action: { ctaLabel: selectedVenue?.isActive ? 'Disable' : 'Enable', onPress: handleToggleActive },
+                        action: {
+                            ctaLabel: selectedVenue?.isActive ? 'Disable' : 'Enable',
+                            onPress: handleToggleActive,
+                        },
                     },
                     {
                         icon: 'calendar-outline',
@@ -951,8 +1283,19 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
                         variant: 'info',
                         form: {
                             fields: [
-                                { type: 'date', placeholder: 'Click to pick date...', value: blockDate, onChange: setBlockDate, minimumDate: new Date() },
-                                { type: 'text', placeholder: 'Reason (optional) — e.g. External booking', value: reason, onChangeText: setReason },
+                                {
+                                    type: 'date',
+                                    placeholder: 'Click to pick date...',
+                                    value: blockDate,
+                                    onChange: setBlockDate,
+                                    minimumDate: new Date(),
+                                },
+                                {
+                                    type: 'text',
+                                    placeholder: 'Reason (optional) — e.g. External booking',
+                                    value: reason,
+                                    onChangeText: setReason,
+                                },
                             ],
                             submitLabel: 'Block Selected Dates',
                             submitDisabled: !blockDate,
@@ -973,7 +1316,6 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
         </View>
     );
 }
-
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
@@ -1391,6 +1733,6 @@ const styles = StyleSheet.create({
         color: Colors.charcoalMid,
         letterSpacing: 0.2,
     },
-     clientScroll: { paddingBottom: 120 },
+    clientScroll: { paddingBottom: 120 },
     footerLoader: { paddingVertical: 20, alignItems: 'center' },
 });

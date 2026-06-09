@@ -298,7 +298,7 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                             }
                             try {
                                 const options = {
-                                    key: orderData.key ?? Config.RAZORPAY_KEY,
+                                    key: Config.RAZORPAY_KEY_TEST,
                                     amount: orderData.order.amount,
                                     currency: orderData.order.currency ?? 'INR',
                                     name: 'RentalMeet',
@@ -483,9 +483,7 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
         return sum + (pkg?.price ?? (pkg as any)?.rate ?? 0) * qty;
     }, 0);
 
-    // FIX 7: step numbers were not dynamically computed — they hard-coded
-    // knowledge of whether packages existed inline. Extract to a variable so
-    // all step badges stay in sync automatically.
+  
     const hasPackages = packages.length > 0;
     const steps = {
         dateTime: 1,
