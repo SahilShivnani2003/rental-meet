@@ -27,6 +27,10 @@ import RazorpayCheckout from 'react-native-razorpay';
 import { useAuthStore } from '@/store/useAuthStore';
 import Config from 'react-native-config';
 import TimePicker from '../components/TimePicker';
+import ServiceQuotationModal, {
+    ServiceBookingLite,
+    ServicePricing,
+} from '@/features/quotation/screens/ServiceQuotationModal';
 
 const { width: W } = Dimensions.get('window');
 
@@ -143,12 +147,9 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
         ]).start();
     }, []);
 
-    // FIX 1: calAnim is declared but was never used for actual rendering.
-    // The calendar was toggled with a plain conditional, making calAnim redundant.
-    // Removed calAnim entirely and rely purely on calendarOpen state for the
-    // conditional render — this is the correct pattern for React Native
-    // (Animated.View with height interpolation has layout issues without
-    // onLayout measurements). The toggle logic is kept straightforward.
+    const [quotationOpen, setQuotationOpen] = useState(false);
+    const [quotationBooking, setQuotationBooking] = useState<ServiceBookingLite | null>(null);
+
     const toggleCalendar = () => {
         setCalendarOpen(prev => !prev);
     };
@@ -261,6 +262,168 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
         couponCode,
     ]);
 
+    const toISODate = (d: Date) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+    };
+
+    const quotationPricing: ServicePricing = useMemo(
+        () => ({
+            subtotal: breakdown.base,
+            serviceCgst: breakdown.serviceCGST,
+            serviceSgst: breakdown.serviceSGST,
+            cgstPct: breakdown.cgstPct,
+            sgstPct: breakdown.sgstPct,
+            platformFee: breakdown.platformFee,
+            platformFeePct: breakdown.platFeePct,
+            platformFeeGst: breakdown.platformFeeGST,
+            platformCgstPct: breakdown.platCgstPct,
+            platformSgstPct: breakdown.platSgstPct,
+            total: breakdown.total,
+        }),
+        [breakdown],
+    );
+
+    const quotationPackages = useMemo(
+        () =>
+            packages.map(pkg => ({
+                name: pkg.name ?? (pkg as any).serviceName ?? '',
+                price: pkg.price ?? (pkg as any).rate ?? 0,
+                unit: pkg.unit ?? '',
+            })),
+        [packages],
+    );
+
+    const quotationSvc = useMemo(
+        () => ({
+            title: service.title,
+            category: service.category,
+            city: service.city,
+            state: service.state,
+            companyName: service.companyName,
+            vendor: service.vendor as any,
+        }),
+        [service],
+    );
+
+    const quotationForm = useMemo(
+        () => ({
+            name: user?.name,
+            company: user?.companyName,
+            email: user?.email,
+            phone: user?.phone,
+            eventName: eventType,
+            notes: specialReq || undefined,
+        }),
+        [user, eventType, specialReq],
+    );
+
+    const handleGetQuotation = () => {
+        const e = validate();
+        setErrors(e);
+        if (Object.keys(e).length > 0) return;
+        if (!service._id) {
+            alert.error('Missing Data', 'Service ID is missing.');
+            return;
+        }
+        setQuotationBooking({
+            isTemporary: true,
+            quotationNumber: `Q-${Date.now().toString().slice(-8)}`,
+        });
+        setQuotationOpen(true);
+    };
+
+    // Standalone — duplicates a little of handleBook's payload shape on purpose,
+    // so handleBook itself stays untouched.
+    const handleSaveQuotationAsBooking = (): Promise<ServiceBookingLite | null> =>
+        new Promise(resolve => {
+            const items: ServiceBooking['items'] = [];
+            if (Object.keys(serviceQuantities).length > 0) {
+                Object.entries(serviceQuantities).forEach(([idx, qty]) => {
+                    const pkg = packages[parseInt(idx)];
+                    items.push({
+                        name:
+                            pkg?.name ??
+                            (pkg as any)?.serviceName ??
+                            `Service ${parseInt(idx) + 1}`,
+                        price: pkg?.price ?? (pkg as any)?.rate ?? 0,
+                        unit: pkg?.unit,
+                        quantity: qty,
+                        amount: (pkg?.price ?? (pkg as any)?.rate ?? 0) * qty,
+                    });
+                });
+            } else {
+                items.push({
+                    name: service.title,
+                    price: service.startingPrice ?? 0,
+                    quantity: 1,
+                    amount: service.startingPrice ?? 0,
+                });
+            }
+
+            const noteParts: string[] = [];
+            if (guestCount) noteParts.push(`Guests: ${guestCount}`);
+            if (startTime) noteParts.push(`Start Time: ${startTime}`);
+            if (specialReq) noteParts.push(specialReq);
+
+            const payload: ServiceBooking = {
+                service: service._id,
+                serviceId: service._id,
+                vendor: service.vendor,
+                eventDate: selectedDate!,
+                customerInfo: {
+                    name: user?.name,
+                    email: user?.email,
+                    phone: user?.phone,
+                    company: user?.companyName,
+                    eventName: eventType,
+                    notes: noteParts.join(' | ') || undefined,
+                },
+                serviceSnapshot: {
+                    title: service.title,
+                    category: service.category,
+                    companyName: service.companyName,
+                    city: service.city,
+                    state: service.state,
+                },
+                items,
+                pricing: {
+                    subtotal: breakdown.base,
+                    serviceCGST: breakdown.serviceCGST,
+                    serviceSGST: breakdown.serviceSGST,
+                    cgstPct: breakdown.cgstPct,
+                    sgstPct: breakdown.sgstPct,
+                    platformFee: breakdown.platformFee,
+                    platformFeePct: breakdown.platFeePct,
+                    platformFeeGST: breakdown.platformFeeGST,
+                    total: breakdown.total,
+                },
+                amount: breakdown.total,
+                ...(couponCode && {
+                    coupon: { code: couponCode, discountAmount: breakdown.discountAmount },
+                }),
+            };
+
+            createBooking(payload, {
+                onSuccess: (response: any) => {
+                    if (response?.success && response.booking) {
+                        resolve({
+                            _id: response.booking._id,
+                            bookingNumber: response.booking.bookingNumber,
+                            quotationNumber:
+                                response.booking.quotationNumber ?? response.booking.bookingNumber,
+                            isTemporary: false,
+                        });
+                    } else {
+                        resolve(null);
+                    }
+                },
+                onError: () => resolve(null),
+            });
+        });
+
     // ── Validation ────────────────────────────────────────────────────────────
     const validate = () => {
         const e: Record<string, string> = {};
@@ -287,7 +450,7 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
     const handlePayment = useCallback(
         (bookingId: string): Promise<void> =>
             new Promise((resolve, reject) => {
-                debugger
+                debugger;
                 createPaymentOrder(
                     { bookingId, amount: breakdown.total, bookingType: 'service' },
                     {
@@ -374,7 +537,7 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
 
     // ── Submit ────────────────────────────────────────────────────────────────
     const handleBook = () => {
-        debugger
+        debugger;
         const e = validate();
         setErrors(e);
         if (Object.keys(e).length > 0) return;
@@ -410,7 +573,6 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
         if (startTime) noteParts.push(`Start Time: ${startTime}`);
         if (specialReq) noteParts.push(specialReq);
 
-        
         const payload: ServiceBooking = {
             service: service._id,
             serviceId: service._id,
@@ -483,7 +645,6 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
         return sum + (pkg?.price ?? (pkg as any)?.rate ?? 0) * qty;
     }, 0);
 
-  
     const hasPackages = packages.length > 0;
     const steps = {
         dateTime: 1,
@@ -1248,7 +1409,6 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                     <LoadingDots />
                                 ) : (
                                     <>
-                                       
                                         <Ionicons
                                             name={
                                                 selectedDate
@@ -1273,12 +1433,37 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                                     Share Service
                                 </Text>
                             </TouchableOpacity>
+                            <TouchableOpacity
+                                style={s.shareBtn}
+                                onPress={handleGetQuotation}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="document-text-outline" size={18} color={catColor} />
+                                <Text style={[s.shareBtnText, { color: catColor }]}>
+                                    Get Quotation
+                                </Text>
+                            </TouchableOpacity>
                         </View>
 
                         <View style={{ height: 40 }} />
                     </Animated.View>
                 </ScrollView>
             </View>
+
+            {quotationBooking && (
+                <ServiceQuotationModal
+                    visible={quotationOpen}
+                    booking={quotationBooking}
+                    svc={quotationSvc}
+                    form={quotationForm}
+                    selectedDate={selectedDate ? toISODate(selectedDate) : ''}
+                    quantities={serviceQuantities}
+                    packages={quotationPackages}
+                    pricing={quotationPricing}
+                    onSave={handleSaveQuotationAsBooking}
+                    onClose={() => setQuotationOpen(false)}
+                />
+            )}
         </KeyboardAvoidingView>
     );
 }
