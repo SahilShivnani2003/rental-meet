@@ -28,6 +28,7 @@ import { updateVendorService } from '@/features/vendor/service/vendorService';
 import UpdateServiceScreen from '@/features/vendor/screens/UpdateServiceScreen';
 import ServiceBookingDetailScreen from '@/features/booking/screens/ServiceBookingDetailScreen';
 import ForgotPasswordScreen from '@/features/auth/screens/ForgotPasswordScreen';
+import ReferralScreen from '@/features/profile/screen/RefferralScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -70,6 +71,7 @@ export default function RootNavigator() {
                         <Stack.Screen name='getServiceQuotation' component={GetQuotationScreen}/>
                         <Stack.Screen name='updateVendorService' component={UpdateServiceScreen}/>
                         <Stack.Screen name='serviceBookingDetail' component={ServiceBookingDetailScreen}/>
+                        <Stack.Screen name="referral" component={ReferralScreen} />
                     </Stack.Navigator>
                 </NavigationContainer>
             </AlertProvider>

@@ -9,6 +9,8 @@ import {
     Animated,
     Dimensions,
     RefreshControl,
+    ActivityIndicator,
+    Image,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
@@ -29,6 +31,10 @@ import { User } from '../types/User';
 import ChangePasswordModal from '../models/ChangePasswordModal';
 import EditProfileModal from '../models/EditProfileModal';
 import KycUploadModal from '../models/KycUploadModal';
+import { useUploadImage } from '../hooks/useUploadImage';
+import { launchCamera, launchImageLibrary, Asset } from 'react-native-image-picker';
+import { useDeactivateAccount } from '../hooks/useDeactivateAccount';
+import { useDeleteAccount } from '../hooks/useDeletAccount';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -167,9 +173,11 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
         refetch: refetchProfile,
     } = useGetMyProfile();
     const user: Partial<User> = userData?.user ?? {};
+    const referralCode = user?.referralCode ?? '';
     const typeCfg = USER_TYPE_CONFIG[user.role ?? ''] ?? DEFAULT_TYPE_CFG;
     const initials = user.name?.trim().slice(0, 2).toUpperCase() ?? '??';
     const { isAuthenticated } = useAuthStore();
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
     // ── Bookings data ─────────────────────────────────────────────────────────
     const {
         data: bookingData,
@@ -186,7 +194,7 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
         completed: number;
         confirmed: number;
         pending: number;
-    }= bookingData?.pages[0]?.stats ?? {};
+    } = bookingData?.pages[0]?.stats ?? {};
 
     const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -199,7 +207,11 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
     const { mutate: updateUser } = useUpdateProfile();
     const { mutate: changePassword } = useChangePassword();
     const { mutate: uploadKycDoc } = useUploadKycDoc();
+    const { mutate: uploadProfilePhoto } = useUploadImage();
+    const { mutate: deactivateAccount } = useDeactivateAccount();
+    const { mutate: deleteAccount } = useDeleteAccount();
 
+    const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
     const alert = useAlert();
     const { logOut } = useAuthStore();
 
@@ -224,9 +236,105 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
         ]).start();
     }, []);
 
+    const handleUploadPhoto = (asset: Asset) => {
+        if (!asset.uri) return;
+
+        const formData = new FormData();
+        formData.append('file', {
+            uri: asset.uri,
+            type: asset.type ?? 'image/jpeg',
+            name: asset.fileName ?? `profile_${Date.now()}.jpg`,
+        } as any);
+
+        formData.append('folder', 'profiles');
+        setUploadingPhoto(true);
+
+        uploadProfilePhoto(formData, {
+            onSuccess: (res: any) => {
+                const url = res?.url ?? res?.data?.url ?? res?.image?.url;
+                if (!url) {
+                    alert.error?.('Upload failed', 'Could not get the uploaded image URL.');
+                    return;
+                }
+                setProfilePicUrl(url);
+
+                // Persist it on the profile
+                updateUser({ profilePicture: url } as any, {
+                    onSuccess: () => {
+                        refetchProfile();
+                    },
+                    onError: () => {
+                        alert.error?.('Update failed', 'Photo uploaded but profile update failed.');
+                    },
+                });
+            },
+            onError: () => {
+                alert.error?.('Upload failed', 'Could not upload your photo. Please try again.');
+            },
+            onSettled: () => {
+                setUploadingPhoto(false);
+            },
+        });
+    };
+
+    const pickFromCamera = async () => {
+        const result = await launchCamera({
+            mediaType: 'photo',
+            quality: 0.8,
+            maxWidth: 1080,
+            maxHeight: 1080,
+            saveToPhotos: true,
+        });
+        if (result.didCancel || !result.assets?.length) return;
+        if (result.errorCode) {
+            alert.error?.('Camera error', result.errorMessage ?? 'Could not open camera.');
+            return;
+        }
+        handleUploadPhoto(result.assets[0]);
+    };
+
+    const pickFromGallery = async () => {
+        const result = await launchImageLibrary({
+            mediaType: 'photo',
+            quality: 0.8,
+            maxWidth: 1080,
+            maxHeight: 1080,
+            selectionLimit: 1,
+        });
+        if (result.didCancel || !result.assets?.length) return;
+        if (result.errorCode) {
+            alert.error?.('Gallery error', result.errorMessage ?? 'Could not open gallery.');
+            return;
+        }
+        handleUploadPhoto(result.assets[0]);
+    };
+
+    const handlePhotoOptions = () => {
+        alert.show({
+            type: 'confirm',
+            title: 'Update Profile Photo',
+            message: 'Choose a source for your new profile photo.',
+            buttons: [
+                {
+                    label: 'Take Photo',
+                    onPress: () => {
+                        alert.dismiss();
+                        pickFromCamera();
+                    },
+                },
+                {
+                    label: 'Gallery',
+                    onPress: () => {
+                        alert.dismiss();
+                        pickFromGallery();
+                    },
+                },
+                { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },
+            ],
+        });
+    };
     // ── Stats derived from API bookings ───────────────────────────────────────
     const stats: StatItem[] = useMemo(() => {
-
         return [
             {
                 id: 'total',
@@ -262,6 +370,94 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
             },
         ];
     }, [bookingsStats]);
+
+    const handleDeactivateAccount = () => {
+        alert.show({
+            type: 'confirm',
+            title: 'Deactivate Account',
+            message:
+                'Your account will be temporarily disabled. You can reactivate it later by logging in again. Continue?',
+            buttons: [
+                { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },
+                {
+                    label: 'Deactivate',
+                    onPress: () => {
+                        deactivateAccount(undefined as any, {
+                            onSuccess: async () => {
+                                alert.dismiss();
+                                navigation
+                                    .getParent<NativeStackNavigationProp<RootStackParamList>>()
+                                    .reset({ index: 0, routes: [{ name: 'login' }] });
+                                await logOut();
+                            },
+                            onError: () => {
+                                alert.dismiss();
+                                alert.error?.(
+                                    'Deactivation failed',
+                                    'Could not deactivate your account. Please try again.',
+                                );
+                            },
+                        });
+                    },
+                },
+            ],
+        });
+    };
+
+    const handleDeleteAccount = () => {
+        alert.show({
+            type: 'confirm',
+            title: 'Delete Account',
+            message:
+                'This will permanently delete your account and all associated data. This action cannot be undone. Are you absolutely sure?',
+            buttons: [
+                { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },
+                {
+                    label: 'Delete Permanently',
+                    style: 'danger',
+                    onPress: () => {
+                        // Second confirmation since this is irreversible
+                        alert.show({
+                            type: 'confirm',
+                            title: 'Final Confirmation',
+                            message:
+                                'Last chance — type nothing, just confirm: delete your account forever?',
+                            buttons: [
+                                { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },
+                                {
+                                    label: 'Yes, Delete',
+                                    style: 'danger',
+                                    onPress: () => {
+                                        deleteAccount(undefined as any, {
+                                            onSuccess: async () => {
+                                                alert.dismiss();
+                                                navigation
+                                                    .getParent<
+                                                        NativeStackNavigationProp<RootStackParamList>
+                                                    >()
+                                                    .reset({
+                                                        index: 0,
+                                                        routes: [{ name: 'login' }],
+                                                    });
+                                                await logOut();
+                                            },
+                                            onError: () => {
+                                                alert.dismiss();
+                                                alert.error?.(
+                                                    'Deletion failed',
+                                                    'Could not delete your account. Please try again.',
+                                                );
+                                            },
+                                        });
+                                    },
+                                },
+                            ],
+                        });
+                    },
+                },
+            ],
+        });
+    };
 
     // ── Logout ────────────────────────────────────────────────────────────────
     const handleLogout = () => {
@@ -304,6 +500,18 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
             title: 'Browse Venues',
             subtitle: 'Find your perfect space',
             onPress: () => navigation.navigate('venues'),
+        },
+        {
+            id: 'referral',
+            icon: 'gift-outline',
+            iconColor: Colors.primary,
+            iconBg: Colors.primaryLight,
+            title: 'Refer & Earn',
+            subtitle: `${user.referralCount ?? user.referrals?.length ?? 0} referrals`,
+            onPress: () =>
+                navigation
+                    .getParent<NativeStackNavigationProp<RootStackParamList>>()
+                    .navigate('referral'),
         },
     ];
 
@@ -407,26 +615,31 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                         <View style={styles.avatarWrapper}>
                             <View style={styles.avatarRing}>
                                 <View style={styles.avatar}>
-                                    <Text style={styles.avatarInitials}>{initials}</Text>
+                                    {profilePicUrl || user.profilePicture ? (
+                                        <Image
+                                            source={{ uri: profilePicUrl ?? user.profilePicture }}
+                                            style={styles.avatarImage}
+                                        />
+                                    ) : (
+                                        <Text style={styles.avatarInitials}>{initials}</Text>
+                                    )}
                                 </View>
                             </View>
                             <TouchableOpacity
                                 style={styles.cameraBtn}
-                                onPress={() => setEditProfileVisible(true)}
+                                onPress={handlePhotoOptions}
+                                disabled={uploadingPhoto}
                             >
-                                <Ionicons name="camera" size={14} color={Colors.white} />
+                                {uploadingPhoto ? (
+                                    <ActivityIndicator size="small" color={Colors.white} />
+                                ) : (
+                                    <Ionicons name="camera" size={14} color={Colors.white} />
+                                )}
                             </TouchableOpacity>
                         </View>
 
                         <Text style={styles.userName}>{user.name ?? '—'}</Text>
                         <Text style={styles.userEmail}>{user.email ?? '—'}</Text>
-
-                        <View style={styles.memberBadge}>
-                            <View style={styles.memberDot} />
-                            <Text style={styles.memberText}>
-                                {(user.role ?? 'member').toUpperCase()}
-                            </Text>
-                        </View>
 
                         <View style={[styles.typeBadge, { backgroundColor: typeCfg.bg }]}>
                             <Ionicons name={typeCfg.icon as any} size={13} color={typeCfg.color} />
@@ -434,6 +647,18 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                                 {typeCfg.label}
                             </Text>
                         </View>
+
+                        {!!referralCode && (
+                            <View style={styles.referralRow}>
+                                <Ionicons
+                                    name="gift-outline"
+                                    size={13}
+                                    color={Colors.primaryDark}
+                                />
+                                <Text style={styles.referralLabel}>Referral Code</Text>
+                                <Text style={styles.referralCode}>{referralCode}</Text>
+                            </View>
+                        )}
 
                         {user.kyc?.verifiedAt && (
                             <View style={styles.kycBadge}>
@@ -458,6 +683,36 @@ export default function ClientProfile({ navigation }: clientProfileProps) {
                 <MenuSection title="QUICK ACTIONS" items={quickActions} />
                 <MenuSection title="ACCOUNT" items={accountItems} />
                 <MenuSection title="PREFERENCES" items={preferenceItems} />
+
+                {/* Danger zone */}
+                <View style={styles.menuSection}>
+                    <Text style={styles.menuSectionLabel}>ACCOUNT ACTIONS</Text>
+                    <View style={styles.menuSectionCard}>
+                        <MenuItem
+                            item={{
+                                id: 'deactivate',
+                                icon: 'pause-circle-outline',
+                                iconColor: Colors.warning,
+                                iconBg: Colors.warningLight,
+                                title: 'Deactivate Account',
+                                subtitle: 'Temporarily disable your account',
+                                onPress: handleDeactivateAccount,
+                            }}
+                        />
+                        <View style={styles.menuDivider} />
+                        <MenuItem
+                            item={{
+                                id: 'delete',
+                                icon: 'trash-outline',
+                                iconColor: Colors.danger,
+                                iconBg: Colors.dangerLight,
+                                title: 'Delete Account',
+                                subtitle: 'Permanently remove your account',
+                                onPress: handleDeleteAccount,
+                            }}
+                        />
+                    </View>
+                </View>
 
                 {/* Logout */}
                 <TouchableOpacity
@@ -571,6 +826,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
+    avatarImage: { width: '100%', height: '100%', borderRadius: 44 },
     avatarInitials: {
         fontSize: 28,
         fontWeight: Typography.extraBold,
@@ -636,6 +892,29 @@ const styles = StyleSheet.create({
         fontSize: Typography.base,
         fontWeight: Typography.bold,
         letterSpacing: Typography.normal,
+    },
+    referralRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: Colors.primaryLight,
+        borderWidth: 1,
+        borderColor: Colors.primaryBorder,
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: Radii.full,
+        marginBottom: Spacing.lg,
+    },
+    referralLabel: {
+        fontSize: Typography.sm,
+        color: Colors.charcoalLight,
+        fontWeight: Typography.medium,
+    },
+    referralCode: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.extraBold,
+        color: Colors.primaryDark,
+        letterSpacing: 1,
     },
     kycBadge: {
         flexDirection: 'row',

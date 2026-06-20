@@ -64,5 +64,6 @@ export type RootStackParamList = {
     };
     serviceBookingDetail: {
         bookingData: any
-    }
+    },
+    referral:undefined;
 };
