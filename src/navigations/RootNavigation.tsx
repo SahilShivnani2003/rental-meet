@@ -29,6 +29,8 @@ import UpdateServiceScreen from '@/features/vendor/screens/UpdateServiceScreen';
 import ServiceBookingDetailScreen from '@/features/booking/screens/ServiceBookingDetailScreen';
 import ForgotPasswordScreen from '@/features/auth/screens/ForgotPasswordScreen';
 import ReferralScreen from '@/features/profile/screen/RefferralScreen';
+import SplashScreen2 from '@/screens/SplashScreen2';
+import { Colors } from '@/theme/theme';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -39,9 +41,9 @@ export default function RootNavigator() {
                 <NavigationContainer>
                     <Stack.Navigator
                         initialRouteName="splash"
-                        screenOptions={{ headerShown: false, animation: 'fade' }}
+                        screenOptions={{ headerShown: false, animation: 'fade' , statusBarStyle: 'light', statusBarBackgroundColor:Colors.primary}}
                     >
-                        <Stack.Screen name="splash" component={SplashScreen} />
+                        <Stack.Screen name="splash" component={SplashScreen2} />
                         <Stack.Screen name="login" component={LoginScreen} />
                         <Stack.Screen name="registerType" component={RegisterTypeScreen} />
                         <Stack.Screen name="register" component={RegisterScreen} />

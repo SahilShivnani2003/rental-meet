@@ -13,6 +13,7 @@ import {
     ScrollView,
     Alert,
     Modal,
+    Image,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -32,6 +33,15 @@ import {
     useVerifyEmailOtp,
     useVerifyPhoneOtp,
 } from '../hooks/useVerfication';
+import { useUploadKycDoc } from '@/features/profile/hooks/useUploadkycDoc';
+import { useUploadImage } from '@/features/profile/hooks/useUploadImage';
+import {
+    Asset,
+    launchCamera,
+    launchImageLibrary,
+    ImagePickerResponse,
+} from 'react-native-image-picker';
+import { useUpdateProfile } from '@/features/profile/hooks/useUpdateProfile';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -52,12 +62,23 @@ const VENDOR_CATEGORIES = [
 // ── OTP step type ─────────────────────────────────────────────────────────────
 type OtpStep = 'none' | 'email' | 'phone';
 
+// ── KYC types (step 2, customer only) ─────────────────────────────────────────
+type IdProofType = 'Aadhaar' | 'PAN' | 'Passport' | 'Voter ID' | 'Driving License';
+const ID_PROOF_TYPES: IdProofType[] = ['Aadhaar', 'PAN', 'Passport', 'Voter ID', 'Driving License'];
+type KycSlot = 'front' | 'back' | 'selfie' | 'addressProof';
+interface PickedFile {
+    uri: string;
+    name: string;
+    type: string;
+}
+
 type registerProps = NativeStackScreenProps<RootStackParamList, 'register'>;
 
 export default function RegisterScreen({ navigation, route }: registerProps) {
     // FIX: ROLE_META key must match the role value. Fallback to 'customer' not 'client'.
     const role = route.params?.role ?? 'customer';
     const meta = ROLE_META[role] ?? ROLE_META['client'];
+    const isCustomer = role === 'customer';
     const alert = useAlert();
     const { setUser } = useAuthStore();
     const { mutate: register } = useRegister();
@@ -65,6 +86,9 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
     const { mutate: sendPhoneOtp, isPending: sendingPhoneOtp } = useSendPhoneOtp();
     const { mutate: verifyEmailOtp, isPending: verifyingEmailOtp } = useVerifyEmailOtp();
     const { mutate: verifyPhoneOtp, isPending: verifyingPhoneOtp } = useVerifyPhoneOtp();
+
+    // ── Step control — only customers get a 2-step flow ─────────────────────────
+    const [step, setStep] = useState<1 | 2>(1);
 
     // ── Common fields ─────────────────────────────────────────────────────────
     const [fullName, setFullName] = useState('');
@@ -80,6 +104,8 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
     // ── Verification state ────────────────────────────────────────────────────
     const [emailVerified, setEmailVerified] = useState(false);
     const [phoneVerified, setPhoneVerified] = useState(false);
+    const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
     // ── OTP modal state ───────────────────────────────────────────────────────
     const [otpStep, setOtpStep] = useState<OtpStep>('none');
@@ -90,9 +116,19 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
     const [city, setCity] = useState('');
     const [state, setState] = useState('');
 
-    // ── Vendor-only fields ────────────────────────────────────────────────────
-    const [accountType, setAccountType] = useState<'individual' | 'company'>('individual');
-    const [vendorCategory, setVendorCategory] = useState('');
+    // ── KYC state (step 2, customer only) ────────────────────────────────────
+    const [kycIdProofType, setKycIdProofType] = useState<IdProofType>('Aadhaar');
+    const [kycFront, setKycFront] = useState<PickedFile | null>(null);
+    const [kycBack, setKycBack] = useState<PickedFile | null>(null);
+    const [kycSelfie, setKycSelfie] = useState<PickedFile | null>(null);
+    const [kycAddressProof, setKycAddressProof] = useState<PickedFile | null>(null);
+    const [kycErrors, setKycErrors] = useState<Record<string, string>>({});
+    const [kycLoading, setKycLoading] = useState(false);
+
+    //For Step 2 for customer only
+    const { mutate: uploadKycDoc } = useUploadKycDoc();
+    const { mutate: uploadProfilePhoto } = useUploadImage();
+    const { mutate: updateUser } = useUpdateProfile();
 
     // ── Animations ────────────────────────────────────────────────────────────
     const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -158,10 +194,6 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
         if (role === 'customer' || role === 'vendor') {
             if (!city.trim()) e.city = 'City is required';
             if (!state.trim()) e.state = 'State is required';
-        }
-
-        if (role === 'vendor') {
-            if (!vendorCategory) e.vendorCategory = 'Please select a category';
         }
 
         if (!agreed) e.agreed = 'Please accept the terms to continue';
@@ -257,7 +289,24 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
         );
     };
 
-    // ── Submit ────────────────────────────────────────────────────────────────
+    // ── Build the payload shared by both the single-step and 2-step flows ─────
+    const buildRegisterData = () => {
+        const base = {
+            name: fullName,
+            email,
+            phone,
+            password,
+            referralCode: referralCode.trim() || undefined,
+        };
+
+        return role === 'customer'
+            ? { ...base, role: 'customer' as const, city, state }
+            : role === 'vendor'
+            ? { ...base, role: 'vendor' as const, city, state }
+            : { ...base, role: 'owner' as const, city, state };
+    };
+
+    // ── Submit: non-customer roles (single step, unchanged) ───────────────────
     const handleRegister = async () => {
         const e = validate();
         setErrors(e);
@@ -271,28 +320,46 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
             Animated.spring(btnScale, { toValue: 1, useNativeDriver: true, speed: 20 }),
         ]).start();
 
-        const base = {
-            name: fullName,
-            email,
-            phone,
-            password,
-            referralCode: referralCode.trim() || undefined,
-        };
-
-        const registerData =
-            role === 'customer'
-                ? { ...base, role: 'customer' as const, city, state }
-                : role === 'vendor'
-                ? { ...base, role: 'vendor' as const, city, state, accountType, vendorCategory }
-                : { ...base, role: 'owner' as const };
-
         setLoading(true);
 
-        register(registerData, {
+        register(buildRegisterData(), {
             onSuccess: data => {
                 setLoading(false);
                 setUser(data?.user, data?.token);
                 alert.success('Registration succeeded', `${role} registered successfully`);
+            },
+            onError: (error: ApiError) => {
+                setLoading(false);
+                alert.error('Registration failed', error?.message || 'Something went wrong');
+            },
+        });
+    };
+
+    // ── Submit: customer step 1 → creates the account, then advances to step 2 ─
+    const handleContinueToKyc = () => {
+        const e = validate();
+        setErrors(e);
+        if (Object.keys(e).length > 0) {
+            shakeCard();
+            return;
+        }
+
+        Animated.sequence([
+            Animated.timing(btnScale, { toValue: 0.95, duration: 80, useNativeDriver: true }),
+            Animated.spring(btnScale, { toValue: 1, useNativeDriver: true, speed: 20 }),
+        ]).start();
+
+        setLoading(true);
+
+        register(buildRegisterData(), {
+            onSuccess: data => {
+                setLoading(false);
+                // Account + token are set now so the KYC / photo uploads below are authenticated.
+                // NOTE: if your root navigator switches stacks as soon as a user/token is present,
+                // this screen will unmount before step 2 renders — see the message accompanying
+                // this file for how to handle that case.
+                setUser(data?.user, data?.token);
+                setStep(2);
             },
             onError: (error: ApiError) => {
                 setLoading(false);
@@ -313,6 +380,261 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
     const handleResendOtp = () => {
         if (otpStep === 'email') handleSendEmailOtp();
         else if (otpStep === 'phone') handleSendPhoneOtp();
+    };
+
+    // ── Profile photo upload (used in step 2) ──────────────────────────────────
+    const pickFromCamera = async () => {
+        const result = await launchCamera({
+            mediaType: 'photo',
+            quality: 0.8,
+            maxWidth: 1080,
+            maxHeight: 1080,
+            saveToPhotos: true,
+        });
+        if (result.didCancel || !result.assets?.length) return;
+        if (result.errorCode) {
+            alert.error?.('Camera error', result.errorMessage ?? 'Could not open camera.');
+            return;
+        }
+        handleUploadPhoto(result.assets[0]);
+    };
+
+    const pickFromGallery = async () => {
+        const result = await launchImageLibrary({
+            mediaType: 'photo',
+            quality: 0.8,
+            maxWidth: 1080,
+            maxHeight: 1080,
+            selectionLimit: 1,
+        });
+        if (result.didCancel || !result.assets?.length) return;
+        if (result.errorCode) {
+            alert.error?.('Gallery error', result.errorMessage ?? 'Could not open gallery.');
+            return;
+        }
+        handleUploadPhoto(result.assets[0]);
+    };
+
+    const handlePhotoOptions = () => {
+        alert.show({
+            type: 'confirm',
+            title: 'Update Profile Photo',
+            message: 'Choose a source for your new profile photo.',
+            buttons: [
+                {
+                    label: 'Take Photo',
+                    onPress: () => {
+                        alert.dismiss();
+                        pickFromCamera();
+                    },
+                },
+                {
+                    label: 'Gallery',
+                    onPress: () => {
+                        alert.dismiss();
+                        pickFromGallery();
+                    },
+                },
+                { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },
+            ],
+        });
+    };
+
+    const handleUploadPhoto = (asset: Asset) => {
+        if (!asset.uri) return;
+
+        const formData = new FormData();
+        formData.append('file', {
+            uri: asset.uri,
+            type: asset.type ?? 'image/jpeg',
+            name: asset.fileName ?? `profile_${Date.now()}.jpg`,
+        } as any);
+
+        formData.append('folder', 'profiles');
+        setUploadingPhoto(true);
+
+        uploadProfilePhoto(formData, {
+            onSuccess: (res: any) => {
+                const url = res?.url ?? res?.data?.url ?? res?.image?.url;
+                if (!url) {
+                    alert.error?.('Upload failed', 'Could not get the uploaded image URL.');
+                    return;
+                }
+                setProfilePicUrl(url);
+
+                // Persist it on the profile
+                updateUser({ profilePicture: url } as any, {
+                    onSuccess: () => {},
+                    onError: () => {
+                        alert.error?.('Update failed', 'Photo uploaded but profile update failed.');
+                    },
+                });
+            },
+            onError: () => {
+                alert.error?.('Upload failed', 'Could not upload your photo. Please try again.');
+            },
+            onSettled: () => {
+                setUploadingPhoto(false);
+            },
+        });
+    };
+
+    // ── KYC doc upload (step 2, customer only) ─────────────────────────────────
+    const getKycSetter = (slot: KycSlot) => {
+        switch (slot) {
+            case 'front':
+                return setKycFront;
+            case 'back':
+                return setKycBack;
+            case 'selfie':
+                return setKycSelfie;
+            case 'addressProof':
+                return setKycAddressProof;
+        }
+    };
+
+    const pickKycImage = (slot: KycSlot) => {
+        const setter = getKycSetter(slot);
+        launchImageLibrary(
+            { mediaType: 'photo', quality: 0.8, includeBase64: false },
+            (response: ImagePickerResponse) => {
+                if (response.didCancel || response.errorCode) return;
+                const asset = response.assets?.[0];
+                if (!asset?.uri) return;
+                setter({
+                    uri: asset.uri,
+                    name: asset.fileName ?? `${slot}_${Date.now()}.jpg`,
+                    type: asset.type ?? 'image/jpeg',
+                });
+                setKycErrors(prev => ({ ...prev, [slot]: '' }));
+            },
+        );
+    };
+
+    const openKycCamera = (slot: KycSlot) => {
+        const setter = getKycSetter(slot);
+        launchCamera(
+            { mediaType: 'photo', quality: 0.8, saveToPhotos: false },
+            (response: ImagePickerResponse) => {
+                if (response.didCancel || response.errorCode) return;
+                const asset = response.assets?.[0];
+                if (!asset?.uri) return;
+                setter({
+                    uri: asset.uri,
+                    name: asset.fileName ?? `${slot}_${Date.now()}.jpg`,
+                    type: asset.type ?? 'image/jpeg',
+                });
+                setKycErrors(prev => ({ ...prev, [slot]: '' }));
+            },
+        );
+    };
+
+    const showKycPickerOptions = (slot: KycSlot) => {
+        alert.show({
+            type: 'confirm',
+            title: 'Choose Source',
+            message: 'Select from gallery or take a new photo',
+            buttons: [
+                {
+                    label: 'Gallery',
+                    onPress: () => {
+                        alert.dismiss();
+                        pickKycImage(slot);
+                    },
+                    style: 'ghost',
+                },
+                {
+                    label: 'Camera',
+                    onPress: () => {
+                        alert.dismiss();
+                        openKycCamera(slot);
+                    },
+                },
+            ],
+        });
+    };
+
+    const hasAnyKycInput = !!(kycFront || kycBack || kycSelfie || kycAddressProof);
+
+    const validateKyc = () => {
+        const e: Record<string, string> = {};
+        if (!kycFront) e.front = 'Front side of ID is required';
+        if (kycIdProofType !== 'PAN' && !kycBack) e.back = 'Back side of ID is required';
+        if (!kycSelfie) e.selfie = 'Selfie is required';
+        return e;
+    };
+
+    // Final step — called whether KYC was filled in, uploaded, or skipped.
+    const finishSetup = () => {
+        alert.success('All set!', 'Your account has been created successfully.');
+        // If your app's root navigator doesn't already switch stacks on auth
+        // state change, navigate to the home/dashboard screen here, e.g.
+        navigation.reset({ index: 0, routes: [{ name: 'client' }] });
+    };
+
+    const handleSkipKyc = () => finishSetup();
+
+    const handleSubmitKyc = () => {
+        if (!hasAnyKycInput) {
+            finishSetup();
+            return;
+        }
+
+        const e = validateKyc();
+        setKycErrors(e);
+        if (Object.keys(e).length > 0) return;
+
+        const formData = new FormData();
+        formData.append('idProofType', kycIdProofType);
+
+        formData.append('idProof', {
+            uri: kycFront!.uri,
+            name: kycFront!.name,
+            type: kycFront!.type,
+        } as any);
+
+        if (kycBack) {
+            formData.append('idProofBack', {
+                uri: kycBack.uri,
+                name: kycBack.name,
+                type: kycBack.type,
+            } as any);
+        }
+
+        formData.append('selfie', {
+            uri: kycSelfie!.uri,
+            name: kycSelfie!.name,
+            type: kycSelfie!.type,
+        } as any);
+
+        if (kycAddressProof) {
+            formData.append('addressProof', {
+                uri: kycAddressProof.uri,
+                name: kycAddressProof.name,
+                type: kycAddressProof.type,
+            } as any);
+        }
+
+        setKycLoading(true);
+        uploadKycDoc(formData, {
+            onSuccess: () => {
+                setKycLoading(false);
+                finishSetup();
+            },
+            onError: (error: ApiError) => {
+                setKycLoading(false);
+                alert.error('KYC Upload Failed', error?.message || 'Something went wrong.');
+            },
+        });
+    };
+
+    // ── Back button: step 2 goes back to step 1 instead of leaving the screen ──
+    const handleBackPress = () => {
+        if (isCustomer && step === 2) {
+            setStep(1);
+        } else {
+            navigation.goBack();
+        }
     };
 
     // ── Render ────────────────────────────────────────────────────────────────
@@ -412,10 +734,7 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
 
                     {/* Top nav */}
                     <Animated.View style={[styles.topBar, { opacity: fadeAnim }]}>
-                        <TouchableOpacity
-                            style={styles.backBtn}
-                            onPress={() => navigation.goBack()}
-                        >
+                        <TouchableOpacity style={styles.backBtn} onPress={handleBackPress}>
                             <Ionicons name="arrow-back" size={20} color={Colors.charcoal} />
                         </TouchableOpacity>
                         <Text style={styles.topBarTitle}>Create Account</Text>
@@ -447,169 +766,213 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
                         </View>
                     </Animated.View>
 
+                    {/* Step indicator — customer only */}
+                    {isCustomer && (
+                        <Animated.View style={[styles.stepRow, { opacity: fadeAnim }]}>
+                            <View style={styles.stepItem}>
+                                <View style={[styles.stepDot, styles.stepDotActive]}>
+                                    <Text style={styles.stepDotTextActive}>1</Text>
+                                </View>
+                                <Text style={styles.stepLabelActive}>Your details</Text>
+                            </View>
+                            <View
+                                style={[
+                                    styles.stepConnector,
+                                    step === 2 && styles.stepConnectorActive,
+                                ]}
+                            />
+                            <View style={styles.stepItem}>
+                                <View style={[styles.stepDot, step === 2 && styles.stepDotActive]}>
+                                    <Text
+                                        style={
+                                            step === 2
+                                                ? styles.stepDotTextActive
+                                                : styles.stepDotText
+                                        }
+                                    >
+                                        2
+                                    </Text>
+                                </View>
+                                <Text
+                                    style={step === 2 ? styles.stepLabelActive : styles.stepLabel}
+                                >
+                                    KYC & photo
+                                </Text>
+                            </View>
+                        </Animated.View>
+                    )}
+
                     {/* Heading */}
                     <Animated.View style={[styles.heading, { opacity: fadeAnim }]}>
-                        <Text style={styles.headingTitle}>Let's get{'\n'}you set up</Text>
+                        <Text style={styles.headingTitle}>
+                            {isCustomer && step === 2
+                                ? "You're almost\nthere"
+                                : "Let's get\nyou set up"}
+                        </Text>
                         <Text style={styles.headingSubtitle}>
-                            Fill in your details to create a free account.
+                            {isCustomer && step === 2
+                                ? 'Add a profile photo and verify your identity. You can also skip this and do it later.'
+                                : 'Fill in your details to create a free account.'}
                         </Text>
                     </Animated.View>
 
-                    {/* Form card */}
-                    <Animated.View
-                        style={[
-                            styles.card,
-                            {
-                                opacity: fadeAnim,
-                                transform: [{ translateY: slideAnim }, { translateX: shakeAnim }],
-                            },
-                        ]}
-                    >
-                        {/* ── Common fields ── */}
-                        <Field
-                            label="Full Name"
-                            placeholder="Sara Patel"
-                            icon="person-outline"
-                            value={fullName}
-                            onChangeText={t => {
-                                setFullName(t);
-                                clearError('fullName');
-                            }}
-                            error={errors.fullName}
-                            autoCapitalize="words"
-                        />
+                    {/* ════════════════════════ STEP 1 — account details ═══════════════════════ */}
+                    {step === 1 && (
+                        <Animated.View
+                            style={[
+                                styles.card,
+                                {
+                                    opacity: fadeAnim,
+                                    transform: [
+                                        { translateY: slideAnim },
+                                        { translateX: shakeAnim },
+                                    ],
+                                },
+                            ]}
+                        >
+                            {/* ── Common fields ── */}
+                            <Field
+                                label="Full Name"
+                                placeholder="Sara Patel"
+                                icon="person-outline"
+                                value={fullName}
+                                onChangeText={t => {
+                                    setFullName(t);
+                                    clearError('fullName');
+                                }}
+                                error={errors.fullName}
+                                autoCapitalize="words"
+                            />
 
-                        {/* Email with verify button */}
-                        <Field
-                            label="Email Address"
-                            placeholder="you@example.com"
-                            icon="mail-outline"
-                            value={email}
-                            onChangeText={t => {
-                                setEmail(t);
-                                setEmailVerified(false); // reset verification if email changes
-                                clearError('email');
-                            }}
-                            error={errors.email}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            trailingIcon={emailVerified ? 'checkmark-circle' : undefined}
-                        />
-                        {!emailVerified && (
-                            <TouchableOpacity
-                                style={styles.verifyBtn}
-                                onPress={handleSendEmailOtp}
-                                disabled={sendingEmailOtp}
-                                activeOpacity={0.8}
-                            >
-                                {sendingEmailOtp ? (
-                                    <LoadingDots />
-                                ) : (
-                                    <Text style={styles.verifyBtnText}>Verify Email</Text>
-                                )}
-                            </TouchableOpacity>
-                        )}
-                        {emailVerified && (
-                            <View style={styles.verifiedBadge}>
-                                <Ionicons
-                                    name="checkmark-circle"
-                                    size={13}
-                                    color={Colors.success}
-                                />
-                                <Text style={styles.verifiedText}>Email verified</Text>
-                            </View>
-                        )}
+                            {/* Email with verify button */}
+                            <Field
+                                label="Email Address"
+                                placeholder="you@example.com"
+                                icon="mail-outline"
+                                value={email}
+                                onChangeText={t => {
+                                    setEmail(t);
+                                    setEmailVerified(false); // reset verification if email changes
+                                    clearError('email');
+                                }}
+                                error={errors.email}
+                                keyboardType="email-address"
+                                autoCapitalize="none"
+                                trailingIcon={emailVerified ? 'checkmark-circle' : undefined}
+                            />
+                            {!emailVerified && (
+                                <TouchableOpacity
+                                    style={styles.verifyBtn}
+                                    onPress={handleSendEmailOtp}
+                                    disabled={sendingEmailOtp}
+                                    activeOpacity={0.8}
+                                >
+                                    {sendingEmailOtp ? (
+                                        <LoadingDots />
+                                    ) : (
+                                        <Text style={styles.verifyBtnText}>Verify Email</Text>
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                            {emailVerified && (
+                                <View style={styles.verifiedBadge}>
+                                    <Ionicons
+                                        name="checkmark-circle"
+                                        size={13}
+                                        color={Colors.success}
+                                    />
+                                    <Text style={styles.verifiedText}>Email verified</Text>
+                                </View>
+                            )}
 
-                        {/* Phone with verify button */}
-                        {/* FIX: removed maxLength={10} since the field stores raw digits
-                            and placeholder shows formatted number. maxLength now 10 for digits only. */}
-                        <Field
-                            label="Phone Number"
-                            placeholder="9876543210"
-                            icon="call-outline"
-                            value={phone}
-                            onChangeText={t => {
-                                // strip non-digits and cap at 10
-                                const digits = t.replace(/\D/g, '').slice(0, 10);
-                                setPhone(digits);
-                                setPhoneVerified(false); // reset if phone changes
-                                clearError('phone');
-                            }}
-                            error={errors.phone}
-                            keyboardType="phone-pad"
-                            maxLength={10}
-                        />
-                        {!phoneVerified && (
-                            <TouchableOpacity
-                                style={styles.verifyBtn}
-                                onPress={handleSendPhoneOtp}
-                                disabled={sendingPhoneOtp}
-                                activeOpacity={0.8}
-                            >
-                                {sendingPhoneOtp ? (
-                                    <LoadingDots />
-                                ) : (
-                                    <Text style={styles.verifyBtnText}>Verify Phone</Text>
-                                )}
-                            </TouchableOpacity>
-                        )}
-                        {phoneVerified && (
-                            <View style={styles.verifiedBadge}>
-                                <Ionicons
-                                    name="checkmark-circle"
-                                    size={13}
-                                    color={Colors.success}
-                                />
-                                <Text style={styles.verifiedText}>Phone verified</Text>
-                            </View>
-                        )}
+                            {/* Phone with verify button */}
+                            <Field
+                                label="Phone Number"
+                                placeholder="9876543210"
+                                icon="call-outline"
+                                value={phone}
+                                onChangeText={t => {
+                                    // strip non-digits and cap at 10
+                                    const digits = t.replace(/\D/g, '').slice(0, 10);
+                                    setPhone(digits);
+                                    setPhoneVerified(false); // reset if phone changes
+                                    clearError('phone');
+                                }}
+                                error={errors.phone}
+                                keyboardType="phone-pad"
+                                maxLength={10}
+                            />
+                            {!phoneVerified && (
+                                <TouchableOpacity
+                                    style={styles.verifyBtn}
+                                    onPress={handleSendPhoneOtp}
+                                    disabled={sendingPhoneOtp}
+                                    activeOpacity={0.8}
+                                >
+                                    {sendingPhoneOtp ? (
+                                        <LoadingDots />
+                                    ) : (
+                                        <Text style={styles.verifyBtnText}>Verify Phone</Text>
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                            {phoneVerified && (
+                                <View style={styles.verifiedBadge}>
+                                    <Ionicons
+                                        name="checkmark-circle"
+                                        size={13}
+                                        color={Colors.success}
+                                    />
+                                    <Text style={styles.verifiedText}>Phone verified</Text>
+                                </View>
+                            )}
 
-                        <Field
-                            label="Password"
-                            placeholder="Minimum 8 characters"
-                            icon="lock-closed-outline"
-                            value={password}
-                            onChangeText={t => {
-                                setPassword(t);
-                                clearError('password');
-                            }}
-                            error={errors.password}
-                            secureTextEntry={!showPassword}
-                            trailingIcon={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                            onTrailingPress={() => setShowPassword(!showPassword)}
-                        />
+                            <Field
+                                label="Password"
+                                placeholder="Minimum 8 characters"
+                                icon="lock-closed-outline"
+                                value={password}
+                                onChangeText={t => {
+                                    setPassword(t);
+                                    clearError('password');
+                                }}
+                                error={errors.password}
+                                secureTextEntry={!showPassword}
+                                trailingIcon={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                                onTrailingPress={() => setShowPassword(!showPassword)}
+                            />
 
-                        <PasswordStrength password={password} />
+                            <PasswordStrength password={password} />
 
-                        {password.length > 0 && (
-                            <View style={styles.hintsGrid}>
-                                {[
-                                    // FIX: consistent with validation — 8 chars, not 6
-                                    { ok: password.length >= 8, text: 'Min 8 characters' },
-                                    { ok: /[A-Z]/.test(password), text: 'Uppercase letter' },
-                                    { ok: /[0-9]/.test(password), text: 'Number included' },
-                                    {
-                                        ok: /[^a-zA-Z0-9]/.test(password),
-                                        text: 'Special character',
-                                    },
-                                ].map((h, i) => (
-                                    <View key={i} style={styles.hintItem}>
-                                        <Ionicons
-                                            name={h.ok ? 'checkmark-circle' : 'ellipse-outline'}
-                                            size={13}
-                                            color={h.ok ? Colors.success : Colors.charcoalLight}
-                                        />
-                                        <Text style={[styles.hintText, h.ok && styles.hintTextOk]}>
-                                            {h.text}
-                                        </Text>
-                                    </View>
-                                ))}
-                            </View>
-                        )}
+                            {password.length > 0 && (
+                                <View style={styles.hintsGrid}>
+                                    {[
+                                        // FIX: consistent with validation — 8 chars, not 6
+                                        { ok: password.length >= 8, text: 'Min 8 characters' },
+                                        { ok: /[A-Z]/.test(password), text: 'Uppercase letter' },
+                                        { ok: /[0-9]/.test(password), text: 'Number included' },
+                                        {
+                                            ok: /[^a-zA-Z0-9]/.test(password),
+                                            text: 'Special character',
+                                        },
+                                    ].map((h, i) => (
+                                        <View key={i} style={styles.hintItem}>
+                                            <Ionicons
+                                                name={h.ok ? 'checkmark-circle' : 'ellipse-outline'}
+                                                size={13}
+                                                color={h.ok ? Colors.success : Colors.charcoalLight}
+                                            />
+                                            <Text
+                                                style={[styles.hintText, h.ok && styles.hintTextOk]}
+                                            >
+                                                {h.text}
+                                            </Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            )}
 
-                        {/* ── Location fields (customer + vendor) ── */}
-                        {(role === 'customer' || role === 'vendor') && (
-                            // FIX: added minWidth:0 on children so they shrink correctly in row
+                            {/* ── Location fields (customer + vendor) ── */}
                             <View style={styles.row}>
                                 <View style={styles.rowItem}>
                                     <Field
@@ -640,194 +1003,414 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
                                     />
                                 </View>
                             </View>
-                        )}
 
-                        {/* ── Vendor-only fields ── */}
-                        {role === 'vendor' && (
-                            <>
-                                <Text style={styles.fieldLabel}>Account Type</Text>
-                                <View style={styles.toggleRow}>
-                                    {(['individual', 'company'] as const).map(type => (
-                                        <TouchableOpacity
-                                            key={type}
-                                            style={[
-                                                styles.toggleBtn,
-                                                accountType === type && styles.toggleBtnActive,
-                                            ]}
-                                            onPress={() => setAccountType(type)}
-                                            activeOpacity={0.8}
-                                        >
-                                            <Ionicons
-                                                name={
-                                                    type === 'individual'
-                                                        ? 'person-outline'
-                                                        : 'business-outline'
-                                                }
-                                                size={15}
-                                                color={
-                                                    accountType === type
-                                                        ? Colors.white
-                                                        : Colors.charcoalLight
-                                                }
-                                            />
-                                            <Text
-                                                style={[
-                                                    styles.toggleBtnText,
-                                                    accountType === type &&
-                                                        styles.toggleBtnTextActive,
-                                                ]}
-                                            >
-                                                {type.charAt(0).toUpperCase() + type.slice(1)}
-                                            </Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </View>
+                            {/* ── Referral code ── */}
+                            <Field
+                                label="Referral Code (Optional)"
+                                placeholder="Enter referral code if any"
+                                icon="people-outline"
+                                value={referralCode}
+                                onChangeText={setReferralCode}
+                                autoCapitalize="characters"
+                            />
 
-                                <Text style={styles.fieldLabel}>Vendor Category</Text>
-                                <View style={styles.categoryGrid}>
-                                    {VENDOR_CATEGORIES.map(cat => {
-                                        const active = vendorCategory === cat;
-                                        return (
-                                            <TouchableOpacity
-                                                key={cat}
-                                                style={[
-                                                    styles.categoryChip,
-                                                    active && styles.categoryChipActive,
-                                                ]}
-                                                onPress={() => {
-                                                    setVendorCategory(cat);
-                                                    clearError('vendorCategory');
-                                                }}
-                                                activeOpacity={0.8}
-                                            >
-                                                <Text
-                                                    style={[
-                                                        styles.categoryChipText,
-                                                        active && styles.categoryChipTextActive,
-                                                    ]}
-                                                >
-                                                    {cat}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        );
-                                    })}
-                                </View>
-                                {!!errors.vendorCategory && (
-                                    <View style={styles.errorRow}>
-                                        <Ionicons
-                                            name="alert-circle"
-                                            size={12}
-                                            color={Colors.danger}
-                                        />
-                                        <Text style={styles.errorText}>
-                                            {errors.vendorCategory}
-                                        </Text>
-                                    </View>
-                                )}
-                            </>
-                        )}
+                            <View style={styles.divider} />
 
-                        {/* ── Referral code ── */}
-                        <Field
-                            label="Referral Code (Optional)"
-                            placeholder="Enter referral code if any"
-                            icon="people-outline"
-                            value={referralCode}
-                            onChangeText={setReferralCode}
-                            autoCapitalize="characters"
-                        />
-
-                        <View style={styles.divider} />
-
-                        {/* Terms */}
-                        <TouchableOpacity
-                            style={styles.termsRow}
-                            onPress={() => {
-                                setAgreed(!agreed);
-                                clearError('agreed');
-                            }}
-                            activeOpacity={0.7}
-                        >
-                            <View
-                                style={[
-                                    styles.checkbox,
-                                    agreed && styles.checkboxOn,
-                                    !!errors.agreed && styles.checkboxErr,
-                                ]}
-                            >
-                                {agreed && (
-                                    <Ionicons name="checkmark" size={11} color={Colors.white} />
-                                )}
-                            </View>
-                            <Text style={styles.termsText}>
-                                I agree to the{' '}
-                                <Text
-                                    style={styles.termsLink}
-                                    onPress={() => Alert.alert('Terms', 'Coming soon.')}
-                                >
-                                    Terms of Service
-                                </Text>{' '}
-                                and{' '}
-                                <Text
-                                    style={styles.termsLink}
-                                    onPress={() => Alert.alert('Privacy', 'Coming soon.')}
-                                >
-                                    Privacy Policy
-                                </Text>
-                            </Text>
-                        </TouchableOpacity>
-                        {!!errors.agreed && (
-                            <View
-                                style={[
-                                    styles.errorRow,
-                                    { marginTop: 0, marginBottom: Spacing.sm },
-                                ]}
-                            >
-                                <Ionicons name="alert-circle" size={12} color={Colors.danger} />
-                                <Text style={styles.errorText}>{errors.agreed}</Text>
-                            </View>
-                        )}
-
-                        {/* CTA */}
-                        <Animated.View
-                            style={{ transform: [{ scale: btnScale }], marginTop: Spacing.sm }}
-                        >
+                            {/* Terms */}
                             <TouchableOpacity
-                                style={[styles.registerBtn, loading && { opacity: 0.7 }]}
-                                onPress={handleRegister}
-                                activeOpacity={0.9}
-                                disabled={loading}
+                                style={styles.termsRow}
+                                onPress={() => {
+                                    setAgreed(!agreed);
+                                    clearError('agreed');
+                                }}
+                                activeOpacity={0.7}
                             >
-                                {loading ? (
-                                    <LoadingDots />
-                                ) : (
-                                    <>
-                                        <Text style={styles.registerBtnText}>Create Account</Text>
-                                        <View style={styles.registerBtnArrow}>
+                                <View
+                                    style={[
+                                        styles.checkbox,
+                                        agreed && styles.checkboxOn,
+                                        !!errors.agreed && styles.checkboxErr,
+                                    ]}
+                                >
+                                    {agreed && (
+                                        <Ionicons name="checkmark" size={11} color={Colors.white} />
+                                    )}
+                                </View>
+                                <Text style={styles.termsText}>
+                                    I agree to the{' '}
+                                    <Text
+                                        style={styles.termsLink}
+                                        onPress={() => Alert.alert('Terms', 'Coming soon.')}
+                                    >
+                                        Terms of Service
+                                    </Text>{' '}
+                                    and{' '}
+                                    <Text
+                                        style={styles.termsLink}
+                                        onPress={() => Alert.alert('Privacy', 'Coming soon.')}
+                                    >
+                                        Privacy Policy
+                                    </Text>
+                                </Text>
+                            </TouchableOpacity>
+                            {!!errors.agreed && (
+                                <View
+                                    style={[
+                                        styles.errorRow,
+                                        { marginTop: 0, marginBottom: Spacing.sm },
+                                    ]}
+                                >
+                                    <Ionicons name="alert-circle" size={12} color={Colors.danger} />
+                                    <Text style={styles.errorText}>{errors.agreed}</Text>
+                                </View>
+                            )}
+
+                            {/* CTA */}
+                            <Animated.View
+                                style={{ transform: [{ scale: btnScale }], marginTop: Spacing.sm }}
+                            >
+                                <TouchableOpacity
+                                    style={[styles.registerBtn, loading && { opacity: 0.7 }]}
+                                    onPress={isCustomer ? handleContinueToKyc : handleRegister}
+                                    activeOpacity={0.9}
+                                    disabled={loading}
+                                >
+                                    {loading ? (
+                                        <LoadingDots />
+                                    ) : (
+                                        <>
+                                            <Text style={styles.registerBtnText}>
+                                                {isCustomer ? 'Continue' : 'Create Account'}
+                                            </Text>
+                                            <View style={styles.registerBtnArrow}>
+                                                <Ionicons
+                                                    name="arrow-forward"
+                                                    size={17}
+                                                    color={meta.color}
+                                                />
+                                            </View>
+                                        </>
+                                    )}
+                                </TouchableOpacity>
+                            </Animated.View>
+                        </Animated.View>
+                    )}
+
+                    {/* ════════════════════ STEP 2 — KYC + profile photo (customer) ═══════════════ */}
+                    {isCustomer && step === 2 && (
+                        <Animated.View style={[styles.card, { opacity: fadeAnim }]}>
+                            {/* Profile photo */}
+                            <Text style={styles.sectionLabel}>PROFILE PHOTO</Text>
+                            <View style={styles.avatarWrap}>
+                                <TouchableOpacity
+                                    onPress={handlePhotoOptions}
+                                    activeOpacity={0.85}
+                                    style={styles.avatarTouchable}
+                                >
+                                    {profilePicUrl ? (
+                                        <Image
+                                            source={{ uri: profilePicUrl }}
+                                            style={styles.avatarImage}
+                                        />
+                                    ) : (
+                                        <View style={styles.avatarPlaceholder}>
                                             <Ionicons
-                                                name="arrow-forward"
-                                                size={17}
-                                                color={meta.color}
+                                                name="person"
+                                                size={32}
+                                                color={Colors.charcoalLight}
                                             />
                                         </View>
-                                    </>
+                                    )}
+                                    <View style={styles.avatarEditBadge}>
+                                        {uploadingPhoto ? (
+                                            <LoadingDots />
+                                        ) : (
+                                            <Ionicons
+                                                name="camera"
+                                                size={13}
+                                                color={Colors.white}
+                                            />
+                                        )}
+                                    </View>
+                                </TouchableOpacity>
+                                <Text style={styles.avatarLabel}>
+                                    {profilePicUrl
+                                        ? 'Tap to change photo'
+                                        : 'Add a profile photo (optional)'}
+                                </Text>
+                            </View>
+
+                            <View style={styles.divider} />
+
+                            {/* KYC */}
+                            <Text style={styles.sectionLabel}>IDENTITY VERIFICATION (KYC)</Text>
+                            <Text style={styles.kycHint}>
+                                Verifying your identity unlocks bookings and payouts faster. You can
+                                also do this later from your profile.
+                            </Text>
+
+                            <Text style={[styles.fieldLabel, { marginTop: Spacing.sm }]}>
+                                ID Type
+                            </Text>
+                            <View style={styles.typeRow}>
+                                {ID_PROOF_TYPES.map(type => (
+                                    <TouchableOpacity
+                                        key={type}
+                                        style={[
+                                            styles.typeChip,
+                                            kycIdProofType === type && styles.typeChipActive,
+                                        ]}
+                                        onPress={() => {
+                                            setKycIdProofType(type);
+                                            setKycBack(null);
+                                        }}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Text
+                                            style={[
+                                                styles.typeChipText,
+                                                kycIdProofType === type &&
+                                                    styles.typeChipTextActive,
+                                            ]}
+                                        >
+                                            {type}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+
+                            <Text style={[styles.fieldLabel, { marginTop: Spacing.lg }]}>
+                                {kycIdProofType} — Front Side
+                            </Text>
+                            <KycDocCard
+                                label={`${kycIdProofType} — Front`}
+                                icon="id-card-outline"
+                                file={kycFront}
+                                onPick={() => showKycPickerOptions('front')}
+                                onRemove={() => setKycFront(null)}
+                                error={kycErrors.front}
+                            />
+
+                            {kycIdProofType !== 'PAN' && (
+                                <>
+                                    <Text style={[styles.fieldLabel, { marginTop: Spacing.lg }]}>
+                                        {kycIdProofType} — Back Side
+                                    </Text>
+                                    <KycDocCard
+                                        label={`${kycIdProofType} — Back`}
+                                        icon="id-card-outline"
+                                        file={kycBack}
+                                        onPick={() => showKycPickerOptions('back')}
+                                        onRemove={() => setKycBack(null)}
+                                        error={kycErrors.back}
+                                    />
+                                </>
+                            )}
+
+                            <Text style={[styles.fieldLabel, { marginTop: Spacing.lg }]}>
+                                Address Proof (Optional)
+                            </Text>
+                            <KycDocCard
+                                label="Address Proof"
+                                icon="home-outline"
+                                file={kycAddressProof}
+                                onPick={() => showKycPickerOptions('addressProof')}
+                                onRemove={() => setKycAddressProof(null)}
+                                error={kycErrors.addressProof}
+                                preferCamera
+                            />
+
+                            <Text style={[styles.fieldLabel, { marginTop: Spacing.lg }]}>
+                                Selfie with ID
+                            </Text>
+                            <KycDocCard
+                                label="Selfie with ID"
+                                icon="camera-outline"
+                                file={kycSelfie}
+                                onPick={() => showKycPickerOptions('selfie')}
+                                onRemove={() => setKycSelfie(null)}
+                                error={kycErrors.selfie}
+                                preferCamera
+                            />
+
+                            {/* CTAs */}
+                            <TouchableOpacity
+                                style={[
+                                    styles.registerBtn,
+                                    kycLoading && { opacity: 0.7 },
+                                    { marginTop: Spacing.lg },
+                                ]}
+                                onPress={handleSubmitKyc}
+                                activeOpacity={0.9}
+                                disabled={kycLoading}
+                            >
+                                {kycLoading ? (
+                                    <LoadingDots />
+                                ) : (
+                                    <Text style={styles.registerBtnText}>
+                                        {hasAnyKycInput ? 'Submit & Finish' : 'Finish'}
+                                    </Text>
                                 )}
                             </TouchableOpacity>
+
+                            {!kycLoading && (
+                                <TouchableOpacity
+                                    style={styles.skipBtn}
+                                    onPress={handleSkipKyc}
+                                    activeOpacity={0.7}
+                                >
+                                    <Text style={styles.skipBtnText}>Skip for now</Text>
+                                </TouchableOpacity>
+                            )}
                         </Animated.View>
-                    </Animated.View>
+                    )}
 
                     {/* Sign in link */}
-                    <Animated.View style={[styles.loginRow, { opacity: fadeAnim }]}>
-                        <Text style={styles.loginText}>Already have an account? </Text>
-                        <TouchableOpacity onPress={() => navigation.navigate('login')}>
-                            <Text style={styles.loginLink}>Sign in</Text>
-                        </TouchableOpacity>
-                    </Animated.View>
+                    {step === 1 && (
+                        <Animated.View style={[styles.loginRow, { opacity: fadeAnim }]}>
+                            <Text style={styles.loginText}>Already have an account? </Text>
+                            <TouchableOpacity onPress={() => navigation.navigate('login')}>
+                                <Text style={styles.loginLink}>Sign in</Text>
+                            </TouchableOpacity>
+                        </Animated.View>
+                    )}
                 </ScrollView>
             </KeyboardAvoidingView>
         </>
     );
 }
+
+// ── KYC doc upload card sub-component (step 2) ───────────────────────────────
+interface KycDocCardProps {
+    label: string;
+    icon: string;
+    file: PickedFile | null;
+    onPick: () => void;
+    onRemove: () => void;
+    error?: string;
+    preferCamera?: boolean;
+}
+
+function KycDocCard({ label, icon, file, onPick, onRemove, error, preferCamera }: KycDocCardProps) {
+    return (
+        <View>
+            {file ? (
+                <View style={[kc.card, kc.cardFilled]}>
+                    <Image source={{ uri: file.uri }} style={kc.preview} resizeMode="cover" />
+                    <View style={kc.filledOverlay}>
+                        <View style={kc.fileInfo}>
+                            <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
+                            <Text style={kc.fileName} numberOfLines={1}>
+                                {file.name}
+                            </Text>
+                        </View>
+                        <TouchableOpacity style={kc.removeBtn} onPress={onRemove}>
+                            <Ionicons name="trash-outline" size={16} color={Colors.danger} />
+                            <Text style={kc.removeBtnText}>Remove</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            ) : (
+                <TouchableOpacity
+                    style={[kc.card, !!error && kc.cardError]}
+                    onPress={onPick}
+                    activeOpacity={0.8}
+                >
+                    <View style={kc.iconWrap}>
+                        <Ionicons
+                            name={icon as any}
+                            size={26}
+                            color={error ? Colors.danger : Colors.info}
+                        />
+                    </View>
+                    <Text style={[kc.label, !!error && { color: Colors.danger }]}>{label}</Text>
+                    <Text style={kc.sub}>
+                        {preferCamera
+                            ? 'Tap to take a photo or choose from gallery'
+                            : 'Tap to choose from gallery or camera'}
+                    </Text>
+                    <View style={[kc.uploadBtn, !!error && kc.uploadBtnError]}>
+                        <Ionicons
+                            name="cloud-upload-outline"
+                            size={13}
+                            color={error ? Colors.danger : Colors.info}
+                        />
+                        <Text style={[kc.uploadBtnText, !!error && { color: Colors.danger }]}>
+                            Upload
+                        </Text>
+                    </View>
+                </TouchableOpacity>
+            )}
+            {!!error && (
+                <View style={kc.errorRow}>
+                    <Ionicons name="alert-circle" size={12} color={Colors.danger} />
+                    <Text style={kc.errorText}>{error}</Text>
+                </View>
+            )}
+        </View>
+    );
+}
+
+const kc = StyleSheet.create({
+    card: {
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        borderStyle: 'dashed',
+        borderRadius: Radii.lg,
+        overflow: 'hidden',
+        alignItems: 'center',
+        padding: Spacing.lg,
+        backgroundColor: Colors.background,
+        marginBottom: 4,
+    },
+    cardFilled: { padding: 0, borderStyle: 'solid', borderColor: Colors.primaryBorder },
+    cardError: { borderColor: Colors.danger, backgroundColor: '#FFF5F5' },
+    preview: { width: '100%', height: 140 },
+    filledOverlay: {
+        width: '100%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: Spacing.md,
+        backgroundColor: Colors.surface,
+    },
+    fileInfo: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+    fileName: { fontSize: 13, fontWeight: Typography.medium, color: Colors.charcoal, flex: 1 },
+    removeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    removeBtnText: { fontSize: 12, color: Colors.danger, fontWeight: Typography.bold },
+    iconWrap: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: Colors.infoLight,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: Spacing.sm,
+    },
+    label: { fontSize: 13, fontWeight: Typography.bold, color: Colors.charcoal, marginBottom: 4 },
+    sub: {
+        fontSize: 11,
+        color: Colors.charcoalLight,
+        textAlign: 'center',
+        lineHeight: 16,
+        marginBottom: Spacing.sm,
+    },
+    uploadBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 14,
+        paddingVertical: 7,
+        borderRadius: Radii.full,
+        borderWidth: 1.5,
+        borderColor: Colors.info,
+        backgroundColor: Colors.infoLight,
+    },
+    uploadBtnError: { borderColor: Colors.danger, backgroundColor: '#FEE2E2' },
+    uploadBtnText: { fontSize: 12, fontWeight: Typography.bold, color: Colors.info },
+    errorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: Spacing.sm },
+    errorText: { fontSize: 11, color: Colors.danger, fontWeight: Typography.semiBold },
+});
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
@@ -849,7 +1432,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         width: SCREEN_WIDTH,
         paddingHorizontal: Spacing.lg,
-        paddingTop: 56,
+        paddingTop: 24,
         paddingBottom: Spacing.sm,
     },
     backBtn: {
@@ -886,6 +1469,32 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     rolePillText: { fontSize: 12, fontWeight: Typography.medium, letterSpacing: 0.1 },
+
+    // Step indicator
+    stepRow: {
+        width: SCREEN_WIDTH - 32,
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: Spacing.sm,
+        marginBottom: Spacing.md,
+    },
+    stepItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    stepDot: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: Colors.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    stepDotActive: { backgroundColor: Colors.primary },
+    stepDotText: { fontSize: 11, fontWeight: Typography.bold, color: Colors.charcoalLight },
+    stepDotTextActive: { fontSize: 11, fontWeight: Typography.bold, color: Colors.charcoal },
+    stepLabel: { fontSize: 12, color: Colors.charcoalLight, fontWeight: Typography.medium },
+    stepLabelActive: { fontSize: 12, color: Colors.charcoal, fontWeight: Typography.bold },
+    stepConnector: { flex: 1, height: 1.5, backgroundColor: Colors.border, marginHorizontal: 8 },
+    stepConnectorActive: { backgroundColor: Colors.primary },
+
     heading: { width: SCREEN_WIDTH - 32, marginBottom: Spacing.lg },
     headingTitle: {
         fontSize: 30,
@@ -959,43 +1568,67 @@ const styles = StyleSheet.create({
         textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
-
-    // Account-type toggle
-    toggleRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.md },
-    toggleBtn: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        height: 44,
-        borderRadius: Radii.md,
-        borderWidth: 1.5,
-        borderColor: Colors.border,
-        backgroundColor: Colors.surface,
-    },
-    toggleBtnActive: { backgroundColor: Colors.charcoal, borderColor: Colors.charcoal },
-    toggleBtnText: { fontSize: 14, fontWeight: Typography.medium, color: Colors.charcoalLight },
-    toggleBtnTextActive: { color: Colors.white, fontWeight: Typography.bold },
-
-    // Vendor category chips
-    categoryGrid: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: Spacing.xs,
+    sectionLabel: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalLight,
+        letterSpacing: 1.8,
         marginBottom: Spacing.sm,
     },
-    categoryChip: {
+    kycHint: {
+        fontSize: 12,
+        color: Colors.charcoalLight,
+        lineHeight: 17,
+        marginBottom: Spacing.sm,
+    },
+
+    // Profile photo (step 2)
+    avatarWrap: { alignItems: 'center', marginBottom: Spacing.sm },
+    avatarTouchable: { position: 'relative' },
+    avatarImage: { width: 88, height: 88, borderRadius: 44, backgroundColor: Colors.background },
+    avatarPlaceholder: {
+        width: 88,
+        height: 88,
+        borderRadius: 44,
+        backgroundColor: Colors.background,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    avatarEditBadge: {
+        position: 'absolute',
+        bottom: -2,
+        right: -2,
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        backgroundColor: Colors.primary,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: Colors.surface,
+    },
+    avatarLabel: {
+        fontSize: 12,
+        color: Colors.charcoalLight,
+        fontWeight: Typography.medium,
+        marginTop: Spacing.sm,
+    },
+
+    // ID type chips (also reused in step 2)
+    typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.xs },
+    typeChip: {
         paddingHorizontal: Spacing.md,
         paddingVertical: 8,
         borderRadius: Radii.full,
-        borderWidth: 1,
+        borderWidth: 1.5,
         borderColor: Colors.border,
         backgroundColor: Colors.background,
     },
-    categoryChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-    categoryChipText: { fontSize: 13, color: Colors.charcoalLight, fontWeight: Typography.medium },
-    categoryChipTextActive: { color: Colors.white, fontWeight: Typography.bold },
+    typeChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+    typeChipText: { fontSize: 12.5, color: Colors.charcoalLight, fontWeight: Typography.semiBold },
+    typeChipTextActive: { color: Colors.charcoal, fontWeight: Typography.bold },
 
     divider: { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.lg },
     termsRow: {
@@ -1043,6 +1676,8 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
+    skipBtn: { alignSelf: 'center', marginTop: Spacing.md, padding: Spacing.xs },
+    skipBtnText: { fontSize: 13, fontWeight: Typography.semiBold, color: Colors.charcoalLight },
     loginRow: { flexDirection: 'row', alignItems: 'center', marginTop: Spacing.xl },
     loginText: { fontSize: 14, color: Colors.charcoalLight },
     loginLink: { fontSize: 14, color: Colors.primary, fontWeight: Typography.extraBold },
