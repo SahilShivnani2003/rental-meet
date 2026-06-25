@@ -23,12 +23,34 @@ target 'RentalMeet' do
     :app_path => "#{Pod::Config.instance.installation_root}/.."
   )
 
-  post_install do |installer|
-    react_native_post_install(
-      installer,
-      config[:reactNativePath],
-      :mac_catalyst_enabled => false,
-      # :ccache_enabled => true
-    )
+post_install do |installer|
+  # Keep your existing react_native_post_install here
+  react_native_post_install(installer, config[:reactNativePath])
+
+  installer.pods_project.targets.each do |target|
+    if target.name == 'fmt'
+      target.build_configurations.each do |config|
+        config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'c++17'
+      end
+    end
+  end
+
+
+  fmt_base = File.join(installer.sandbox.root, 'fmt', 'include', 'fmt', 'base.h')
+  if File.exist?(fmt_base)
+    content = File.read(fmt_base)
+    unless content.include?('Xcode 26 workaround')
+      patched = content.gsub(
+        /^(#elif defined\(__cpp_consteval\)\n#  define FMT_USE_CONSTEVAL) 1/,
+        "// Xcode 26 workaround: disable consteval\n\\1 0"
+      )
+      if patched != content
+        File.chmod(0644, fmt_base)
+        File.write(fmt_base, patched)
+      end
+    end
+  end
+
+
   end
 end
