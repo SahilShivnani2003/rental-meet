@@ -66,4 +66,5 @@ export type RootStackParamList = {
         bookingData: any
     },
     referral:undefined;
+    quotationDownload: undefined;
 };

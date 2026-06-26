@@ -31,6 +31,7 @@ import ForgotPasswordScreen from '@/features/auth/screens/ForgotPasswordScreen';
 import ReferralScreen from '@/features/profile/screen/RefferralScreen';
 import SplashScreen2 from '@/screens/SplashScreen2';
 import { Colors } from '@/theme/theme';
+import QuotationDownloadsScreen from '@/features/quotation/screens/QuotationDownloadScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -74,6 +75,7 @@ export default function RootNavigator() {
                         <Stack.Screen name='updateVendorService' component={UpdateServiceScreen}/>
                         <Stack.Screen name='serviceBookingDetail' component={ServiceBookingDetailScreen}/>
                         <Stack.Screen name="referral" component={ReferralScreen} />
+                        <Stack.Screen name="quotationDownload" component={QuotationDownloadsScreen}/>
                     </Stack.Navigator>
                 </NavigationContainer>
             </AlertProvider>
