@@ -150,11 +150,11 @@ export interface Booking {
 
     paymentId?: string;
 
-    paymentDetails?: {
-        razorpay_order_id?: string;
-        razorpay_payment_id?: string;
-        razorpay_signature?: string;
-        paidAt?: Date;
+    paymentDetails: {
+        razorpay_order_id: string;
+        razorpay_payment_id: string;
+        razorpay_signature: string;
+        paidAt: number;
     };
 
     cancellationReason?: string;

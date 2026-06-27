@@ -903,91 +903,13 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
         guestNum,
         maxCapacity,
     ]);
-    const handlePayment = useCallback(
-        (bookingId: string): Promise<void> =>
-            new Promise((resolve, reject) => {
-                createPaymentOrder(
-                    {
-                        bookingId,
-                        amount: total,
-                        bookingType: toBookingType(selectedDuration!.type),
-                    },
-                    {
-                        onSuccess: async (orderData: any) => {
-                            if (!orderData?.success) {
-                                reject(new Error('Failed to create payment order'));
-                                return;
-                            }
-                            try {
-                                const options = {
-                                    key: Config.RAZORPAY_KEY_TEST ?? '',
-                                    amount: orderData.order.amount,
-                                    currency: orderData.order.currency ?? 'INR',
-                                    name: 'RentalMeet',
-                                    description: `Booking Payment - ${venue.businessName}`,
-                                    order_id: orderData.order.id,
-                                    prefill: { name: fullName, email, contact: phone },
-                                    theme: { color: '#F59F0A' },
-                                };
 
-                                const razorpayResponse = await RazorpayCheckout.open(options);
-
-                                if (!razorpayResponse?.razorpay_payment_id) {
-                                    reject(new Error('Payment not completed'));
-                                    return;
-                                }
-
-                                // FIX 7: verifyPaymentMutate is the mutate fn — call it properly
-                                verifyPaymentMutate(
-                                    {
-                                        razorpay_order_id: razorpayResponse.razorpay_order_id,
-                                        razorpay_payment_id: razorpayResponse.razorpay_payment_id,
-                                        razorpay_signature: razorpayResponse.razorpay_signature,
-                                        bookingId,
-                                        paidAmount: total,
-                                        bookingType: toBookingType(selectedDuration!.type),
-                                    },
-                                    {
-                                        onSuccess: (verifyData: any) => {
-                                            if (verifyData?.success) {
-                                                alert.success(
-                                                    'Payment Successful',
-                                                    'Booking confirmed!',
-                                                );
-                                                navigation.popToTop?.() ?? navigation.goBack();
-                                                resolve();
-                                            } else {
-                                                reject(new Error('Payment verification failed'));
-                                            }
-                                        },
-                                        onError: (err: any) => reject(err),
-                                    },
-                                );
-                            } catch (err) {
-                                reject(err);
-                            }
-                        },
-                        onError: (err: any) => reject(err),
-                    },
-                );
-            }),
-        [
-            createPaymentOrder,
-            verifyPaymentMutate,
-            total,
-            selectedDuration,
-            venue,
-            fullName,
-            email,
-            phone,
-            alert,
-            navigation,
-        ],
-    );
-
-    // ── Submit ────────────────────────────────────────────────────────────────
-    // FIX 8: createBooking mutate result is now received via onSuccess callback, not a return value
-    const handleConfirmBooking = async () => {
+    const handleConfirmBooking = async (paymentDetails: {
+        razorpay_order_id: string;
+        razorpay_payment_id: string;
+        razorpay_signature: string;
+        paidAt: number;
+    }) => {
         const err = validate();
         if (err) {
             alert.error('Validation Error', err);
@@ -1034,6 +956,7 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
                 guestCount: guestNum,
                 specialRequirements: specialRequirements.trim(),
             },
+            paymentDetails: paymentDetails,
         };
         debugger;
         createBooking(bookingPayload, {
@@ -1041,7 +964,7 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
             onSuccess: async (response: any) => {
                 if (response?.success) {
                     try {
-                        await handlePayment(response.booking._id);
+                        alert.success('Booking Successfull', response?.message || 'Booking created successfull')
                     } catch (payErr: any) {
                         console.error('PAYMENT ERROR:', payErr);
                         alert.error(
@@ -1065,6 +988,81 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
             },
         });
     };
+
+    const handlePayment = useCallback(
+    (): Promise<void> =>
+        new Promise((resolve, reject) => {
+            createPaymentOrder(
+                {
+                    amount: total,
+                    bookingType: toBookingType(selectedDuration!.type),
+                },
+                {
+                    onSuccess: async (orderData: any) => {
+                        if (!orderData?.success) {
+                            reject(new Error('Failed to create payment order'));
+                            return;
+                        }
+
+                        try {
+                            const options = {
+                                key: Config.RAZORPAY_KEY_TEST ?? 'rzp_test_SccoVnz23oDwwG',
+                                amount: orderData.order.amount,
+                                currency: orderData.order.currency ?? 'INR',
+                                name: 'RentalMeet',
+                                description: `Booking Payment - ${venue.businessName}`,
+                                order_id: orderData.order.id,
+                                prefill: {
+                                    name: fullName,
+                                    email,
+                                    contact: phone,
+                                },
+                                theme: { color: '#F59F0A' },
+                            };
+
+                            const razorpayResponse =
+                                await RazorpayCheckout.open(options);
+
+                            if (!razorpayResponse?.razorpay_payment_id) {
+                                reject(new Error('Payment not completed'));
+                                return;
+                            }
+
+                            const paymentDetails = {
+                                razorpay_order_id:
+                                    razorpayResponse.razorpay_order_id,
+                                razorpay_payment_id:
+                                    razorpayResponse.razorpay_payment_id,
+                                razorpay_signature:
+                                    razorpayResponse.razorpay_signature,
+                                paidAt: Date.now(),
+                            };
+
+                            await handleConfirmBooking(paymentDetails);
+                            resolve();
+                        } catch (err) {
+                            reject(err);
+                        }
+                    },
+                    onError: (err: any) => reject(err),
+                },
+            );
+        }),
+    [
+        createPaymentOrder,
+        total,
+        selectedDuration,
+        venue,
+        fullName,
+        email,
+        phone,
+        handleConfirmBooking,
+    ],
+);
+
+    // ── Submit ────────────────────────────────────────────────────────────────
+    // FIX 8: createBooking mutate result is now received via onSuccess callback, not a return value
+    
 
     const handleGenerateQuote = async () => {
         const err = validate();
@@ -1662,7 +1660,7 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
                     style={[s.footerConfirm, footerDisabled && s.footerConfirmDisabled]}
                     activeOpacity={0.88}
                     disabled={footerDisabled}
-                    onPress={handleConfirmBooking}
+                    onPress={handlePayment}
                 >
                     {submitting ? (
                         <ActivityIndicator size="small" color={Colors.white} />
