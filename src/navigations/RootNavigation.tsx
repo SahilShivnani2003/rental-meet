@@ -42,7 +42,7 @@ export default function RootNavigator() {
                 <NavigationContainer>
                     <Stack.Navigator
                         initialRouteName="splash"
-                        screenOptions={{ headerShown: false, animation: 'fade' , statusBarStyle: 'light', statusBarBackgroundColor:Colors.primary}}
+                        screenOptions={{ headerShown: false, animation: 'fade' }}
                     >
                         <Stack.Screen name="splash" component={SplashScreen2} />
                         <Stack.Screen name="login" component={LoginScreen} />
