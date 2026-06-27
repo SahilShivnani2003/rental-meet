@@ -34,7 +34,11 @@
 		<true/>
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
+	<string>RentalMeet uses your location to show nearby rental properties and improve your search experience.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>RentalMeet needs access to your photo library so you can upload images.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>RentalMeet needs permission to save images to your photo library.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>AntDesign.ttf</string>
