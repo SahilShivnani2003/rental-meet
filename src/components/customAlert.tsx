@@ -9,6 +9,7 @@ import {
     Modal,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { Colors } from '@/theme/theme';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -65,9 +66,9 @@ const TYPE_CONFIG: Record<
     },
     info: {
         icon: 'information-circle',
-        iconColor: '#FF6B35',
+        iconColor: Colors.primary,
         iconBg: '#FFF0EB',
-        accentColor: '#FF6B35',
+        accentColor: Colors.primary,
         cardBg: '#FFF8F5', // ultra-light orange wash
     },
     confirm: {
@@ -81,10 +82,10 @@ const TYPE_CONFIG: Record<
 
 const BUTTON_STYLES: Record<string, object> = {
     primary: {
-        bg: '#FF6B35',
+        bg: Colors.primary,
         text: '#FFFFFF',
         border: 'transparent',
-        shadow: '#FF6B35',
+        shadow:Colors.primaryLight,
     },
     secondary: {
         bg: '#1A1A1A',

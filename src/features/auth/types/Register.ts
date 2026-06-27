@@ -25,8 +25,6 @@ export interface RegisterVendor {
     password: string;
     role: 'vendor';
     referralCode?: string;
-    accountType: 'individual' | 'company';
-    vendorCategory: string;
     city: string;
     state: string;
 }

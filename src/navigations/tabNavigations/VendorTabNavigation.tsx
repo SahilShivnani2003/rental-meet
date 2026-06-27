@@ -2,6 +2,7 @@ import CustomTabBar from '@/components/bottomTab/custom-tabBar';
 import VendorBookingsScreen from '@/features/booking/screens/VendorBookingScreen';
 import VendorDashboardScreen from '@/features/dashboard/screens/VendorDashboardScreen';
 import { VendorService } from '@/features/otherService/types/VendorService';
+import ServicePaymentsScreen from '@/features/payments/screens/ServicePaymentScreen';
 import ProfileScreen from '@/features/profile/screen/OwnerProfile';
 import VendorProfileScreen from '@/features/profile/screen/VendorProfileScreen';
 import GetQuotationScreen from '@/features/quotation/screens/GetQuotationScreen';
@@ -14,7 +15,7 @@ export type VendorTabParamList = {
     dashboard: undefined;
     myService: undefined;
     booking: undefined;
-    quotationDownload: undefined;
+    payment: undefined;
     profile: undefined;
 };
 
@@ -39,10 +40,10 @@ const vendorTabConfig: TabConfig[] = [
         center: true, // useful for showing new bookings
     },
     {
-        name: 'quotationDownload',
-        label: 'Quotations',
-        icon: 'download',
-        iconOff: 'download-outline',
+        name: 'payment',
+        label: 'Payment',
+        icon: 'wallet',
+        iconOff: 'wallet-outline',
     },
     {
         name: 'profile',
@@ -63,7 +64,7 @@ export function VendorTabNavigation() {
             <Tab.Screen name="dashboard" component={VendorDashboardScreen} />
             <Tab.Screen name="myService" component={VendorServicesScreen} />
             <Tab.Screen name="booking" component={VendorBookingsScreen} />
-            <Tab.Screen name="quotationDownload" component={QuotationDownloadsScreen} />
+            <Tab.Screen name="payment" component={ServicePaymentsScreen} />
             <Tab.Screen name="profile" component={ProfileScreen} />
         </Tab.Navigator>
     );

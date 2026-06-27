@@ -20,6 +20,9 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '@/types/RootStackParamList';
 import { useGetVendorProfile } from '@/features/vendor/hooks/useVendorService';
 import { VendorProfile } from '@/features/vendor/types/VendorProfile';
+import { useUploadImage } from '../hooks/useUploadImage';
+import { useDeactivateAccount } from '../hooks/useDeactivateAccount';
+import { useDeleteAccount } from '../hooks/useDeletAccount';
 
 const { width: W } = Dimensions.get('window');
 
@@ -87,9 +90,11 @@ export default function VendorProfileScreen({ navigation }: Props) {
     const rootNav = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
     // TODO: replace with real hook
     const profile: VendorProfile = data?.profile ?? {};
-
+    const { mutate: uploadProfilePhoto } = useUploadImage();
+    const { mutate: deactivateAccount } = useDeactivateAccount();
+    const { mutate: deleteAccount } = useDeleteAccount();
     const handleRefresh = useCallback(() => {
-        // refetch();
+        refetch();
     }, []);
 
     // ── Animations ────────────────────────────────────────────────────────────
@@ -240,12 +245,7 @@ export default function VendorProfileScreen({ navigation }: Props) {
                         label="Secondary Mobile"
                         value={profile.basicInfo?.secondaryMobile ?? '—'}
                     />
-                    <InfoRow
-                        icon="briefcase-outline"
-                        label="Role"
-                        value={role}
-                        last
-                    />
+                    <InfoRow icon="briefcase-outline" label="Role" value={role} last />
                 </View>
 
                 {/* Business Info */}
@@ -405,7 +405,6 @@ export default function VendorProfileScreen({ navigation }: Props) {
                         </TouchableOpacity>
                     </View>
                 </View>
-
                 {/* Logout */}
                 <TouchableOpacity style={s.logoutBtn} onPress={handleLogout} activeOpacity={0.8}>
                     <Ionicons name="log-out-outline" size={18} color={Colors.danger} />

@@ -7,6 +7,7 @@ import {
     TouchableOpacity,
     Animated,
     RefreshControl,
+    Image,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -26,6 +27,10 @@ import { useUpdateProfile } from '../hooks/useUpdateProfile';
 import ChangePasswordModal from '../models/ChangePasswordModal';
 import EditProfileModal from '../models/EditProfileModal';
 import { VendorTabParamList } from '@/navigations/tabNavigations/VendorTabNavigation';
+import { useUploadImage } from '../hooks/useUploadImage';
+import { useDeactivateAccount } from '../hooks/useDeactivateAccount';
+import { useDeleteAccount } from '../hooks/useDeletAccount';
+import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -144,7 +149,9 @@ export default function ProfileScreen({ navigation }: ProfileProps) {
 
     // True during pull-to-refresh (data already exists, just re-fetching)
     const isRefreshing = isProfileRefetching || isBookingsRefetching;
-
+    const { mutate: uploadProfilePhoto } = useUploadImage();
+    const { mutate: deactivateAccount } = useDeactivateAccount();
+    const { mutate: deleteAccount } = useDeleteAccount();
     // ── Pull-to-refresh: fire both refetches together ─────────────────────────
     const handleRefresh = useCallback(() => {
         refetchProfile();
@@ -166,6 +173,8 @@ export default function ProfileScreen({ navigation }: ProfileProps) {
     const displayPhone = profile?.phone ?? '';
     const referralCode = profile?.referralCode ?? '';
     const initials = displayName.slice(0, 2).toUpperCase();
+    const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
     // ── Parent stack navigator ────────────────────────────────────────────────
     const rootNav = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
@@ -261,6 +270,191 @@ export default function ProfileScreen({ navigation }: ProfileProps) {
         },
     ];
 
+    const handleDeactivateAccount = () => {
+        alert.show({
+            type: 'confirm',
+            title: 'Deactivate Account',
+            message:
+                'Your account will be temporarily disabled. You can reactivate it later by logging in again. Continue?',
+            buttons: [
+                { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },
+                {
+                    label: 'Deactivate',
+                    onPress: () => {
+                        deactivateAccount(undefined as any, {
+                            onSuccess: async () => {
+                                alert.dismiss();
+                                navigation
+                                    .getParent<NativeStackNavigationProp<RootStackParamList>>()
+                                    .reset({ index: 0, routes: [{ name: 'login' }] });
+                                await logOut();
+                            },
+                            onError: () => {
+                                alert.dismiss();
+                                alert.error?.(
+                                    'Deactivation failed',
+                                    'Could not deactivate your account. Please try again.',
+                                );
+                            },
+                        });
+                    },
+                },
+            ],
+        });
+    };
+
+    const handleDeleteAccount = () => {
+        alert.show({
+            type: 'confirm',
+            title: 'Delete Account',
+            message:
+                'This will permanently delete your account and all associated data. This action cannot be undone. Are you absolutely sure?',
+            buttons: [
+                { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },
+                {
+                    label: 'Delete Permanently',
+                    style: 'danger',
+                    onPress: () => {
+                        // Second confirmation since this is irreversible
+                        alert.show({
+                            type: 'confirm',
+                            title: 'Final Confirmation',
+                            message:
+                                'Last chance — type nothing, just confirm: delete your account forever?',
+                            buttons: [
+                                { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },
+                                {
+                                    label: 'Yes, Delete',
+                                    style: 'danger',
+                                    onPress: () => {
+                                        deleteAccount(undefined as any, {
+                                            onSuccess: async () => {
+                                                alert.dismiss();
+                                                navigation
+                                                    .getParent<
+                                                        NativeStackNavigationProp<RootStackParamList>
+                                                    >()
+                                                    .reset({
+                                                        index: 0,
+                                                        routes: [{ name: 'login' }],
+                                                    });
+                                                await logOut();
+                                            },
+                                            onError: () => {
+                                                alert.dismiss();
+                                                alert.error?.(
+                                                    'Deletion failed',
+                                                    'Could not delete your account. Please try again.',
+                                                );
+                                            },
+                                        });
+                                    },
+                                },
+                            ],
+                        });
+                    },
+                },
+            ],
+        });
+    };
+
+    const handleUploadPhoto = (asset: Asset) => {
+        if (!asset.uri) return;
+
+        const formData = new FormData();
+        formData.append('file', {
+            uri: asset.uri,
+            type: asset.type ?? 'image/jpeg',
+            name: asset.fileName ?? `profile_${Date.now()}.jpg`,
+        } as any);
+
+        formData.append('folder', 'profiles');
+        setUploadingPhoto(true);
+
+        uploadProfilePhoto(formData, {
+            onSuccess: (res: any) => {
+                const url = res?.url ?? res?.data?.url ?? res?.image?.url;
+                if (!url) {
+                    alert.error?.('Upload failed', 'Could not get the uploaded image URL.');
+                    return;
+                }
+                setProfilePicUrl(url);
+
+                // Persist it on the profile
+                updateUser({ profilePicture: url } as any, {
+                    onSuccess: () => {
+                        refetchProfile();
+                    },
+                    onError: () => {
+                        alert.error?.('Update failed', 'Photo uploaded but profile update failed.');
+                    },
+                });
+            },
+            onError: () => {
+                alert.error?.('Upload failed', 'Could not upload your photo. Please try again.');
+            },
+            onSettled: () => {
+                setUploadingPhoto(false);
+            },
+        });
+    };
+
+    const pickFromCamera = async () => {
+        const result = await launchCamera({
+            mediaType: 'photo',
+            quality: 0.8,
+            maxWidth: 1080,
+            maxHeight: 1080,
+            saveToPhotos: true,
+        });
+        if (result.didCancel || !result.assets?.length) return;
+        if (result.errorCode) {
+            alert.error?.('Camera error', result.errorMessage ?? 'Could not open camera.');
+            return;
+        }
+        handleUploadPhoto(result.assets[0]);
+    };
+
+    const pickFromGallery = async () => {
+        const result = await launchImageLibrary({
+            mediaType: 'photo',
+            quality: 0.8,
+            maxWidth: 1080,
+            maxHeight: 1080,
+            selectionLimit: 1,
+        });
+        if (result.didCancel || !result.assets?.length) return;
+        if (result.errorCode) {
+            alert.error?.('Gallery error', result.errorMessage ?? 'Could not open gallery.');
+            return;
+        }
+        handleUploadPhoto(result.assets[0]);
+    };
+    
+    const handlePhotoOptions = () => {
+        alert.show({
+            type: 'confirm',
+            title: 'Update Profile Photo',
+            message: 'Choose a source for your new profile photo.',
+            buttons: [
+                {
+                    label: 'Take Photo',
+                    onPress: () => {
+                        alert.dismiss();
+                        pickFromCamera();
+                    },
+                },
+                {
+                    label: 'Gallery',
+                    onPress: () => {
+                        alert.dismiss();
+                        pickFromGallery();
+                    },
+                },
+                { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },
+            ],
+        });
+    };
     // ── Initial load spinner (full screen) ────────────────────────────────────
     if (isInitialLoading) {
         return (
@@ -321,10 +515,21 @@ export default function ProfileScreen({ navigation }: ProfileProps) {
                         <View style={styles.avatarWrapper}>
                             <View style={styles.avatarRing}>
                                 <View style={styles.avatar}>
-                                    <Text style={styles.avatarInitials}>{initials}</Text>
+                                    {profilePicUrl || (user && user.profilePicture) ? (
+                                        <Image
+                                            source={{ uri: profilePicUrl ?? user?.profilePicture }}
+                                            style={styles.avatarImage}
+                                        />
+                                    ) : (
+                                        <Text style={styles.avatarInitials}>{initials}</Text>
+                                    )}
                                 </View>
                             </View>
-                            <TouchableOpacity style={styles.cameraBtn} activeOpacity={0.8}>
+                            <TouchableOpacity
+                                style={styles.cameraBtn}
+                                activeOpacity={0.8}
+                                onPress={handlePhotoOptions}
+                            >
                                 <Ionicons name="camera" size={14} color={Colors.white} />
                             </TouchableOpacity>
                         </View>
@@ -385,7 +590,34 @@ export default function ProfileScreen({ navigation }: ProfileProps) {
 
                 <MenuSection title="ACCOUNT" items={accountItems} />
                 <MenuSection title="PREFERENCES" items={preferenceItems} />
-
+                <View style={styles.menuSection}>
+                    <Text style={styles.menuSectionLabel}>ACCOUNT ACTIONS</Text>
+                    <View style={styles.menuSectionCard}>
+                        <MenuItem
+                            item={{
+                                id: 'deactivate',
+                                icon: 'pause-circle-outline',
+                                iconColor: Colors.warning,
+                                iconBg: Colors.warningLight,
+                                title: 'Deactivate Account',
+                                subtitle: 'Temporarily disable your account',
+                                onPress: handleDeactivateAccount,
+                            }}
+                        />
+                        <View style={styles.menuDivider} />
+                        <MenuItem
+                            item={{
+                                id: 'delete',
+                                icon: 'trash-outline',
+                                iconColor: Colors.danger,
+                                iconBg: Colors.dangerLight,
+                                title: 'Delete Account',
+                                subtitle: 'Permanently remove your account',
+                                onPress: handleDeleteAccount,
+                            }}
+                        />
+                    </View>
+                </View>
                 {/* Logout */}
                 <TouchableOpacity
                     style={styles.logoutBtn}
@@ -509,6 +741,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
     },
+    avatarImage: { width: '100%', height: '100%', borderRadius: 44 },
     avatarInitials: {
         fontSize: 28,
         fontWeight: Typography.extraBold,
@@ -700,5 +933,23 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: Colors.border,
         fontWeight: Typography.regular,
+    },
+    menuSection: { marginBottom: Spacing.lg },
+    menuSectionLabel: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalLight,
+        letterSpacing: 2,
+        marginBottom: Spacing.sm,
+        paddingHorizontal: Spacing.xxs,
+    },
+    menuSectionCard: {
+        backgroundColor: Colors.surface,
+        borderRadius: Radii.xl,
+        shadowColor: Colors.charcoal,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.06,
+        shadowRadius: 10,
+        elevation: 3,
     },
 });
