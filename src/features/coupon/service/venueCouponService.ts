@@ -20,7 +20,7 @@ export const createVenueCoupons = async (data: Coupon) => {
     try {
         console.log('Creating venue coupon....')
 
-        const response = await privateClient.post('/owner/coupons');
+        const response = await privateClient.post('/owner/coupons', data);
 
         console.log('Create venue coupon respone : ', response.data);
 

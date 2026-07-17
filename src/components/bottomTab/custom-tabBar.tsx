@@ -12,11 +12,8 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 interface CustomTabBarProps {
     state: any;
     navigation: any;
-    /** Tab descriptors in display order — must match the navigator's screen order */
     tabs: TabConfig[];
-    /** Live badge counts keyed by route name, e.g. { messages: 3 } */
     badgeCounts?: Record<string, number>;
-    /** Override icon shown inside the center FAB (defaults to tab's own icon) */
     centerIcon?: string;
 }
 

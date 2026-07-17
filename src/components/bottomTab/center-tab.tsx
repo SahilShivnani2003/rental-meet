@@ -94,7 +94,7 @@ export default function CenterTab({
                 </TouchableOpacity>
 
                 {/* Label beneath FAB */}
-                {isFocused ? <Text style={styles.centerLabel}>{tab.label}</Text> : null}
+                {!isFocused ? <Text style={styles.centerLabel}>{tab.label}</Text> : null}
             </View>
         </View>
     );
@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     centerLabel: {
         fontSize: Typography.xs,
         fontWeight: Typography.extraBold as any,
-        color: Colors.primary,
+        color: Colors.white,
         letterSpacing: Typography.wide,
         textTransform: 'uppercase',
         marginTop: 4,

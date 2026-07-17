@@ -48,6 +48,15 @@ const DAY_ABBR: Record<string, string> = {
     Sunday: 'S',
 };
 
+// ─── Food type indicator config ───────────────────────────────────────────────
+// Uses the classic Indian veg/non-veg square+dot convention so it reads
+// instantly: green = pure veg, red = non-veg, amber = both served.
+const FOOD_TYPE_CONFIG: Record<NonNullable<Venue['foodType']>, { color: string; label: string }> = {
+    Veg: { color: Colors.success, label: 'Pure Veg' },
+    'Non Veg': { color: Colors.danger, label: 'Non-Veg' },
+    Both: { color: Colors.warning, label: 'Veg & Non-Veg' },
+};
+
 // ─── Safe venue data defaults ─────────────────────────────────────────────────
 // All fields on Venue are optional — centralise the safe defaults here once
 function safeVenue(venue: Venue) {
@@ -95,6 +104,20 @@ function SectionTitle({ icon, label }: { icon: string; label: string }) {
     );
 }
 
+// Classic Indian veg/non-veg square-with-dot symbol, colored by food type.
+function FoodTypeTag({ type }: { type?: Venue['foodType'] }) {
+    if (!type) return null;
+    const config = FOOD_TYPE_CONFIG[type];
+    return (
+        <View style={util.metaItem}>
+            <View style={[util.foodSquare, { borderColor: config.color }]}>
+                <View style={[util.foodDot, { backgroundColor: config.color }]} />
+            </View>
+            <Text style={util.metaText}>{config.label}</Text>
+        </View>
+    );
+}
+
 const util = StyleSheet.create({
     sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
     sectionIconWrap: {
@@ -112,6 +135,21 @@ const util = StyleSheet.create({
         letterSpacing: -0.3,
     },
     divider: { height: 1, backgroundColor: Colors.divider, marginVertical: Spacing.lg },
+    metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    metaText: {
+        fontSize: Typography.base,
+        color: Colors.charcoalMid,
+        fontWeight: Typography.medium,
+    },
+    foodSquare: {
+        width: 14,
+        height: 14,
+        borderRadius: 3,
+        borderWidth: 1.5,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    foodDot: { width: 6, height: 6, borderRadius: 3 },
 });
 
 // ─── Amenity sub-components ───────────────────────────────────────────────────
@@ -324,7 +362,6 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
     // ── Safe destructure — all fields optional on Venue ───────────────────────
     const { amenities, pricing, availability, images } = safeVenue(venue);
     const location = venue.location;
-
     // ── Scroll / hero animations ──────────────────────────────────────────────
     const scrollY = useRef(new Animated.Value(0)).current;
     const flatListRef = useRef<FlatList<NonNullable<Venue['images']>[0]>>(null);
@@ -715,6 +752,12 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                             <Ionicons name="people-outline" size={14} color={Colors.primary} />
                             <Text style={s.metaText}>Up to {venue.capacity} guests</Text>
                         </View>
+                        {!!venue.foodType && (
+                            <>
+                                <View style={s.metaDot} />
+                                <FoodTypeTag type={venue.foodType} />
+                            </>
+                        )}
                     </View>
                     <View style={s.statsStrip}>
                         {[
@@ -868,56 +911,6 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                         }
                                         onQtyChange={val =>
                                             handleQtyChange(item.name!, val, setPaidQty)
-                                        }
-                                    />
-                                ))}
-                        </View>
-                    )}
-
-                    {/* Additional paid services */}
-                    {amenities.additional.filter(a => a.type === 'Paid' && a.name).length > 0 && (
-                        <View style={am.subSection}>
-                            <View style={am.subHeader}>
-                                <View style={[am.subDot, { backgroundColor: Colors.info }]} />
-                                <Text style={am.subTitle}>Additional Services</Text>
-                            </View>
-                            {amenities.additional
-                                .filter(a => a.type === 'Paid' && a.name)
-                                .map((item, i) => (
-                                    <PaidItem
-                                        key={i}
-                                        name={item.name!}
-                                        charge={item.charges ?? 0}
-                                        qty={paidQty[`add_${item.name!}`] ?? 1}
-                                        checked={paidChecked.has(`add_${item.name!}`)}
-                                        onToggle={() => {
-                                            setPaidChecked(prev =>
-                                                toggleSet(prev, `add_${item.name!}`),
-                                            );
-                                            if (!paidQty[`add_${item.name!}`])
-                                                setPaidQty(p => ({
-                                                    ...p,
-                                                    [`add_${item.name!}`]: 1,
-                                                }));
-                                        }}
-                                        onIncrement={() =>
-                                            setPaidQty(p => ({
-                                                ...p,
-                                                [`add_${item.name!}`]:
-                                                    (p[`add_${item.name!}`] ?? 1) + 1,
-                                            }))
-                                        }
-                                        onDecrement={() =>
-                                            setPaidQty(p => ({
-                                                ...p,
-                                                [`add_${item.name!}`]: Math.max(
-                                                    1,
-                                                    (p[`add_${item.name!}`] ?? 1) - 1,
-                                                ),
-                                            }))
-                                        }
-                                        onQtyChange={val =>
-                                            handleQtyChange(`add_${item.name!}`, val, setPaidQty)
                                         }
                                     />
                                 ))}
@@ -1184,6 +1177,7 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                     {[
                         { label: 'Address', value: location.address },
                         { label: 'Landmark', value: location.landmark },
+                        { label: 'Village', value: location.village },
                         { label: 'City', value: location.city },
                         { label: 'Area', value: location.area },
                         { label: 'Pincode', value: location.pincode },
@@ -1268,21 +1262,24 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                                             label: '1 Hour',
                                             price: ph,
                                             sub: '',
+                                            enable: pricing.enabledOptions.perHour,
                                         },
                                         {
                                             icon: 'sunny-outline',
                                             label: 'Half Day',
                                             price: hd,
                                             sub: '4 Hrs',
+                                            enable: pricing.enabledOptions.halfDay,
                                         },
                                         {
                                             icon: 'calendar-outline',
                                             label: 'Full Day',
                                             price: fd,
                                             sub: '8 Hrs',
+                                            enable: pricing.enabledOptions.fullDay,
                                         },
                                     ]
-                                        .filter(p => p.price > 0)
+                                        .filter(p => p.price > 0 && p.enable === true)
                                         .map((p, i) => (
                                             <View key={i} style={[pr.card, wknd && pr.cardWeekend]}>
                                                 <View style={pr.iconWrap}>
@@ -1380,8 +1377,8 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: Spacing.lg,
-        paddingTop: Platform.OS === 'ios' ? 54 : 21,
+        paddingHorizontal: Spacing.md,
+        paddingTop: Platform.OS === 'ios' ? 24 : 21,
         paddingBottom: Spacing.md,
         backgroundColor: Colors.surface,
         ...Shadows.header,

@@ -281,7 +281,7 @@ type Props = NativeBottomTabScreenProps<OwnerTabParamList, 'dashboard'>;
 export default function OwnerDashboardScreen({ navigation }: Props) {
     const { user } = useAuthStore();
     const alert = useAlert();
-
+    const rootNav = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
     const { data: dashboardData, isLoading, isRefetching, refetch } = useGetOwnerDashboard();
 
     // Derive data safely — no local mirror state that can go stale
@@ -355,24 +355,20 @@ export default function OwnerDashboardScreen({ navigation }: Props) {
     // ── Navigation helpers ────────────────────────────────────────────────────
     const goToBookingDetail = useCallback(
         (booking: RecentBooking) => {
-            navigation
-                .getParent<NativeStackNavigationProp<RootStackParamList>>()
-                .navigate('bookingDetail', { bookingId: booking._id });
+            rootNav.navigate('venueBookingDetail', { bookingId: booking._id });
         },
         [navigation],
     );
 
     const goToVenueDetail = useCallback(
         (venue: RecentVenue) => {
-            navigation
-                .getParent<NativeStackNavigationProp<RootStackParamList>>()
-                .navigate('venueDetail', { venue });
+            rootNav.navigate('venueDetail', { venue });
         },
         [navigation],
     );
 
     const goToAddVenue = useCallback(() => {
-        navigation.getParent<NativeStackNavigationProp<RootStackParamList>>().navigate('addVenue');
+        rootNav.navigate('addVenue');
     }, [navigation]);
 
     // ── Render ────────────────────────────────────────────────────────────────
@@ -397,7 +393,7 @@ export default function OwnerDashboardScreen({ navigation }: Props) {
                         <TouchableOpacity
                             style={s.notifBtn}
                             onPress={() =>
-                                alert.info('Coming Soon', 'Notification feature coming soon')
+                                rootNav.navigate('notification')
                             }
                         >
                             <Ionicons

@@ -5,7 +5,6 @@ import OwnerDashboardScreen from '@/features/dashboard/screens/OwnerDashboardScr
 import BookingsScreen from '@/features/booking/screens/BookingScreen';
 import VenuesScreen from '@/features/venue/screens/VenueScreen';
 import ProfileScreen from '@/features/profile/screen/OwnerProfile';
-import QuotationDownloadsScreen from '@/features/quotation/screens/QuotationDownloadScreen';
 import PaymentsScreen from '@/features/payments/screens/VenuePaymentScreen';
 
 export type OwnerTabParamList = {

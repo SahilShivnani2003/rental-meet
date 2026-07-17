@@ -580,8 +580,8 @@ function HeaderSummary({ quotations }: { quotations: NormalisedQuotation[] }) {
 }
 
 // ─── Screen ────────────────────────────────────────────────────────────────────
-export default function QuotationDownloadsScreen() {
-    const { user } = useAuthStore();
+export default function  QuotationDownloadsScreen() {
+    const { user } = useAuthStore(); 
     const isVendor = user?.role === 'vendor';
     const isVenue = user?.role === 'owner'; // venue owner
 

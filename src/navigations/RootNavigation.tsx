@@ -32,6 +32,8 @@ import ReferralScreen from '@/features/profile/screen/RefferralScreen';
 import SplashScreen2 from '@/screens/SplashScreen2';
 import { Colors } from '@/theme/theme';
 import QuotationDownloadsScreen from '@/features/quotation/screens/QuotationDownloadScreen';
+import { NotificationScreen } from '@/features/notification/screens/NotificationScreen';
+import { VenueCouponScreen } from '@/features/coupon/screens/VenueCouponScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -42,7 +44,12 @@ export default function RootNavigator() {
                 <NavigationContainer>
                     <Stack.Navigator
                         initialRouteName="splash"
-                        screenOptions={{ headerShown: false, animation: 'fade' , statusBarStyle: 'light', statusBarBackgroundColor:Colors.primary}}
+                        screenOptions={{
+                            headerShown: false,
+                            animation: 'fade',
+                            statusBarStyle: 'light',
+                            statusBarBackgroundColor: Colors.primary,
+                        }}
                     >
                         <Stack.Screen name="splash" component={SplashScreen2} />
                         <Stack.Screen name="login" component={LoginScreen} />
@@ -62,20 +69,28 @@ export default function RootNavigator() {
                         <Stack.Screen name="vendor" component={VendorTabNavigation} />
                         <Stack.Screen name="venueDetail" component={VenueDetailScreen} />
                         <Stack.Screen name="category" component={BrowseCategoryScreen} />
-                        <Stack.Screen name='venueBooking' component={VenueBookingScreen} />
+                        <Stack.Screen name="venueBooking" component={VenueBookingScreen} />
                         <Stack.Screen name="venueBookingDetail" component={BookingDetailScreen} />
                         <Stack.Screen name="onBoarding" component={OnboardingScreen} />
                         <Stack.Screen name="addVenue" component={RegisterVenueScreen} />
                         <Stack.Screen name="updateVenue" component={UpdateVenueScreen} />
                         <Stack.Screen name="modifyVenueBooking" component={ModifyBookingScreen} />
                         <Stack.Screen name="addVendorService" component={AddServiceScreen} />
-                        <Stack.Screen name='vendorDetail' component={VendorDetailScreen}/>
-                        <Stack.Screen name='serviceBooking' component={ServiceBookingScreen}/>
-                        <Stack.Screen name='getServiceQuotation' component={GetQuotationScreen}/>
-                        <Stack.Screen name='updateVendorService' component={UpdateServiceScreen}/>
-                        <Stack.Screen name='serviceBookingDetail' component={ServiceBookingDetailScreen}/>
+                        <Stack.Screen name="vendorDetail" component={VendorDetailScreen} />
+                        <Stack.Screen name="serviceBooking" component={ServiceBookingScreen} />
+                        <Stack.Screen name="getServiceQuotation" component={GetQuotationScreen} />
+                        <Stack.Screen name="updateVendorService" component={UpdateServiceScreen} />
+                        <Stack.Screen
+                            name="serviceBookingDetail"
+                            component={ServiceBookingDetailScreen}
+                        />
                         <Stack.Screen name="referral" component={ReferralScreen} />
-                        <Stack.Screen name="quotationDownload" component={QuotationDownloadsScreen}/>
+                        <Stack.Screen
+                            name="quotationDownload"
+                            component={QuotationDownloadsScreen}
+                        />
+                        <Stack.Screen name="notification" component={NotificationScreen} />
+                        <Stack.Screen name="venueCoupon" component={VenueCouponScreen} />
                     </Stack.Navigator>
                 </NavigationContainer>
             </AlertProvider>

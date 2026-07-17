@@ -808,7 +808,7 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
         return platformSettings.platformFeeType ?? 'percentage';
     }, [venue.customPlatformFee, platformSettings.platformFeeType]);
 
-    const effectivePlatformFeePercentage: number = useMemo(() => {
+    const seffectivePlatformFeePercentage: number = useMemo(() => {
         if (venue.customPlatformFee?.enabled) return venue.customPlatformFee.percentage ?? 5;
         if (platformSettings.platformFeeType === 'percentage')
             return platformSettings.platformFeePercentage ?? 0;

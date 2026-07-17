@@ -1,16 +1,22 @@
 export interface Venue {
     _id?: string;
 
-    owner?: string;
+    owner: string; // ObjectId as string
     sku?: string;
 
     businessName: string;
     venueType: string[];
+
+    foodType?: 'Veg' | 'Non Veg' | 'Both';
+
     description: string;
+
     capacity:
     | '10-20' | '20-30' | '30-40' | '40-50' | '50-100' | '100-200'
     | '200-300' | '300-400' | '400-500' | '500-600' | '600-700'
-    | '700-800' | '800-1000' | '1000-1500' | '1500-2000' | 'More than 2000';
+    | '700-800' | '800-1000' | '1000-1500' | '1500-2000'
+    | 'More than 2000';
+
     areaSqft: number;
 
     location: {
@@ -34,19 +40,23 @@ export interface Venue {
             type?: 'Included' | 'Paid';
             rate?: number;
             rateType?: 'Fixed' | 'Per Use';
+            maxQuantity?: number | null;
         }[];
+
         beverages?: {
             name?: string;
             available?: boolean;
             ratePerUnit?: number;
             brand?: string;
         }[];
+
         refreshmentFood?: {
             name?: string;
             available?: boolean;
             ratePerPlate?: number;
             items?: string;
         }[];
+
         lunchThalis?: {
             thaliType:
             | 'North Indian Thali' | 'Punjabi Thali' | 'Non-Veg Thali'
@@ -61,16 +71,19 @@ export interface Venue {
                 itemNames: string;
             }[];
         }[];
+
         kitchenAccess?: {
             available?: boolean;
             type?: 'Included' | 'Paid';
             charges?: number;
         };
+
         diningArea?: {
             available?: boolean;
             type?: 'Included' | 'Paid';
             charges?: number;
         };
+
         additional?: {
             name?: string;
             available?: boolean;
@@ -85,19 +98,42 @@ export interface Venue {
             halfDay?: boolean;
             fullDay?: boolean;
         };
-        perHour?: { weekday?: number; weekend?: number };
-        halfDay?: { weekday?: number; weekend?: number };
-        fullDay?: { weekday?: number; weekend?: number };
-        extraHourRate?: { weekday?: number; weekend?: number };
+
+        perHour?: {
+            weekday?: number;
+            weekend?: number;
+        };
+
+        halfDay?: {
+            weekday?: number;
+            weekend?: number;
+        };
+
+        fullDay?: {
+            weekday?: number;
+            weekend?: number;
+        };
+
+        extraHourRate?: {
+            weekday?: number;
+            weekend?: number;
+        };
     };
 
     customPlatformFee?: {
         enabled?: boolean;
+        feeType?: 'fixed' | 'percentage';
+        feeValue?: number;
+        platformCGSTRate?: number;
+        platformSGSTRate?: number;
         percentage?: number;
     };
 
     customGST?: {
         enabled?: boolean;
+        cgstRate?: number;
+        sgstRate?: number;
+        hsnCode?: string;
         rate?: number;
     };
 
@@ -108,15 +144,18 @@ export interface Venue {
             'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' |
             'Friday' | 'Saturday' | 'Sunday'
         )[];
+
         advanceBookingRule?:
         | 'Same day allowed'
         | '24 hours in advance'
         | '48 hours in advance'
         | '1 week in advance';
+
         blackoutDates?: {
             date?: Date;
             reason?: string;
         }[];
+
         confirmationHours?: number;
     };
 
@@ -172,10 +211,11 @@ export interface Venue {
 
     status?: 'pending' | 'approved' | 'rejected' | 'suspended' | 'resubmitted';
     rejectionReason?: string;
+
     rejectionHistory?: {
         reason?: string;
         rejectedAt?: Date;
-        rejectedBy?: string;
+        rejectedBy?: string; // ObjectId
     }[];
 
     verificationTimeline?: {
@@ -196,8 +236,7 @@ export interface Venue {
     totalEarnings?: number;
     rating?: number;
     reviewCount?: number;
-    activeCoupons?:any;
-    activeCouponCount?:number;
+
     createdAt?: Date;
     updatedAt?: Date;
 }

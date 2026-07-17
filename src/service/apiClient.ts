@@ -3,7 +3,8 @@ import { ApiError } from "@/types/ApiError";
 import { useAuthStore } from "@/store/useAuthStore";
 
 const BASE_URL = "https://api.rentalmeet.com/api";
-// const BASE_URL = "https://rentalmeet.onrender.com/api";
+//const BASE_URL = "https://rentalmeet.onrender.com/api";
+//const BASE_URL = "https://subconsciously-unsuppressible-precious.ngrok-free.dev/api";
 
 export const publicClient = axios.create({
     baseURL: BASE_URL,

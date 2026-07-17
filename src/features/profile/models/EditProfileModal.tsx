@@ -20,233 +20,9 @@ import { Colors, Spacing, Radii, Shadows, Typography } from '@/theme/theme';
 import { ApiError } from '@/types/ApiError';
 import { User, UpdateUser } from '../types/User';
 import Config from 'react-native-config';
-
-const GOOGLE_PLACES_API_KEY = Config.GOOGLEAPI; // 🔑 Replace with your key
-
-interface PlacePrediction {
-    place_id: string;
-    description: string;
-    structured_formatting: {
-        main_text: string;
-        secondary_text: string;
-    };
-    types: string[];
-}
-
-interface CityStatePickerProps {
-    label: string;
-    placeholder: string;
-    icon: string;
-    value: string;
-    onSelect: (value: string) => void;
-    error?: string;
-    types: '(cities)' | 'administrative_area_level_1';
-}
-
-function CityStatePicker({
-    label,
-    placeholder,
-    icon,
-    value,
-    onSelect,
-    error,
-    types,
-}: CityStatePickerProps) {
-    const [query, setQuery] = useState(value);
-    const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
-    const [showDropdown, setShowDropdown] = useState(false);
-    const [fetching, setFetching] = useState(false);
-    const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-    // Sync external value changes (e.g. modal re-open pre-fill)
-    useEffect(() => {
-        setQuery(value);
-    }, [value]);
-
-    const fetchPredictions = async (input: string) => {
-        if (!input || input.length < 2) {
-            setPredictions([]);
-            return;
-        }
-        setFetching(true);
-        try {
-            const typeParam = types === '(cities)' ? 'locality' : 'administrative_area_level_1';
-            const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
-                input,
-            )}&types=${typeParam}&components=country:in&key=${GOOGLE_PLACES_API_KEY}`;
-
-            const res = await fetch(url);
-            const data = await res.json();
-            console.log('Google Places API response:', data);
-            if (data.status === 'OK') {
-                setPredictions(data.predictions ?? []);
-            } else {
-                setPredictions([]);
-            }
-        } catch(error) {
-            console.error('Google Places API error:', error);
-            setPredictions([]);
-        } finally {
-            setFetching(false);
-        }
-    };
-
-    const handleChangeText = (text: string) => {
-        setQuery(text);
-        setShowDropdown(true);
-        if (debounceRef.current) clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(() => fetchPredictions(text), 350);
-    };
-
-    const handleSelect = (prediction: PlacePrediction) => {
-        const mainText = prediction.structured_formatting.main_text;
-        setQuery(mainText);
-        onSelect(mainText);
-        setPredictions([]);
-        setShowDropdown(false);
-    };
-
-    const handleBlur = () => {
-        // Small delay so tap on suggestion registers before blur hides dropdown
-        setTimeout(() => setShowDropdown(false), 180);
-    };
-
-    return (
-        <View style={picker.wrapper}>
-            {/* Label */}
-            <Text style={picker.label}>{label}</Text>
-
-            {/* Input row */}
-            <View style={[picker.inputRow, error ? picker.inputRowError : null]}>
-                <Ionicons
-                    name={icon as string}
-                    size={16}
-                    color={Colors.charcoalLight}
-                    style={picker.icon}
-                />
-                <TextInput
-                    style={picker.input}
-                    value={query}
-                    onChangeText={handleChangeText}
-                    placeholder={placeholder}
-                    placeholderTextColor={Colors.charcoalLight}
-                    onFocus={() => query.length >= 2 && setShowDropdown(true)}
-                    onBlur={handleBlur}
-                    autoCapitalize="words"
-                    autoCorrect={false}
-                />
-                {fetching && (
-                    <Ionicons name="reload-outline" size={14} color={Colors.charcoalLight} />
-                )}
-                {!!query && !fetching && (
-                    <TouchableOpacity
-                        onPress={() => {
-                            setQuery('');
-                            onSelect('');
-                            setPredictions([]);
-                        }}
-                    >
-                        <Ionicons name="close-circle" size={16} color={Colors.charcoalLight} />
-                    </TouchableOpacity>
-                )}
-            </View>
-
-            {error ? <Text style={picker.errorText}>{error}</Text> : null}
-
-            {/* Dropdown */}
-            {showDropdown && predictions.length > 0 && (
-                <View style={picker.dropdown}>
-                    {predictions.map(item => (
-                        <TouchableOpacity
-                            key={item.place_id}
-                            style={picker.suggestion}
-                            onPress={() => handleSelect(item)}
-                            activeOpacity={0.75}
-                        >
-                            <Ionicons
-                                name="location-outline"
-                                size={14}
-                                color={Colors.charcoalLight}
-                                style={{ marginRight: 8, marginTop: 1 }}
-                            />
-                            <View style={{ flex: 1 }}>
-                                <Text style={picker.suggestionMain}>
-                                    {item.structured_formatting.main_text}
-                                </Text>
-                                <Text style={picker.suggestionSub} numberOfLines={1}>
-                                    {item.structured_formatting.secondary_text}
-                                </Text>
-                            </View>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-            )}
-        </View>
-    );
-}
-
-// ─── Picker styles ─────────────────────────────────────────────────────────────
-const picker = StyleSheet.create({
-    wrapper: { marginBottom: Spacing.sm, zIndex: 10 },
-    label: {
-        fontSize: Typography.sm,
-        fontWeight: Typography.bold,
-        color: Colors.charcoal,
-        marginBottom: 6,
-    },
-    inputRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colors.background,
-        borderRadius: Radii.sm,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        paddingHorizontal: Spacing.md,
-        height: 48,
-        gap: 8,
-    },
-    inputRowError: { borderColor: '#E53E3E' },
-    icon: { marginRight: 2 },
-    input: {
-        flex: 1,
-        fontSize: 14,
-        color: Colors.charcoal,
-        paddingVertical: 0,
-    },
-    errorText: { fontSize: 12, color: '#E53E3E', marginTop: 4 },
-    dropdown: {
-        position: 'absolute',
-        top: 76, // label height + input height + gap
-        left: 0,
-        right: 0,
-        backgroundColor: Colors.surface,
-        borderRadius: Radii.sm,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        ...Shadows.floating,
-        zIndex: 999,
-        maxHeight: 220,
-        overflow: 'hidden',
-    },
-    suggestion: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        paddingVertical: 10,
-        paddingHorizontal: Spacing.md,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: Colors.border,
-    },
-    suggestionMain: {
-        fontSize: 13,
-        fontWeight: Typography.bold,
-        color: Colors.charcoal,
-    },
-    suggestionSub: {
-        fontSize: 11,
-        color: Colors.charcoalLight,
-        marginTop: 1,
-    },
-});
+import SearchableDropdown, { DropdownOption } from '@/components/UI/SearchableDropDown';
+import { State, getStates, City, getCitiesByState } from '@/utils/location';
+import { useAuthStore } from '@/store/useAuthStore';
 
 // ─── Main modal ────────────────────────────────────────────────────────────────
 interface Props {
@@ -255,13 +31,14 @@ interface Props {
     user: Partial<User>;
     mutate: (
         data: UpdateUser,
-        callbacks: { onSuccess: () => void; onError: (e: ApiError) => void },
+        callbacks: { onSuccess: (data: any) => void; onError: (e: ApiError) => void },
     ) => void;
 }
 
 export default function EditProfileModal({ visible, onClose, user, mutate }: Props) {
     const alert = useAlert();
     const slideAnim = useRef(new Animated.Value(600)).current;
+    const { setUser, token } = useAuthStore();
 
     const [name, setName] = useState('');
     const [email, setEmail] = useState('');
@@ -269,6 +46,8 @@ export default function EditProfileModal({ visible, onClose, user, mutate }: Pro
     const [address, setAddress] = useState('');
     const [city, setCity] = useState('');
     const [state, setState] = useState('');
+    const [cityPlaceId, setCityPlaceId] = useState<string | null>(null);
+    const [statePlaceId, setStatePlaceId] = useState<string | null>(null);
     const [pincode, setPincode] = useState('');
     const [gstNumber, setGstNumber] = useState('');
     const [companyName, setCompanyName] = useState('');
@@ -284,6 +63,8 @@ export default function EditProfileModal({ visible, onClose, user, mutate }: Pro
             setAddress(user.address ?? '');
             setCity(user.city ?? '');
             setState(user.state ?? '');
+            setCityPlaceId(null); // add
+            setStatePlaceId(null); // add
             setPincode(user.pincode ?? '');
             setGstNumber(user.gstNumber ?? '');
             setCompanyName(user.companyName ?? '');
@@ -301,6 +82,40 @@ export default function EditProfileModal({ visible, onClose, user, mutate }: Pro
     }, [visible]);
 
     const clearError = (key: string) => setErrors(prev => ({ ...prev, [key]: '' }));
+
+    const fetchStateOptions = async (query: string): Promise<DropdownOption[]> => {
+        const results: State[] = await getStates(query);
+        return results.map(r => ({ name: r.name, placeId: r.placeId }));
+    };
+
+    const fetchCityOptions = async (query: string): Promise<DropdownOption[]> => {
+        if (!state.trim()) return [];
+        const results: City[] = await getCitiesByState(query, state);
+        return results.map(r => ({ name: r.name, placeId: r.placeId }));
+    };
+
+    const handleStateSelect = (option: DropdownOption) => {
+        setState(option.name);
+        setStatePlaceId(option.placeId);
+        // Changing the state invalidates any previously picked city.
+        setCity('');
+        setCityPlaceId(null);
+    };
+
+    const handleCitySelect = (option: DropdownOption) => {
+        setCity(option.name);
+        setCityPlaceId(option.placeId);
+    };
+
+    const handleStateTextChange = (text: string) => {
+        setState(text);
+        setStatePlaceId(null);
+    };
+
+    const handleCityTextChange = (text: string) => {
+        setCity(text);
+        setCityPlaceId(null);
+    };
 
     const validate = () => {
         const e: Record<string, string> = {};
@@ -331,7 +146,12 @@ export default function EditProfileModal({ visible, onClose, user, mutate }: Pro
 
         setLoading(true);
         mutate(payload, {
-            onSuccess: () => {
+            onSuccess: data => {
+                const user = data?.user;
+                if (token) {
+                    setUser(user, token);
+                }
+
                 setLoading(false);
                 alert.success('Profile Updated', 'Your profile has been updated successfully.');
                 onClose();
@@ -431,26 +251,30 @@ export default function EditProfileModal({ visible, onClose, user, mutate }: Pro
                                 autoCapitalize="sentences"
                             />
 
-                            {/* ── City & State — Google Places dropdowns ── */}
+                            {/* ── City & State — searchable Google Places dropdowns ── */}
                             <View style={s.row}>
                                 <View style={{ flex: 1 }}>
-                                    <CityStatePicker
-                                        label="City"
-                                        placeholder="Bhopal"
-                                        icon="business-outline"
-                                        value={city}
-                                        onSelect={setCity}
-                                        types="(cities)"
+                                    <SearchableDropdown
+                                        label="State"
+                                        icon="map-outline"
+                                        placeholder="Madhya Pradesh"
+                                        value={state}
+                                        onChangeText={handleStateTextChange}
+                                        fetchOptions={fetchStateOptions}
+                                        onSelect={handleStateSelect}
                                     />
                                 </View>
                                 <View style={{ flex: 1 }}>
-                                    <CityStatePicker
-                                        label="State"
-                                        placeholder="Madhya Pradesh"
-                                        icon="map-outline"
-                                        value={state}
-                                        onSelect={setState}
-                                        types="administrative_area_level_1"
+                                    <SearchableDropdown
+                                        label="City"
+                                        icon="business-outline"
+                                        placeholder="Bhopal"
+                                        disabledHint="Select a state first"
+                                        value={city}
+                                        onChangeText={handleCityTextChange}
+                                        fetchOptions={fetchCityOptions}
+                                        onSelect={handleCitySelect}
+                                        disabled={!state.trim()}
                                     />
                                 </View>
                             </View>

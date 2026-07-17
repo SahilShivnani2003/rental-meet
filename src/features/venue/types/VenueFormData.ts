@@ -68,11 +68,11 @@ export interface UploadedDoc {
 export interface VenueFormData {
     basic: {
         businessName: string;
-        /** Array of venueType _id strings */
         venueTypes: string[];
         description: string;
         capacity: string;
         areaSqft: string;
+        foodType?: 'Veg' | 'Non Veg' | 'Both';
     };
     location: {
         address: string;

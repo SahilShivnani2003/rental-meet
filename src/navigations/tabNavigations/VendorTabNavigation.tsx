@@ -1,12 +1,8 @@
 import CustomTabBar from '@/components/bottomTab/custom-tabBar';
 import VendorBookingsScreen from '@/features/booking/screens/VendorBookingScreen';
 import VendorDashboardScreen from '@/features/dashboard/screens/VendorDashboardScreen';
-import { VendorService } from '@/features/otherService/types/VendorService';
 import ServicePaymentsScreen from '@/features/payments/screens/ServicePaymentScreen';
 import ProfileScreen from '@/features/profile/screen/OwnerProfile';
-import VendorProfileScreen from '@/features/profile/screen/VendorProfileScreen';
-import GetQuotationScreen from '@/features/quotation/screens/GetQuotationScreen';
-import QuotationDownloadsScreen from '@/features/quotation/screens/QuotationDownloadScreen';
 import VendorServicesScreen from '@/features/vendor/screens/VendorServiceScreen';
 import { TabConfig } from '@/types/TabConfig';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';

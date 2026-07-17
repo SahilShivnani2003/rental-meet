@@ -50,9 +50,6 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
     const filteredTypes = venueTypes.filter(t =>
         t.name.toLowerCase().includes(typeSearch.toLowerCase()),
     );
-
-    // FIX: was `toggleType(type.name)` in the JSX — must use `type._id` so the
-    // stored array contains IDs that getTypeName / getTypeIcon can look up.
     const toggleType = (id: string) => {
         const next = data.venueTypes.includes(id)
             ? data.venueTypes.filter(x => x !== id)
@@ -84,7 +81,7 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
             contentContainerStyle={{ paddingBottom: 20 }}
             keyboardShouldPersistTaps="handled"
         >
-            <StepHeader title="Step 1: Basic Info" current={1} />
+            {/* <StepHeader title="Step 1: Basic Info" current={1} /> */}
             <SectionCard>
                 <Field
                     label="Business/Venue Name"

@@ -1,11 +1,20 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, Platform } from 'react-native';
+import {
+    View,
+    Text,
+    StyleSheet,
+    TouchableOpacity,
+    Dimensions,
+    Platform,
+    ScrollView,
+    useWindowDimensions,
+} from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../theme/theme';
 import { RootStackParamList } from '@/types/RootStackParamList';
 
-const { width: W, height: H } = Dimensions.get('window');
+const { width: W } = Dimensions.get('window');
 type Props = NativeStackScreenProps<RootStackParamList, 'onBoarding'>;
 
 // ─── Slide data ───────────────────────────────────────────────────────────────
@@ -55,11 +64,11 @@ const SLIDES = [
 ] as const;
 
 // ─── Illustrations — adapted for amber background ─────────────────────────────
-function SlideIllustration({ type }: { type: string }) {
+function SlideIllustration({ type, height }: { type: string; height: number }) {
     // ── Slide 1: Buildings ──
     if (type === 'buildings') {
         return (
-            <View style={il.wrap}>
+            <View style={[il.wrap, { height }]}>
                 {/* Concentric rings — white on amber */}
                 <View
                     style={[
@@ -247,7 +256,7 @@ function SlideIllustration({ type }: { type: string }) {
     // ── Slide 2: Calendar ──
     if (type === 'calendar') {
         return (
-            <View style={il.wrap}>
+            <View style={[il.wrap, { height }]}>
                 <View
                     style={[
                         il.ring,
@@ -391,7 +400,7 @@ function SlideIllustration({ type }: { type: string }) {
 
     // ── Slide 3: Owner ──
     return (
-        <View style={il.wrap}>
+        <View style={[il.wrap, { height }]}>
             <View
                 style={[
                     il.ring,
@@ -521,12 +530,27 @@ function SlideIllustration({ type }: { type: string }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function OnboardingScreen({ navigation }: Props) {
     const [current, setCurrent] = useState(0);
+    const { height: H } = useWindowDimensions();
+
+    // ── Responsive breakpoints ──────────────────────────────────────────────
+    // Small phones (e.g. iPhone SE, older Androids) need a smaller
+    // illustration + tighter spacing so the card content and CTA
+    // never get pushed off screen or clipped.
+    const isTinyScreen = H < 640;
+    const isSmallScreen = H < 720;
+
+    const ilZoneHeight = isTinyScreen ? H * 0.24 : isSmallScreen ? H * 0.3 : H * 0.36;
+    const titleFontSize = isTinyScreen ? 21 : isSmallScreen ? 23 : 26;
+    const titleLineHeight = isTinyScreen ? 26 : isSmallScreen ? 28 : 32;
+    const cardPaddingTop = isTinyScreen ? Spacing.sm : Spacing.lg;
+    const featurePaddingV = isTinyScreen ? 6 : 9;
+    const dividerMarginV = isTinyScreen ? Spacing.sm : Spacing.md;
 
     const goTo = (idx: number) => setCurrent(idx);
 
     const handleNext = () => {
         if (current < SLIDES.length - 1) goTo(current + 1);
-        else navigation.replace('login');
+        else navigation.replace('client');
     };
 
     const slide = SLIDES[current];
@@ -545,7 +569,7 @@ export default function OnboardingScreen({ navigation }: Props) {
                         {current < SLIDES.length - 1 && (
                             <TouchableOpacity
                                 style={s.skipBtn}
-                                onPress={() => navigation.replace('login')}
+                                onPress={() => navigation.replace('client')}
                                 activeOpacity={0.7}
                             >
                                 <Text style={s.skipTxt}>Skip</Text>
@@ -556,53 +580,69 @@ export default function OnboardingScreen({ navigation }: Props) {
             </View>
 
             {/* ── Illustration zone — full amber canvas ── */}
-            <View style={s.ilZone}>
+            <View style={[s.ilZone, { height: ilZoneHeight }]}>
                 {/* Subtle diagonal strip for depth — lighter amber */}
                 <View style={s.diagStrip} />
-                <SlideIllustration type={slide.illustration} />
+                <SlideIllustration type={slide.illustration} height={ilZoneHeight} />
             </View>
 
-            {/* ── Content card — floats over amber ── */}
+            {/* ── Content card — floats over amber, scrolls if content is tall ── */}
             <View style={s.card}>
                 {/* Amber top accent bar */}
                 <View style={s.cardBar} />
 
-                {/* Eyebrow */}
-                <View style={s.eyebrowRow}>
-                    <View style={s.eyebrowDot} />
-                    <Text style={s.eyebrow}>{slide.eyebrow}</Text>
-                </View>
+                <ScrollView
+                    style={s.cardScroll}
+                    contentContainerStyle={[s.cardScrollContent, { paddingTop: cardPaddingTop }]}
+                    showsVerticalScrollIndicator={false}
+                    bounces={false}
+                >
+                    {/* Eyebrow */}
+                    <View style={s.eyebrowRow}>
+                        <View style={s.eyebrowDot} />
+                        <Text style={s.eyebrow}>{slide.eyebrow}</Text>
+                    </View>
 
-                {/* Title */}
-                <Text style={s.title}>{slide.title}</Text>
+                    {/* Title */}
+                    <Text
+                        style={[s.title, { fontSize: titleFontSize, lineHeight: titleLineHeight }]}
+                    >
+                        {slide.title}
+                    </Text>
 
-                {/* Subtitle */}
-                <Text style={s.subtitle}>{slide.subtitle}</Text>
+                    {/* Subtitle */}
+                    <Text style={s.subtitle}>{slide.subtitle}</Text>
 
-                {/* Divider */}
-                <View style={s.cardDivider} />
+                    {/* Divider */}
+                    <View style={[s.cardDivider, { marginVertical: dividerMarginV }]} />
 
-                {/* Feature rows */}
-                <View style={s.featureList}>
-                    {slide.features.map((f, fi) => (
-                        <View
-                            key={fi}
-                            style={[
-                                s.featureRow,
-                                fi < slide.features.length - 1 && s.featureRowBorder,
-                            ]}
-                        >
-                            <View style={s.featureIconBox}>
-                                <Ionicons name={f.icon as any} size={15} color={Colors.primary} />
+                    {/* Feature rows */}
+                    <View style={s.featureList}>
+                        {slide.features.map((f, fi) => (
+                            <View
+                                key={fi}
+                                style={[
+                                    s.featureRow,
+                                    { paddingVertical: featurePaddingV },
+                                    fi < slide.features.length - 1 && s.featureRowBorder,
+                                ]}
+                            >
+                                <View style={s.featureIconBox}>
+                                    <Ionicons
+                                        name={f.icon as any}
+                                        size={15}
+                                        color={Colors.primary}
+                                    />
+                                </View>
+                                <Text style={s.featureLabel}>{f.label}</Text>
+                                <Ionicons name="chevron-forward" size={11} color={Colors.border} />
                             </View>
-                            <Text style={s.featureLabel}>{f.label}</Text>
-                            <Ionicons name="chevron-forward" size={11} color={Colors.border} />
-                        </View>
-                    ))}
-                </View>
+                        ))}
+                    </View>
+                </ScrollView>
             </View>
 
-            {/* ── Bottom bar — white tray ── */}
+            {/* ── Bottom bar — white tray, always fully visible ── */}
             <View style={s.bottomBar}>
                 {/* Dot indicators */}
                 <View style={s.dotsRow}>
@@ -660,7 +700,6 @@ export default function OnboardingScreen({ navigation }: Props) {
 const il = StyleSheet.create({
     wrap: {
         width: W,
-        height: H * 0.38,
         alignItems: 'center',
         justifyContent: 'center',
         position: 'relative',
@@ -859,12 +898,12 @@ const s = StyleSheet.create({
         paddingTop: Platform.OS === 'ios' ? Spacing.xl + 24 : Spacing.lg + 16,
         paddingBottom: Spacing.md,
     },
-    topRight: { 
-        flex: 1, 
-        flexDirection: 'row', 
+    topRight: {
+        flex: 1,
+        flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center', 
-        gap: Spacing.sm 
+        alignItems: 'center',
+        gap: Spacing.sm,
     },
 
     // White pill on amber
@@ -897,7 +936,6 @@ const s = StyleSheet.create({
 
     // ── Illustration zone — bare amber canvas ─────────────────────────────────
     ilZone: {
-        height: H * 0.38,
         backgroundColor: Colors.primary, // seamless amber
         overflow: 'hidden',
         position: 'relative',
@@ -907,7 +945,7 @@ const s = StyleSheet.create({
         bottom: -60,
         left: -60,
         right: -60,
-        height: H * 0.18,
+        height: 140,
         backgroundColor: 'rgba(255,255,255,0.07)',
         transform: [{ rotate: '-7deg' }],
     },
@@ -915,6 +953,7 @@ const s = StyleSheet.create({
     // ── Content card — white, floats up over amber ────────────────────────────
     card: {
         flex: 1, // fills remaining space above bottom bar
+        minHeight: 0, // required on some RN versions so ScrollView inside a flex child can shrink correctly
         backgroundColor: Colors.surface,
         marginHorizontal: Spacing.lg,
         marginTop: -(Spacing.xl + 6), // overlaps illustration zone
@@ -923,9 +962,6 @@ const s = StyleSheet.create({
         borderBottomLeftRadius: 0,
         borderBottomRightRadius: 0,
         overflow: 'hidden',
-        paddingHorizontal: Spacing.xl,
-        paddingBottom: Spacing.sm,
-        paddingTop: Spacing.lg,
         ...Shadows.card,
     },
     // Amber top accent bar inside card
@@ -938,6 +974,18 @@ const s = StyleSheet.create({
         backgroundColor: Colors.primary,
         borderBottomLeftRadius: 3,
         borderBottomRightRadius: 3,
+        zIndex: 1,
+    },
+
+    // Scroll area inside the card — lets features/subtitle scroll instead
+    // of clipping or sliding behind the bottom bar on short screens.
+    cardScroll: {
+        flex: 1,
+    },
+    cardScrollContent: {
+        flexGrow: 1,
+        paddingHorizontal: Spacing.xl,
+        paddingBottom: Spacing.md,
     },
 
     eyebrowRow: {
@@ -945,7 +993,6 @@ const s = StyleSheet.create({
         alignItems: 'center',
         gap: 6,
         marginBottom: Spacing.xs,
-        marginTop: Spacing.xs,
     },
     eyebrowDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primary },
     eyebrow: {
@@ -956,11 +1003,9 @@ const s = StyleSheet.create({
     },
 
     title: {
-        fontSize: 26,
         fontWeight: Typography.extraBold,
         color: Colors.charcoal,
         letterSpacing: Typography.tight,
-        lineHeight: 32,
         marginBottom: Spacing.xs,
     },
     subtitle: {
@@ -970,10 +1015,10 @@ const s = StyleSheet.create({
         fontWeight: Typography.regular,
     },
 
-    cardDivider: { height: 1, backgroundColor: Colors.divider, marginVertical: Spacing.md },
+    cardDivider: { height: 1, backgroundColor: Colors.divider },
 
     featureList: { gap: 0 },
-    featureRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: 9 },
+    featureRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
     featureRowBorder: { borderBottomWidth: 1, borderBottomColor: Colors.divider },
     featureIconBox: {
         width: 34,
@@ -992,7 +1037,8 @@ const s = StyleSheet.create({
         color: Colors.charcoalMid,
     },
 
-    // ── Bottom bar — white tray ───────────────────────────────────────────────
+    // ── Bottom bar — white tray, sized by its own content (not flex) so it
+    // never gets squeezed or overlapped, and always stays fully visible ──────
     bottomBar: {
         backgroundColor: Colors.surface,
         marginHorizontal: Spacing.lg,
@@ -1006,7 +1052,7 @@ const s = StyleSheet.create({
         alignItems: 'center',
         gap: Spacing.sm,
         ...Shadows.floating,
-        marginBottom: Spacing.xl
+        marginBottom: Spacing.xl,
     },
 
     dotsRow: { flexDirection: 'row', gap: 7, alignItems: 'center' },

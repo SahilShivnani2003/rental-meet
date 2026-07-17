@@ -34,7 +34,6 @@ type CategoryProps = NativeStackScreenProps<RootStackParamList, 'category'>;
 
 export default function BrowseCategoryScreen({ navigation }: CategoryProps) {
     const { data: venueTypeData, isLoading, isRefetching, refetch } = useGetVenueType();
-
     const venueTypes: VenueType[] = venueTypeData?.venueTypes ?? [];
 
     const [search, setSearch] = useState('');

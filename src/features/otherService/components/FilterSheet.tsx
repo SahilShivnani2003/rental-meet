@@ -1,8 +1,19 @@
-import { Colors, Spacing, Typography, Radii, Shadows } from "@/theme/theme";
-import { useRef, useEffect } from "react";
-import { Animated, Modal, View, TouchableOpacity, StyleSheet, Text, ScrollView, TextInput } from "react-native";
-import Ionicons from "react-native-vector-icons/Ionicons";
-import { CATEGORIES } from "../data/Category";
+import { Colors, Spacing, Typography, Radii, Shadows } from '@/theme/theme';
+import { useRef, useEffect } from 'react';
+import {
+    Animated,
+    Modal,
+    View,
+    TouchableOpacity,
+    StyleSheet,
+    Text,
+    ScrollView,
+    TextInput,
+} from 'react-native';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import { CATEGORIES } from '../data/Category';
+import SearchableDropdown from '@/components/UI/SearchableDropDown';
+import { getCities } from '@/utils/location';
 
 export function FilterSheet({
     visible,
@@ -96,19 +107,16 @@ export function FilterSheet({
                         </View>
 
                         {/* City */}
-                        <Text style={[fs.label, { marginTop: Spacing.lg }]}>City</Text>
-                        <View style={fs.inputWrap}>
-                            <Ionicons
-                                name="location-outline"
-                                size={16}
-                                color={Colors.charcoalLight}
-                            />
-                            <TextInput
-                                style={fs.input}
+                        <View style={{ marginTop: Spacing.lg }}>
+                            <SearchableDropdown
+                                label="City"
+                                icon="location-outline"
                                 placeholder="e.g. Bhopal, Mumbai..."
-                                placeholderTextColor={Colors.charcoalLight}
                                 value={city}
                                 onChangeText={setCity}
+                                fetchOptions={getCities}
+                                onSelect={option => setCity(option.name)}
+                                minQueryLength={2}
                             />
                         </View>
 

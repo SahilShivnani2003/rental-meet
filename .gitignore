@@ -77,3 +77,4 @@ yarn-error.log
 .env
 android/app/rentalmeet-release-key.jks
 android/app/google-services.json
+src/config/env.ts

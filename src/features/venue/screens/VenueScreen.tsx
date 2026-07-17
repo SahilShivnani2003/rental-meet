@@ -39,343 +39,22 @@ import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { CompositeScreenProps } from '@react-navigation/native';
 import useEntrance from '@/hooks/useEntrance';
 import { useDebouncedValue } from '@/hooks/useDebouncedValue';
-
-const { width: SCREEN_W } = Dimensions.get('window');
-
-const ALL_CATEGORY: VenueType = {
-    _id: 'all',
-    name: 'All',
-    code: 'all',
-    icon: '🏠',
-    description: '',
-    isActive: true,
-    order: 0,
-};
+import DropdownModal from '../models/DropDownModal';
+import RangeSlider from '../components/RangeSlider';
+import OwnerStatCard, { OwnerStatConfig } from '../components/OwnerState';
+import { getCities } from '@/utils/location';
+import SearchableDropdown, { DropdownOption } from '@/components/UI/SearchableDropDown';
 
 // ── Price range constants ─────────────────────────────────────────────────────
 const PRICE_MIN = 0;
 const PRICE_MAX = 100000;
 const PRICE_STEP = 500;
 
-// ── Dual-handle Range Slider ──────────────────────────────────────────────────
-interface RangeSliderProps {
-    min: number;
-    max: number;
-    step: number;
-    low: number;
-    high: number;
-    onValueChange: (low: number, high: number) => void;
-}
-
-function RangeSlider({ min, max, step, low, high, onValueChange }: RangeSliderProps) {
-    const sliderRef = useRef<View>(null);
-    const sliderWidth = useRef(0);
-    const lowRef = useRef(low);
-    const highRef = useRef(high);
-
-    // Keep refs in sync
-    useEffect(() => {
-        lowRef.current = low;
-    }, [low]);
-    useEffect(() => {
-        highRef.current = high;
-    }, [high]);
-
-    const clampStep = (val: number) => {
-        const stepped = Math.round(val / step) * step;
-        return Math.max(min, Math.min(max, stepped));
-    };
-
-    const xToValue = (x: number) => {
-        const ratio = Math.max(0, Math.min(1, x / sliderWidth.current));
-        return clampStep(min + ratio * (max - min));
-    };
-
-    const valueToPercent = (val: number) => ((val - min) / (max - min)) * 100;
-
-    // Low thumb pan
-    const lowPan = useRef(
-        PanResponder.create({
-            onStartShouldSetPanResponder: () => true,
-            onMoveShouldSetPanResponder: () => true,
-            onPanResponderGrant: () => {},
-            onPanResponderMove: (_, gs) => {
-                const trackLeft = 0;
-                const newVal = xToValue(gs.moveX - trackLeft);
-                if (newVal < highRef.current) {
-                    onValueChange(newVal, highRef.current);
-                }
-            },
-        }),
-    ).current;
-
-    // High thumb pan
-    const highPan = useRef(
-        PanResponder.create({
-            onStartShouldSetPanResponder: () => true,
-            onMoveShouldSetPanResponder: () => true,
-            onPanResponderGrant: () => {},
-            onPanResponderMove: (_, gs) => {
-                const newVal = xToValue(gs.moveX);
-                if (newVal > lowRef.current) {
-                    onValueChange(lowRef.current, newVal);
-                }
-            },
-        }),
-    ).current;
-
-    const lowPct = valueToPercent(low);
-    const highPct = valueToPercent(high);
-
-    const formatPrice = (val: number) =>
-        val >= 100000
-            ? '₹1L+'
-            : val === 0
-            ? '₹0'
-            : `₹${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}k`;
-
-    return (
-        <View style={rs.wrap}>
-            {/* Labels */}
-            <View style={rs.labelsRow}>
-                <Text style={rs.rangeLabel}>{formatPrice(low)}</Text>
-                <Text style={rs.rangeSep}>—</Text>
-                <Text style={rs.rangeLabel}>{formatPrice(high)}</Text>
-            </View>
-
-            {/* Track */}
-            <View
-                ref={sliderRef}
-                style={rs.trackOuter}
-                onLayout={e => {
-                    sliderWidth.current = e.nativeEvent.layout.width;
-                }}
-            >
-                {/* Inactive track */}
-                <View style={rs.trackInactive} />
-
-                {/* Active track fill */}
-                <View
-                    style={[rs.trackActive, { left: `${lowPct}%`, right: `${100 - highPct}%` }]}
-                />
-
-                {/* Low thumb */}
-                <View style={[rs.thumb, { left: `${lowPct}%` }]} {...lowPan.panHandlers}>
-                    <View style={rs.thumbInner} />
-                </View>
-
-                {/* High thumb */}
-                <View style={[rs.thumb, { left: `${highPct}%` }]} {...highPan.panHandlers}>
-                    <View style={rs.thumbInner} />
-                </View>
-            </View>
-
-            {/* Min / Max hint */}
-            <View style={rs.hintRow}>
-                <Text style={rs.hint}>₹0</Text>
-                <Text style={rs.hint}>₹1L+</Text>
-            </View>
-        </View>
-    );
-}
-
-const rs = StyleSheet.create({
-    wrap: { gap: 4 },
-    labelsRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        marginBottom: 6,
-    },
-    rangeLabel: {
-        fontSize: 13,
-        fontWeight: Typography.bold,
-        color: Colors.primary,
-        letterSpacing: -0.2,
-    },
-    rangeSep: { fontSize: 12, color: Colors.charcoalLight },
-    trackOuter: {
-        height: 36,
-        justifyContent: 'center',
-        position: 'relative',
-        marginHorizontal: 10,
-    },
-    trackInactive: {
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        height: 4,
-        borderRadius: 2,
-        backgroundColor: Colors.border,
-    },
-    trackActive: {
-        position: 'absolute',
-        height: 4,
-        borderRadius: 2,
-        backgroundColor: Colors.primary,
-    },
-    thumb: {
-        position: 'absolute',
-        width: 26,
-        height: 26,
-        borderRadius: 13,
-        marginLeft: -13,
-        top: 5,
-        backgroundColor: Colors.surface,
-        borderWidth: 2,
-        borderColor: Colors.primary,
-        alignItems: 'center',
-        justifyContent: 'center',
-        ...Shadows.card,
-    },
-    thumbInner: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
-        backgroundColor: Colors.primary,
-    },
-    hintRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginTop: 2,
-        marginHorizontal: 10,
-    },
-    hint: { fontSize: 10, color: Colors.charcoalLight, fontWeight: Typography.medium },
-});
-
 // ─────────────────────────────────────────────────────────────────────────────
 type VenueProps = CompositeScreenProps<
     BottomTabScreenProps<ClientTabParamList, 'venues'>,
     BottomTabScreenProps<OwnerTabParamList, 'venues'>
 >;
-
-type OwnerStatConfig = {
-    label: string;
-    value: number;
-    color: string;
-    bg: string;
-    borderColor: string;
-};
-
-function OwnerStatCard({
-    stat,
-    active,
-    onPress,
-}: {
-    stat: OwnerStatConfig;
-    active: boolean;
-    onPress: () => void;
-}) {
-    return (
-        <TouchableOpacity
-            style={[
-                styles.ownerStatCard,
-                { borderColor: active ? stat.color : Colors.border },
-                active && { backgroundColor: stat.bg },
-            ]}
-            onPress={onPress}
-            activeOpacity={0.75}
-        >
-            <Text style={[styles.ownerStatValue, { color: stat.color }]}>{stat.value}</Text>
-            <Text style={styles.ownerStatLabel}>{stat.label}</Text>
-        </TouchableOpacity>
-    );
-}
-
-interface DropdownModalProps {
-    visible: boolean;
-    title: string;
-    options: { label: string; value: string }[];
-    selectedValue: string;
-    onSelect: (value: string) => void;
-    onClose: () => void;
-    searchable?: boolean;
-}
-
-function DropdownModal({
-    visible,
-    title,
-    options,
-    selectedValue,
-    onSelect,
-    onClose,
-    searchable = false,
-}: DropdownModalProps) {
-    const [searchQuery, setSearchQuery] = useState('');
-    const filteredOptions = searchable
-        ? options.filter(opt => opt.label.toLowerCase().includes(searchQuery.toLowerCase()))
-        : options;
-
-    return (
-        <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-            <TouchableOpacity style={styles.dropdownBackdrop} activeOpacity={1} onPress={onClose} />
-            <View style={styles.dropdownSheet}>
-                <View style={styles.dropdownHandle} />
-                <Text style={styles.dropdownTitle}>{title}</Text>
-                {searchable && (
-                    <View style={styles.dropdownSearchWrap}>
-                        <Ionicons
-                            name="search"
-                            size={16}
-                            color={Colors.charcoalLight}
-                            style={{ marginRight: 8 }}
-                        />
-                        <TextInput
-                            style={styles.dropdownSearchInput}
-                            placeholder="Search..."
-                            placeholderTextColor={Colors.charcoalLight}
-                            value={searchQuery}
-                            onChangeText={setSearchQuery}
-                        />
-                        {searchQuery.length > 0 && (
-                            <TouchableOpacity onPress={() => setSearchQuery('')}>
-                                <Ionicons
-                                    name="close-circle"
-                                    size={16}
-                                    color={Colors.charcoalLight}
-                                />
-                            </TouchableOpacity>
-                        )}
-                    </View>
-                )}
-                <FlatList
-                    data={filteredOptions}
-                    keyExtractor={item => item.value}
-                    showsVerticalScrollIndicator={false}
-                    style={{ maxHeight: 400 }}
-                    renderItem={({ item }) => {
-                        const isActive = item.value === selectedValue;
-                        return (
-                            <TouchableOpacity
-                                style={[
-                                    styles.dropdownOption,
-                                    isActive && styles.dropdownOptionActive,
-                                ]}
-                                onPress={() => {
-                                    onSelect(item.value);
-                                    onClose();
-                                }}
-                            >
-                                <Text
-                                    style={[
-                                        styles.dropdownOptionText,
-                                        isActive && styles.dropdownOptionTextActive,
-                                    ]}
-                                >
-                                    {item.label}
-                                </Text>
-                                {isActive && (
-                                    <Ionicons name="checkmark" size={18} color={Colors.primary} />
-                                )}
-                            </TouchableOpacity>
-                        );
-                    }}
-                />
-            </View>
-        </Modal>
-    );
-}
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 export default function VenuesScreen({ navigation, route }: VenueProps) {
@@ -396,9 +75,21 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
     const priceActive = priceLow > PRICE_MIN || priceHigh < PRICE_MAX;
     const [filtersExpanded, setFiltersExpanded] = useState(false);
     const [ownerFilter, setOwnerFilter] = useState<string>('all');
+    
+    const fetchCityOptions = useCallback(async (query: string): Promise<DropdownOption[]> => {
+        const results = await getCities(query);
+        return results.map(r => ({ name: r.name, placeId: r.placeId }));
+    }, []);
+
+    const handleCityTextChange = useCallback((text: string) => {
+        setSelectedCity(text);
+    }, []);
+
+    const handleCitySelect = useCallback((option: DropdownOption) => {
+        setSelectedCity(option.name);
+    }, []);
 
     const [venueTypeModalVisible, setVenueTypeModalVisible] = useState(false);
-    const [cityModalVisible, setCityModalVisible] = useState(false);
     const [capacityModalVisible, setCapacityModalVisible] = useState(false);
 
     // ── Availability modal ────────────────────────────────────────────────────
@@ -478,7 +169,6 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
 
     const ownerVenues: Venue[] = ownerVenueData?.venues ?? [];
     const isLoading = isOwner ? isOwnerVenueLoading : isClientVenueLoading;
-    const isRefetching = isOwner ? isOwnerRefetching : isClientRefetching;
     const refetch = isOwner ? refetchOwnerVenues : refetchClientVenues;
 
     const rawVenueTypes: VenueType[] = venueTypeData?.venueTypes ?? [];
@@ -686,18 +376,6 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
         ownerFilter !== 'all' ? ownerVenues.filter(v => v.status === ownerFilter) : ownerVenues;
 
     const venueTypeOptions = rawVenueTypes.map(c => ({ label: c.name, value: c.name }));
-    const cityOptions = [
-        { label: 'Mumbai', value: 'Mumbai' },
-        { label: 'Delhi', value: 'Delhi' },
-        { label: 'Bangalore', value: 'Bangalore' },
-        { label: 'Hyderabad', value: 'Hyderabad' },
-        { label: 'Chennai', value: 'Chennai' },
-        { label: 'Pune', value: 'Pune' },
-        { label: 'Kolkata', value: 'Kolkata' },
-        { label: 'Ahmedabad', value: 'Ahmedabad' },
-        { label: 'Bhopal', value: 'Bhopal' },
-        { label: 'Indore', value: 'Indore' },
-    ];
     const capacityOptions = [
         { label: '10–20', value: '10-20' },
         { label: '20–30', value: '20-30' },
@@ -845,30 +523,15 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
                                 </TouchableOpacity>
                             </View>
                             <View style={styles.filterCol}>
-                                <Text style={styles.filterLabel}>City</Text>
-                                <TouchableOpacity
-                                    style={[
-                                        styles.filterInput,
-                                        selectedCity && styles.filterInputActive,
-                                    ]}
-                                    onPress={() => setCityModalVisible(true)}
-                                    activeOpacity={0.8}
-                                >
-                                    <Text
-                                        style={[
-                                            styles.filterInputText,
-                                            !selectedCity && styles.filterInputPlaceholder,
-                                        ]}
-                                        numberOfLines={1}
-                                    >
-                                        {selectedCity || 'Select city'}
-                                    </Text>
-                                    <Ionicons
-                                        name="chevron-down"
-                                        size={14}
-                                        color={Colors.charcoalLight}
-                                    />
-                                </TouchableOpacity>
+                                <SearchableDropdown
+                                    label="City"
+                                    icon="location-outline"
+                                    placeholder="Search city"
+                                    value={selectedCity}
+                                    onChangeText={handleCityTextChange}
+                                    fetchOptions={fetchCityOptions}
+                                    onSelect={handleCitySelect}
+                                />
                             </View>
                         </View>
 
@@ -1007,6 +670,9 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
             appliedPriceHigh,
             clientTotalCount,
             isClientVenueLoading,
+            fetchCityOptions,
+            handleCityTextChange,
+            handleCitySelect,
         ],
     );
 
@@ -1239,15 +905,6 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
                 searchable
             />
             <DropdownModal
-                visible={cityModalVisible}
-                title="Select City"
-                options={cityOptions}
-                selectedValue={selectedCity}
-                onSelect={setSelectedCity}
-                onClose={() => setCityModalVisible(false)}
-                searchable
-            />
-            <DropdownModal
                 visible={capacityModalVisible}
                 title="Select Capacity"
                 options={capacityOptions}
@@ -1396,28 +1053,6 @@ const styles = StyleSheet.create({
         gap: Spacing.sm,
         marginBottom: Spacing.lg,
     },
-    ownerStatCard: {
-        flex: 1,
-        backgroundColor: Colors.surface,
-        borderRadius: Radii.lg,
-        paddingVertical: Spacing.md,
-        paddingHorizontal: Spacing.sm,
-        alignItems: 'center',
-        borderWidth: 1.5,
-        ...Shadows.card,
-    },
-    ownerStatValue: {
-        fontSize: 22,
-        fontWeight: Typography.extraBold,
-        letterSpacing: -0.5,
-        marginBottom: 3,
-    },
-    ownerStatLabel: {
-        fontSize: 10,
-        fontWeight: Typography.semiBold,
-        color: Colors.charcoalLight,
-        textAlign: 'center',
-    },
     ownerSearchWrap: { paddingHorizontal: Spacing.lg, marginBottom: Spacing.lg },
     clientSearchWrap: { paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg },
     searchContainer: {
@@ -1490,7 +1125,7 @@ const styles = StyleSheet.create({
         gap: Spacing.md,
         ...Shadows.card,
     },
-    filterRow: { flexDirection: 'row', gap: Spacing.sm },
+    filterRow: { flexDirection: 'row', gap: Spacing.sm, alignItems: 'flex-start' },
     filterRowSingle: { gap: 6 },
     filterCol: { flex: 1, gap: 6 },
     filterLabel: {
@@ -1504,8 +1139,8 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         backgroundColor: Colors.background,
         borderRadius: Radii.md,
-        paddingHorizontal: 12,
-        height: 44,
+        paddingHorizontal: Spacing.md,
+        height: 52,
         borderWidth: 1.5,
         borderColor: Colors.border,
     },
@@ -1653,63 +1288,6 @@ const styles = StyleSheet.create({
         fontWeight: Typography.bold,
         textDecorationLine: 'underline',
     },
-    dropdownBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
-    dropdownSheet: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: Colors.surface,
-        borderTopLeftRadius: Radii.xxl,
-        borderTopRightRadius: Radii.xxl,
-        paddingHorizontal: Spacing.xl,
-        paddingBottom: 32,
-        ...Shadows.floating,
-    },
-    dropdownHandle: {
-        width: 40,
-        height: 4,
-        borderRadius: 2,
-        backgroundColor: Colors.border,
-        alignSelf: 'center',
-        marginTop: 12,
-        marginBottom: 8,
-    },
-    dropdownTitle: {
-        fontSize: Typography.lg,
-        fontWeight: Typography.extraBold,
-        color: Colors.charcoal,
-        letterSpacing: -0.3,
-        marginBottom: Spacing.md,
-    },
-    dropdownSearchWrap: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: Colors.background,
-        borderRadius: Radii.md,
-        paddingHorizontal: 12,
-        height: 44,
-        marginBottom: Spacing.md,
-        borderWidth: 1.5,
-        borderColor: Colors.border,
-    },
-    dropdownSearchInput: { flex: 1, fontSize: Typography.base, color: Colors.charcoal },
-    dropdownOption: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingVertical: 13,
-        paddingHorizontal: 10,
-        borderRadius: Radii.md,
-        marginBottom: 2,
-    },
-    dropdownOptionActive: { backgroundColor: Colors.primaryLight },
-    dropdownOptionText: {
-        fontSize: Typography.md,
-        color: Colors.charcoalMid,
-        fontWeight: Typography.medium,
-    },
-    dropdownOptionTextActive: { color: Colors.primary, fontWeight: Typography.bold },
     opLoaderBackdrop: {
         ...StyleSheet.absoluteFillObject,
         backgroundColor: 'rgba(0,0,0,0.38)',

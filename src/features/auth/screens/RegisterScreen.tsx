@@ -14,6 +14,7 @@ import {
     Alert,
     Modal,
     Image,
+    Linking,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -42,22 +43,12 @@ import {
     ImagePickerResponse,
 } from 'react-native-image-picker';
 import { useUpdateProfile } from '@/features/profile/hooks/useUpdateProfile';
+import { KycDocCard } from '../components/KycDocCard';
+import { getCitiesByState, getStates, City, State } from '@/utils/location';
+import SearchableDropdown, { DropdownOption } from '@/components/UI/SearchableDropDown';
+import { User } from '@/features/profile/types/User';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// ── Vendor category options ───────────────────────────────────────────────────
-const VENDOR_CATEGORIES = [
-    'Catering & Food',
-    'Photography & Video',
-    'Decoration & Flowers',
-    'Entertainment & Music',
-    'Event Management',
-    'AV & Tech Equipment',
-    'Transportation',
-    'Security Services',
-    'Cleaning Services',
-    'Other',
-];
 
 // ── OTP step type ─────────────────────────────────────────────────────────────
 type OtpStep = 'none' | 'email' | 'phone';
@@ -66,7 +57,7 @@ type OtpStep = 'none' | 'email' | 'phone';
 type IdProofType = 'Aadhaar' | 'PAN' | 'Passport' | 'Voter ID' | 'Driving License';
 const ID_PROOF_TYPES: IdProofType[] = ['Aadhaar', 'PAN', 'Passport', 'Voter ID', 'Driving License'];
 type KycSlot = 'front' | 'back' | 'selfie' | 'addressProof';
-interface PickedFile {
+export interface PickedFile {
     uri: string;
     name: string;
     type: string;
@@ -75,7 +66,6 @@ interface PickedFile {
 type registerProps = NativeStackScreenProps<RootStackParamList, 'register'>;
 
 export default function RegisterScreen({ navigation, route }: registerProps) {
-    // FIX: ROLE_META key must match the role value. Fallback to 'customer' not 'client'.
     const role = route.params?.role ?? 'customer';
     const meta = ROLE_META[role] ?? ROLE_META['client'];
     const isCustomer = role === 'customer';
@@ -96,6 +86,8 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
     const [phone, setPhone] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [agreed, setAgreed] = useState(false);
     const [referralCode, setReferralCode] = useState('');
     const [loading, setLoading] = useState(false);
@@ -115,6 +107,10 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
     // ── Customer / Vendor location fields ─────────────────────────────────────
     const [city, setCity] = useState('');
     const [state, setState] = useState('');
+    // Google place_ids for the selected city/state, in case the payload or a
+    // later step wants them (not required for buildRegisterData currently).
+    const [cityPlaceId, setCityPlaceId] = useState<string | null>(null);
+    const [statePlaceId, setStatePlaceId] = useState<string | null>(null);
 
     // ── KYC state (step 2, customer only) ────────────────────────────────────
     const [kycIdProofType, setKycIdProofType] = useState<IdProofType>('Aadhaar');
@@ -191,9 +187,15 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
             e.password = 'Must be at least 8 characters';
         }
 
+        if (!confirmPassword) {
+            e.confirmPassword = 'Please confirm your password';
+        } else if (confirmPassword !== password) {
+            e.confirmPassword = 'Passwords do not match';
+        }
+
         if (role === 'customer' || role === 'vendor') {
-            if (!city.trim()) e.city = 'City is required';
             if (!state.trim()) e.state = 'State is required';
+            if (!city.trim()) e.city = 'City is required';
         }
 
         if (!agreed) e.agreed = 'Please accept the terms to continue';
@@ -289,6 +291,49 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
         );
     };
 
+    // ── Location: State / City searchable dropdowns ───────────────────────────
+    // State results — filtered by whatever the user has typed so far.
+    const fetchStateOptions = async (query: string): Promise<DropdownOption[]> => {
+        const results: State[] = await getStates(query);
+        return results.map(r => ({ name: r.name, placeId: r.placeId }));
+    };
+
+    // City results depend on the currently selected state; guarded by
+    // `disabled` on the dropdown too, but double-checked here.
+    const fetchCityOptions = async (query: string): Promise<DropdownOption[]> => {
+        if (!state.trim()) return [];
+        const results: City[] = await getCitiesByState(query, state);
+        return results.map(r => ({ name: r.name, placeId: r.placeId }));
+    };
+
+    const handleStateSelect = (option: DropdownOption) => {
+        setState(option.name);
+        setStatePlaceId(option.placeId);
+        clearError('state');
+
+        // Changing the state invalidates any previously picked city.
+        setCity('');
+        setCityPlaceId(null);
+    };
+
+    const handleCitySelect = (option: DropdownOption) => {
+        setCity(option.name);
+        setCityPlaceId(option.placeId);
+        clearError('city');
+    };
+
+    const handleStateTextChange = (text: string) => {
+        setState(text);
+        setStatePlaceId(null); // typed text no longer matches a confirmed selection
+        clearError('state');
+    };
+
+    const handleCityTextChange = (text: string) => {
+        setCity(text);
+        setCityPlaceId(null);
+        clearError('city');
+    };
+
     // ── Build the payload shared by both the single-step and 2-step flows ─────
     const buildRegisterData = () => {
         const base = {
@@ -326,7 +371,19 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
             onSuccess: data => {
                 setLoading(false);
                 setUser(data?.user, data?.token);
+                const user: User = data?.user;
                 alert.success('Registration succeeded', `${role} registered successfully`);
+                if (user.role === 'owner') {
+                    navigation.reset({
+                        index: 0,
+                        routes: [{ name: 'owner' }],
+                    });
+                } else if (user.role === 'vendor') {
+                    navigation.reset({
+                        index: 0,
+                        routes: [{ name: 'vendor' }],
+                    });
+                }
             },
             onError: (error: ApiError) => {
                 setLoading(false);
@@ -354,10 +411,6 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
         register(buildRegisterData(), {
             onSuccess: data => {
                 setLoading(false);
-                // Account + token are set now so the KYC / photo uploads below are authenticated.
-                // NOTE: if your root navigator switches stacks as soon as a user/token is present,
-                // this screen will unmount before step 2 renders — see the message accompanying
-                // this file for how to handle that case.
                 setUser(data?.user, data?.token);
                 setStep(2);
             },
@@ -567,8 +620,6 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
     // Final step — called whether KYC was filled in, uploaded, or skipped.
     const finishSetup = () => {
         alert.success('All set!', 'Your account has been created successfully.');
-        // If your app's root navigator doesn't already switch stacks on auth
-        // state change, navigate to the home/dashboard screen here, e.g.
         navigation.reset({ index: 0, routes: [{ name: 'client' }] });
     };
 
@@ -843,6 +894,34 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
                                 error={errors.fullName}
                                 autoCapitalize="words"
                             />
+                            <View style={styles.row}>
+                                <View style={styles.rowItem}>
+                                    <SearchableDropdown
+                                        label="State"
+                                        icon="map-outline"
+                                        placeholder="Search state"
+                                        value={state}
+                                        onChangeText={handleStateTextChange}
+                                        fetchOptions={fetchStateOptions}
+                                        onSelect={handleStateSelect}
+                                        error={errors.state}
+                                    />
+                                </View>
+                                <View style={styles.rowItem}>
+                                    <SearchableDropdown
+                                        label="City"
+                                        icon="location-outline"
+                                        placeholder="Search city"
+                                        disabledHint="Select a state first"
+                                        value={city}
+                                        onChangeText={handleCityTextChange}
+                                        fetchOptions={fetchCityOptions}
+                                        onSelect={handleCitySelect}
+                                        error={errors.city}
+                                        disabled={!state.trim()}
+                                    />
+                                </View>
+                            </View>
 
                             {/* Email with verify button */}
                             <Field
@@ -935,6 +1014,15 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
                                 onChangeText={t => {
                                     setPassword(t);
                                     clearError('password');
+                                    if (confirmPassword) {
+                                        setErrors(prev => ({
+                                            ...prev,
+                                            confirmPassword:
+                                                confirmPassword === t
+                                                    ? ''
+                                                    : 'Passwords do not match',
+                                        }));
+                                    }
                                 }}
                                 error={errors.password}
                                 secureTextEntry={!showPassword}
@@ -972,37 +1060,27 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
                                 </View>
                             )}
 
-                            {/* ── Location fields (customer + vendor) ── */}
-                            <View style={styles.row}>
-                                <View style={styles.rowItem}>
-                                    <Field
-                                        label="City"
-                                        placeholder="Mumbai"
-                                        icon="location-outline"
-                                        value={city}
-                                        onChangeText={t => {
-                                            setCity(t);
-                                            clearError('city');
-                                        }}
-                                        error={errors.city}
-                                        autoCapitalize="words"
-                                    />
-                                </View>
-                                <View style={styles.rowItem}>
-                                    <Field
-                                        label="State"
-                                        placeholder="Maharashtra"
-                                        icon="map-outline"
-                                        value={state}
-                                        onChangeText={t => {
-                                            setState(t);
-                                            clearError('state');
-                                        }}
-                                        error={errors.state}
-                                        autoCapitalize="words"
-                                    />
-                                </View>
-                            </View>
+                            {/* ── Confirm Password ── */}
+                            <Field
+                                label="Confirm Password"
+                                placeholder="Re-enter your password"
+                                icon="lock-closed-outline"
+                                value={confirmPassword}
+                                onChangeText={t => {
+                                    setConfirmPassword(t);
+                                    setErrors(prev => ({
+                                        ...prev,
+                                        confirmPassword:
+                                            t === password ? '' : 'Passwords do not match',
+                                    }));
+                                }}
+                                error={errors.confirmPassword}
+                                secureTextEntry={!showConfirmPassword}
+                                trailingIcon={
+                                    showConfirmPassword ? 'eye-off-outline' : 'eye-outline'
+                                }
+                                onTrailingPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                            />
 
                             {/* ── Referral code ── */}
                             <Field
@@ -1040,14 +1118,18 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
                                     I agree to the{' '}
                                     <Text
                                         style={styles.termsLink}
-                                        onPress={() => Alert.alert('Terms', 'Coming soon.')}
+                                        onPress={() =>
+                                            Linking.openURL('https://rentalmeet.com/terms')
+                                        }
                                     >
                                         Terms of Service
                                     </Text>{' '}
                                     and{' '}
                                     <Text
                                         style={styles.termsLink}
-                                        onPress={() => Alert.alert('Privacy', 'Coming soon.')}
+                                        onPress={() =>
+                                            Linking.openURL('https://rentalmeet.com/privacy')
+                                        }
                                     >
                                         Privacy Policy
                                     </Text>
@@ -1280,138 +1362,6 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
     );
 }
 
-// ── KYC doc upload card sub-component (step 2) ───────────────────────────────
-interface KycDocCardProps {
-    label: string;
-    icon: string;
-    file: PickedFile | null;
-    onPick: () => void;
-    onRemove: () => void;
-    error?: string;
-    preferCamera?: boolean;
-}
-
-function KycDocCard({ label, icon, file, onPick, onRemove, error, preferCamera }: KycDocCardProps) {
-    return (
-        <View>
-            {file ? (
-                <View style={[kc.card, kc.cardFilled]}>
-                    <Image source={{ uri: file.uri }} style={kc.preview} resizeMode="cover" />
-                    <View style={kc.filledOverlay}>
-                        <View style={kc.fileInfo}>
-                            <Ionicons name="checkmark-circle" size={18} color={Colors.success} />
-                            <Text style={kc.fileName} numberOfLines={1}>
-                                {file.name}
-                            </Text>
-                        </View>
-                        <TouchableOpacity style={kc.removeBtn} onPress={onRemove}>
-                            <Ionicons name="trash-outline" size={16} color={Colors.danger} />
-                            <Text style={kc.removeBtnText}>Remove</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-            ) : (
-                <TouchableOpacity
-                    style={[kc.card, !!error && kc.cardError]}
-                    onPress={onPick}
-                    activeOpacity={0.8}
-                >
-                    <View style={kc.iconWrap}>
-                        <Ionicons
-                            name={icon as any}
-                            size={26}
-                            color={error ? Colors.danger : Colors.info}
-                        />
-                    </View>
-                    <Text style={[kc.label, !!error && { color: Colors.danger }]}>{label}</Text>
-                    <Text style={kc.sub}>
-                        {preferCamera
-                            ? 'Tap to take a photo or choose from gallery'
-                            : 'Tap to choose from gallery or camera'}
-                    </Text>
-                    <View style={[kc.uploadBtn, !!error && kc.uploadBtnError]}>
-                        <Ionicons
-                            name="cloud-upload-outline"
-                            size={13}
-                            color={error ? Colors.danger : Colors.info}
-                        />
-                        <Text style={[kc.uploadBtnText, !!error && { color: Colors.danger }]}>
-                            Upload
-                        </Text>
-                    </View>
-                </TouchableOpacity>
-            )}
-            {!!error && (
-                <View style={kc.errorRow}>
-                    <Ionicons name="alert-circle" size={12} color={Colors.danger} />
-                    <Text style={kc.errorText}>{error}</Text>
-                </View>
-            )}
-        </View>
-    );
-}
-
-const kc = StyleSheet.create({
-    card: {
-        borderWidth: 1.5,
-        borderColor: Colors.border,
-        borderStyle: 'dashed',
-        borderRadius: Radii.lg,
-        overflow: 'hidden',
-        alignItems: 'center',
-        padding: Spacing.lg,
-        backgroundColor: Colors.background,
-        marginBottom: 4,
-    },
-    cardFilled: { padding: 0, borderStyle: 'solid', borderColor: Colors.primaryBorder },
-    cardError: { borderColor: Colors.danger, backgroundColor: '#FFF5F5' },
-    preview: { width: '100%', height: 140 },
-    filledOverlay: {
-        width: '100%',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: Spacing.md,
-        backgroundColor: Colors.surface,
-    },
-    fileInfo: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
-    fileName: { fontSize: 13, fontWeight: Typography.medium, color: Colors.charcoal, flex: 1 },
-    removeBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    removeBtnText: { fontSize: 12, color: Colors.danger, fontWeight: Typography.bold },
-    iconWrap: {
-        width: 48,
-        height: 48,
-        borderRadius: 24,
-        backgroundColor: Colors.infoLight,
-        alignItems: 'center',
-        justifyContent: 'center',
-        marginBottom: Spacing.sm,
-    },
-    label: { fontSize: 13, fontWeight: Typography.bold, color: Colors.charcoal, marginBottom: 4 },
-    sub: {
-        fontSize: 11,
-        color: Colors.charcoalLight,
-        textAlign: 'center',
-        lineHeight: 16,
-        marginBottom: Spacing.sm,
-    },
-    uploadBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        paddingHorizontal: 14,
-        paddingVertical: 7,
-        borderRadius: Radii.full,
-        borderWidth: 1.5,
-        borderColor: Colors.info,
-        backgroundColor: Colors.infoLight,
-    },
-    uploadBtnError: { borderColor: Colors.danger, backgroundColor: '#FEE2E2' },
-    uploadBtnText: { fontSize: 12, fontWeight: Typography.bold, color: Colors.info },
-    errorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: Spacing.sm },
-    errorText: { fontSize: 11, color: Colors.danger, fontWeight: Typography.semiBold },
-});
-
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: Colors.background },
@@ -1514,7 +1464,7 @@ const styles = StyleSheet.create({
     },
 
     // FIX: row children need minWidth:0 to shrink properly
-    row: { flexDirection: 'row', gap: Spacing.sm },
+    row: { flexDirection: 'column' },
     rowItem: { flex: 1, minWidth: 0 },
 
     // OTP verify buttons

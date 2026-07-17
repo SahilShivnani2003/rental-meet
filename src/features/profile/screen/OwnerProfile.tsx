@@ -30,8 +30,10 @@ import { VendorTabParamList } from '@/navigations/tabNavigations/VendorTabNaviga
 import { useUploadImage } from '../hooks/useUploadImage';
 import { useDeactivateAccount } from '../hooks/useDeactivateAccount';
 import { useDeleteAccount } from '../hooks/useDeletAccount';
-import { launchCamera, launchImageLibrary } from 'react-native-image-picker';
+import { Asset, launchCamera, launchImageLibrary } from 'react-native-image-picker';
+import DeviceInfo from 'react-native-device-info';
 
+const appVersion = DeviceInfo.getVersion();
 // ─── Config ───────────────────────────────────────────────────────────────────
 
 const USER_TYPE_CONFIG: Record<string, { label: string; icon: string; color: string; bg: string }> =
@@ -132,16 +134,24 @@ export default function ProfileScreen({ navigation }: ProfileProps) {
         isLoading: isBookingsLoading,
         isRefetching: isBookingsRefetching,
         refetch: refetchBookings,
-    } = useGetAllBookings({
-        enabled: true,
-    });
+    } = useGetAllBookings(
+        {
+            enabled: true,
+        },
+        {},
+    );
     const { mutate: updateUser } = useUpdateProfile();
     const { mutate: changePassword } = useChangePassword();
 
     const { user, logOut } = useAuthStore();
 
     const profile: Partial<User> = userData?.user;
-    const bookings = bookingData?.bookings ?? [];
+    const bookings = bookingData?.pages.flatMap(page => page.bookings ?? []) ?? [];
+    const stats = bookingData?.pages[0]?.stats;
+
+    const totalBookings = stats?.total ?? 0;
+    const completedCount = stats?.completed ?? 0;
+    const pendingCount = (stats?.pending ?? 0) + (stats?.confirmed ?? 0);
     const [editProfileVisible, setEditProfileVisible] = useState(false);
     const [changePasswordVisible, setChangePasswordVisible] = useState(false);
     // True on the very first load (no data yet)
@@ -159,13 +169,6 @@ export default function ProfileScreen({ navigation }: ProfileProps) {
     }, [refetchProfile, refetchBookings]);
 
     const typeCfg = USER_TYPE_CONFIG[user?.role ?? 'customer'] ?? USER_TYPE_CONFIG.customer;
-
-    // ── Stats ─────────────────────────────────────────────────────────────────
-    const totalBookings = bookings.length;
-    const completedCount = bookings.filter((b: Booking) => b.status === 'completed').length;
-    const pendingCount = bookings.filter(
-        (b: Booking) => b.status === 'pending' || b.status === 'confirmed',
-    ).length;
 
     // ── Display values ────────────────────────────────────────────────────────
     const displayName = profile?.name ?? user?.name ?? 'User';
@@ -247,7 +250,7 @@ export default function ProfileScreen({ navigation }: ProfileProps) {
             iconBg: Colors.warningLight,
             title: 'Notifications',
             subtitle: 'Alerts & reminders',
-            onPress: () => alert.info('Coming Soon', 'Notification feature coming soon.'),
+            onPress: () => rootNav.navigate('notification'),
         },
         {
             id: 'help',
@@ -264,12 +267,35 @@ export default function ProfileScreen({ navigation }: ProfileProps) {
             iconColor: Colors.charcoalLight,
             iconBg: Colors.border,
             title: 'About RentalMeet',
-            subtitle: 'Version 1.0.0',
+            subtitle: `Version ${appVersion}`,
             onPress: () =>
-                alert.info('RentalMeet', 'Version 1.0.0\n\nBook your perfect space with ease.'),
+                alert.info(
+                    'RentalMeet',
+                    `Version ${appVersion}\n\nBook your perfect space with ease.`,
+                ),
         },
     ];
 
+    const quickActions = [
+        {
+            id: 'quotations',
+            icon: 'document-text-outline', // better for quotations/docs
+            iconColor: Colors.warning,
+            iconBg: Colors.warningLight,
+            title: 'Quotations',
+            subtitle: 'View price quotes & requests',
+            onPress: () => rootNav.navigate('quotationDownload'),
+        },
+        {
+            id: 'coupons',
+            icon: 'pricetag-outline', // perfect for coupons/offers
+            iconColor: Colors.warning,
+            iconBg: Colors.warningLight,
+            title: 'Coupons',
+            subtitle: 'Discounts & promo offers',
+            onPress: () => rootNav.navigate('venueCoupon'),
+        },
+    ];
     const handleDeactivateAccount = () => {
         alert.show({
             type: 'confirm',
@@ -430,7 +456,7 @@ export default function ProfileScreen({ navigation }: ProfileProps) {
         }
         handleUploadPhoto(result.assets[0]);
     };
-    
+
     const handlePhotoOptions = () => {
         alert.show({
             type: 'confirm',
@@ -589,7 +615,9 @@ export default function ProfileScreen({ navigation }: ProfileProps) {
                 </View>
 
                 <MenuSection title="ACCOUNT" items={accountItems} />
+                <MenuSection title="QUICK ACTION" items={quickActions}/>
                 <MenuSection title="PREFERENCES" items={preferenceItems} />
+                
                 <View style={styles.menuSection}>
                     <Text style={styles.menuSectionLabel}>ACCOUNT ACTIONS</Text>
                     <View style={styles.menuSectionCard}>
@@ -634,7 +662,10 @@ export default function ProfileScreen({ navigation }: ProfileProps) {
             </ScrollView>
             <EditProfileModal
                 visible={editProfileVisible}
-                onClose={() => setEditProfileVisible(false)}
+                onClose={() => {
+                    setEditProfileVisible(false);
+                    handleRefresh();
+                }}
                 user={profile}
                 mutate={updateUser}
             />

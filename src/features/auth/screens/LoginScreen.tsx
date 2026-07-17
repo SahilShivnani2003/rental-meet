@@ -24,8 +24,11 @@ import { RootStackParamList } from '@/types/RootStackParamList';
 import { useLogin } from '../hooks/useLogin';
 import { ApiError } from '@/types/ApiError';
 import { User } from '@/features/profile/types/User';
+import DeviceInfo from 'react-native-device-info';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+const version = DeviceInfo.getVersion();
 
 type LoginProps = NativeStackScreenProps<RootStackParamList, 'login'>;
 
@@ -307,7 +310,7 @@ export default function LoginScreen({ navigation }: LoginProps) {
                     </TouchableOpacity>
                 </Animated.View>
 
-                <Text style={styles.version}>RentalMeet v1.0.0</Text>
+                <Text style={styles.version}>{`RentalMeet v${version}`}</Text>
             </ScrollView>
         </KeyboardAvoidingView>
     );

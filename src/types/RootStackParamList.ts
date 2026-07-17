@@ -67,4 +67,6 @@ export type RootStackParamList = {
     },
     referral:undefined;
     quotationDownload: undefined;
+    notification: undefined;
+    venueCoupon: undefined;
 };
