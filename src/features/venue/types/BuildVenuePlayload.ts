@@ -11,6 +11,7 @@ export function buildVenuePayload(form: VenueFormData): Omit<Venue, '_id' | 'own
         description: basic.description.trim(),
         capacity: basic.capacity as Venue['capacity'],
         areaSqft: Number(basic.areaSqft) || 0,
+        foodType: basic.foodType,
 
         // ── Location ─────────────────────────────────────────────────────────
         location: {

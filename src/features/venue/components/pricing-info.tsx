@@ -1,6 +1,12 @@
 import Field from '@/components/UI/InputField';
-import { StepHeader, SectionCard, SectionTitle, PickerRow, NavButtons } from '@/components/UI/shared-components';
-import { Colors, Spacing, Typography, Radii } from '@/theme/theme';
+import {
+    StepHeader,
+    SectionCard,
+    SectionTitle,
+    PickerRow,
+    NavButtons,
+} from '@/components/UI/shared-components';
+import { Colors, Spacing, Typography, Radii, Shadows } from '@/theme/theme';
 import React, { useState, useRef, useCallback } from 'react';
 import {
     View,
@@ -23,17 +29,20 @@ const ADVANCE_OPTIONS = [
     '48 hours in advance',
     '1 week in advance',
 ];
-const PRICE_ROWS = [
+
+/** Toggleable periods — each has a checkbox to enable/disable it */
+const TOGGLE_PRICE_ROWS: Array<{ key: 'perHour' | 'halfDay' | 'fullDay'; label: string }> = [
     { key: 'perHour', label: 'Per Hour' },
-    { key: 'halfDay', label: 'Half Day (4 hrs)' },
-    { key: 'fullDay', label: 'Full Day (8 hrs)' },
-    { key: 'extraHour', label: 'Extra Hour Rate' },
+    { key: 'halfDay', label: 'Half Day (4 hours)' },
+    { key: 'fullDay', label: 'Full Day (8 hours)' },
 ];
+/** Always-active row — no checkbox */
+const EXTRA_HOUR_ROW = { key: 'extraHour', label: 'Extra Hour Rate' };
 
 const HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')); // 01-12
 const MINUTES = ['00', '15', '30', '45'];
 const PERIODS = ['AM', 'PM'];
-
+const CONFIRMATION_HOURS: Array<1 | 2 | 3> = [1, 2, 3];
 const ITEM_H = 48; // height of each drum item
 
 // ─── Drum column ──────────────────────────────────────────────────────────────
@@ -272,6 +281,14 @@ export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) 
     const updatePrice = (key: string, type: 'weekday' | 'weekend', value: string) =>
         set({ prices: { ...data.prices, [key]: { ...data.prices[key], [type]: value } } });
 
+    const togglePeriod = (key: 'perHour' | 'halfDay' | 'fullDay') =>
+        set({
+            enabledOptions: {
+                ...data.enabledOptions,
+                [key]: !data.enabledOptions?.[key],
+            },
+        });
+
     const toggleDay = (day: string) =>
         set({
             availDays: data.availDays.includes(day)
@@ -284,41 +301,90 @@ export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) 
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 20 }}
         >
-            <StepHeader title="Step 4: Pricing" current={4} />
+            {/* <StepHeader title="Step 4: Pricing" current={4} /> */}
 
             {/* ── Pricing Structure ── */}
             <SectionCard accentColor={Colors.primary}>
-                <SectionTitle icon="logo-usd" title="Pricing Structure" />
+                <SectionTitle
+                    icon="logo-usd"
+                    title="Pricing Structure"
+                    subtitle="Select which pricing options you want to offer"
+                />
                 <View style={s.tableHeader}>
-                    <Text style={[s.colHead, { flex: 1.3 }]}>Period</Text>
-                    <Text style={[s.colHead, { flex: 1 }]}>Weekday</Text>
-                    <Text style={[s.colHead, { flex: 1 }]}>Weekend</Text>
-                </View>
-                {PRICE_ROWS.map(row => (
-                    <View key={row.key} style={s.priceRow}>
-                        <Text style={s.priceLabel}>{row.label}</Text>
-                        <View style={{ flex: 1 }}>
-                            <Field
-                                label=""
-                                placeholder="₹ 0"
-                                icon=""
-                                value={data.prices[row.key]?.weekday || ''}
-                                onChangeText={(v: any) => updatePrice(row.key, 'weekday', v)}
-                                keyboardType="numeric"
-                            />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                            <Field
-                                label=""
-                                placeholder="₹ 0"
-                                icon=""
-                                value={data.prices[row.key]?.weekend || ''}
-                                onChangeText={(v: any) => updatePrice(row.key, 'weekend', v)}
-                                keyboardType="numeric"
-                            />
-                        </View>
+                    <View style={{ flex: 1.3 }}>
+                        <Text style={s.colHead}>Period</Text>
+                        <Text style={s.colHeadNote}>(Select to enable)</Text>
                     </View>
-                ))}
+                    <Text style={[s.colHead, { flex: 1 }]}>Weekday (Mon-Fri)</Text>
+                    <Text style={[s.colHead, { flex: 1 }]}>Weekend (Sat-Sun)</Text>
+                </View>
+
+                {TOGGLE_PRICE_ROWS.map(row => {
+                    const enabled = !!data.enabledOptions?.[row.key];
+                    return (
+                        <View key={row.key} style={s.priceRow}>
+                            <TouchableOpacity
+                                style={s.priceLabelRow}
+                                onPress={() => togglePeriod(row.key)}
+                                activeOpacity={0.75}
+                            >
+                                <View style={[s.checkbox, enabled && s.checkboxActive]}>
+                                    {enabled && (
+                                        <Ionicons name="checkmark" size={12} color={Colors.white} />
+                                    )}
+                                </View>
+                                <Text style={s.priceLabel}>{row.label}</Text>
+                            </TouchableOpacity>
+                            <View style={[{ flex: 1 }, !enabled && s.priceInputDisabled]}>
+                                <Field
+                                    label=""
+                                    placeholder="₹ 0"
+                                    icon=""
+                                    value={enabled ? data.prices[row.key]?.weekday || '' : ''}
+                                    onChangeText={(v: any) => updatePrice(row.key, 'weekday', v)}
+                                    keyboardType="numeric"
+                                />
+                            </View>
+                            <View style={[{ flex: 1 }, !enabled && s.priceInputDisabled]}>
+                                <Field
+                                    label=""
+                                    placeholder="₹ 0"
+                                    icon=""
+                                    value={enabled ? data.prices[row.key]?.weekend || '' : ''}
+                                    onChangeText={(v: any) => updatePrice(row.key, 'weekend', v)}
+                                    keyboardType="numeric"
+                                />
+                            </View>
+                        </View>
+                    );
+                })}
+
+                {/* Extra Hour Rate — always active, no checkbox */}
+                <View style={s.priceRow}>
+                    <Text style={[s.priceLabel, { flex: 1.3, marginLeft: 30 }]}>
+                        {EXTRA_HOUR_ROW.label}
+                    </Text>
+                    <View style={{ flex: 1 }}>
+                        <Field
+                            label=""
+                            placeholder="₹ 0"
+                            icon=""
+                            value={data.prices[EXTRA_HOUR_ROW.key]?.weekday || ''}
+                            onChangeText={(v: any) => updatePrice(EXTRA_HOUR_ROW.key, 'weekday', v)}
+                            keyboardType="numeric"
+                        />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Field
+                            label=""
+                            placeholder="₹ 0"
+                            icon=""
+                            value={data.prices[EXTRA_HOUR_ROW.key]?.weekend || ''}
+                            onChangeText={(v: any) => updatePrice(EXTRA_HOUR_ROW.key, 'weekend', v)}
+                            keyboardType="numeric"
+                        />
+                    </View>
+                </View>
             </SectionCard>
 
             {/* ── Availability Schedule ── */}
@@ -388,6 +454,65 @@ export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) 
                 </View>
             </SectionCard>
 
+            <View style={s.confirmCard}>
+                <View style={s.confirmHeader}>
+                    <View style={s.confirmIconWrap}>
+                        <Ionicons name="timer-outline" size={18} color={Colors.info} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={s.confirmTitle}>Booking Confirmation Time</Text>
+                        <Text style={s.confirmSub}>
+                            How long will you take to confirm a booking request?
+                        </Text>
+                    </View>
+                </View>
+
+                <View style={s.hoursRow}>
+                    {CONFIRMATION_HOURS.map(hr => {
+                        const active = data.confirmationHours === hr;
+                        return (
+                            <TouchableOpacity
+                                key={hr}
+                                style={[s.hourChip, active && s.hourChipActive]}
+                                onPress={() => set({ confirmationHours: hr })}
+                                activeOpacity={0.75}
+                            >
+                                <View style={[s.hourCircle, active && s.hourCircleActive]}>
+                                    <Text style={[s.hourNum, active && s.hourNumActive]}>{hr}</Text>
+                                </View>
+                                <Text style={[s.hourLabel, active && s.hourLabelActive]}>
+                                    {hr === 1 ? '1 Hour' : `${hr} Hours`}
+                                </Text>
+                                {active && (
+                                    <Ionicons
+                                        name="checkmark-circle"
+                                        size={16}
+                                        color={Colors.info}
+                                        style={{ marginLeft: 4 }}
+                                    />
+                                )}
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+
+                <View style={s.confirmNote}>
+                    <Ionicons
+                        name="information-circle-outline"
+                        size={13}
+                        color={Colors.charcoalLight}
+                    />
+                    <Text style={s.confirmNoteText}>
+                        You must confirm or decline booking requests within{' '}
+                        <Text style={s.confirmNoteHighlight}>
+                            {data.confirmationHours}{' '}
+                            {data.confirmationHours === 1 ? 'hour' : 'hours'}
+                        </Text>{' '}
+                        of receiving them.
+                    </Text>
+                </View>
+            </View>
+
             {/* ── Blackout Dates ── */}
             <SectionCard accentColor={Colors.danger}>
                 <SectionTitle
@@ -435,24 +560,52 @@ export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) 
 const s = StyleSheet.create({
     tableHeader: {
         flexDirection: 'row',
+        alignItems: 'flex-end',
         paddingBottom: Spacing.sm,
         borderBottomWidth: 1.5,
         borderBottomColor: Colors.border,
-        marginBottom: 4,
+        marginBottom: Spacing.sm,
     },
     colHead: {
         fontSize: Typography.xs,
         fontWeight: Typography.bold,
-        color: Colors.charcoalLight,
-        textAlign: 'center',
+        color: Colors.charcoal,
     },
-    priceRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-    priceLabel: {
+    colHeadNote: {
+        fontSize: 10,
+        color: Colors.charcoalLight,
+        fontWeight: Typography.medium,
+        marginTop: 1,
+    },
+    priceRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+        paddingVertical: Spacing.xs,
+    },
+    priceLabelRow: {
         flex: 1.3,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+    },
+    priceLabel: {
         fontSize: Typography.sm,
         color: Colors.charcoalMid,
         fontWeight: Typography.medium,
     },
+    checkbox: {
+        width: 20,
+        height: 20,
+        borderRadius: 5,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.surface,
+    },
+    checkboxActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+    priceInputDisabled: { opacity: 0.45 },
     row: { flexDirection: 'row', gap: Spacing.sm },
     sectionLabel: {
         fontSize: 11,
@@ -462,6 +615,91 @@ const s = StyleSheet.create({
         textTransform: 'uppercase',
         marginBottom: 7,
     },
+    confirmCard: {
+        marginHorizontal: Spacing.lg,
+        marginTop: Spacing.md,
+        padding: Spacing.md,
+        backgroundColor: Colors.surface,
+        borderRadius: Radii.md,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        ...Shadows.card,
+    },
+    confirmHeader: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: Spacing.sm,
+        marginBottom: Spacing.md,
+    },
+    confirmIconWrap: {
+        width: 34,
+        height: 34,
+        borderRadius: Radii.sm,
+        backgroundColor: Colors.infoLight,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    confirmTitle: {
+        fontSize: Typography.md,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal,
+    },
+    confirmSub: { fontSize: Typography.sm, color: Colors.charcoalLight, marginTop: 2 },
+    hoursRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
+    hourChip: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.xs,
+        borderRadius: Radii.md,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        backgroundColor: Colors.background,
+        gap: Spacing.xs,
+    },
+    hourChipActive: {
+        borderColor: Colors.info ?? Colors.primary,
+        backgroundColor: Colors.infoLight ?? Colors.primaryLight,
+    },
+    hourCircle: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: Colors.border,
+    },
+    hourCircleActive: { backgroundColor: Colors.info ?? Colors.primary },
+    hourNum: {
+        fontSize: Typography.base,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoalLight,
+    },
+    hourNumActive: { color: Colors.white },
+    hourLabel: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoalLight,
+    },
+    hourLabelActive: { color: Colors.info ?? Colors.primary },
+    confirmNote: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: Spacing.xs,
+        backgroundColor: Colors.background,
+        borderRadius: Radii.sm,
+        padding: Spacing.sm,
+        marginTop: Spacing.xs,
+    },
+    confirmNoteText: {
+        flex: 1,
+        fontSize: Typography.xs,
+        color: Colors.charcoalLight,
+        lineHeight: 16,
+    },
+    confirmNoteHighlight: { fontWeight: Typography.bold, color: Colors.charcoalMid },
     req: { color: Colors.primary },
     daysGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
     dayChip: {

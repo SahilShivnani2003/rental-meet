@@ -191,6 +191,10 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                     setLatest({
                         uploads: { ...dataRef.current.uploads, [key]: displayName },
                         uploadedDocs: newDocs,
+                        // Keep dedicated bank-proof fields in sync for easy access elsewhere
+                        ...(key === 'bank_proof'
+                            ? { bankProofUrl: response.url, bankProofPublicId: response.publicId }
+                            : {}),
                     });
                 } else {
                     // API returned success:false — roll back the optimistic filename
@@ -352,7 +356,7 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 20 }}
             >
-                <StepHeader title="Step 6: Documents" current={6} />
+                {/* <StepHeader title="Step 6: Documents" current={6} /> */}
 
                 {/* ── Owner Details ── */}
                 <SectionCard accentColor={Colors.primary}>
@@ -529,15 +533,19 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                             />
                         </View>
                     </View>
-                    <Text style={[s.uploadLabel, { marginTop: Spacing.sm }]}>
-                        UPLOAD BACK <Text style={s.req}>*</Text>
-                    </Text>
-                    <UploadBtn
-                        uploadKey="id_back"
-                        mode="photo"
-                        label="ID Back"
-                        {...uploadBtnShared}
-                    />
+                    {data.idType === 'aadhaar' && (
+                        <>
+                            <Text style={[s.uploadLabel, { marginTop: Spacing.sm }]}>
+                                UPLOAD BACK <Text style={s.req}>*</Text>
+                            </Text>
+                            <UploadBtn
+                                uploadKey="id_back"
+                                mode="photo"
+                                label="ID Back"
+                                {...uploadBtnShared}
+                            />
+                        </>
+                    )}
                 </SectionCard>
 
                 {/* ── Selfie ── */}
@@ -672,6 +680,27 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                                 }}
                             />
                         </View>
+                        <Text style={[s.uploadLabel, { marginTop: Spacing.sm }]}>
+                            UPLOAD BANK PROOF <Text style={s.req}>*</Text>
+                        </Text>
+                        <UploadBtn
+                            uploadKey="bank_proof"
+                            mode="document"
+                            label="Bank Proof"
+                            btnLabel="Upload Cancelled Cheque / Passbook"
+                            {...uploadBtnShared}
+                        />
+                        <View style={s.gstNote}>
+                            <Ionicons
+                                name="information-circle-outline"
+                                size={13}
+                                color={Colors.charcoalLight}
+                            />
+                            <Text style={s.gstNoteText}>
+                                Upload a cancelled cheque, passbook front page, or bank statement
+                                (PDF, JPG or PNG)
+                            </Text>
+                        </View>
                     </View>
                     <View style={s.secureNote}>
                         <Ionicons name="lock-closed" size={12} color={Colors.primary} />
@@ -736,7 +765,7 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
 }
 
 const s = StyleSheet.create({
-    row: { flexDirection: 'row', gap: Spacing.sm },
+    row: { flexDirection: 'column', gap: Spacing.sm },
     gstDivider: { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.md },
     gstCheckRow: {
         flexDirection: 'row',

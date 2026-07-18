@@ -1,5 +1,7 @@
+import { deviceLogout } from '@/features/notification/services/notificationService';
 import { User } from '@/features/profile/types/User';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import DeviceInfo from 'react-native-device-info';
 import { create } from "zustand"
 
 interface AuthStore {
@@ -35,6 +37,8 @@ export const useAuthStore = create<AuthStore>((set) => ({
     logOut: async () => {
         try {
 
+            const deviceId = await DeviceInfo.getUniqueId();
+            await deviceLogout(deviceId);
             await AsyncStorage.removeItem(STORAGE_KEY);
 
             set({

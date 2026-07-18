@@ -9,6 +9,8 @@ import {
     Pressable,
     Platform,
     ActivityIndicator,
+    Image,
+    Alert,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import {
@@ -19,7 +21,7 @@ import {
 } from 'react-native-image-picker';
 import { Colors, Typography, Spacing, Radii } from '../../../theme/theme';
 import { StepHeader, SectionCard, NavButtons } from '../../../components/UI/shared-components';
-import { VenueFormData } from '../types/VenueFormData';
+import { VenueFormData, UploadedImage } from '../types/VenueFormData';
 import { useUploadImage } from '../hooks/useUpload';
 
 const PHOTO_SECTIONS = [
@@ -45,16 +47,19 @@ interface Props {
 }
 
 export default function Step5Photos({ data, onChange, onPrev, onNext }: Props) {
-    const {mutateAsync: uploadImageAsync} = useUploadImage();
+    const { mutateAsync: uploadImageAsync } = useUploadImage();
     const [pickerTarget, setPickerTarget] = useState<string | null>(null);
     const pickerTargetRef = useRef<string | null>(null);
     const [uploading, setUploading] = useState<Record<string, boolean>>({});
+    const [removing, setRemoving] = useState<Record<string, boolean>>({});
 
     // Derived count per section from shared data
     const counts = PHOTO_SECTIONS.reduce<Record<string, number>>((acc, sec) => {
         acc[sec.key] = data.uploadedImages.filter(i => i.sectionKey === sec.key).length;
         return acc;
     }, {});
+
+    const imagesFor = (key: string) => data.uploadedImages.filter(i => i.sectionKey === key);
 
     const handleUpload = (key: string) => {
         pickerTargetRef.current = key;
@@ -103,13 +108,37 @@ export default function Step5Photos({ data, onChange, onPrev, onNext }: Props) {
             onPickerResult,
         );
 
+    // ── Remove an uploaded photo ─────────────────────────────────────────────
+    const confirmRemove = (image: UploadedImage) => {
+        Alert.alert('Remove Photo', 'Are you sure you want to remove this photo?', [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Remove', style: 'destructive', onPress: () => removeImage(image) },
+        ]);
+    };
+
+    const removeImage = async (image: UploadedImage) => {
+        setRemoving(p => ({ ...p, [image.publicId]: true }));
+        try {
+            // If you have a delete-from-storage mutation (e.g. useDeleteImage),
+            // call it here before removing from local state:
+            // await deleteImageAsync({ publicId: image.publicId });
+            onChange({
+                uploadedImages: data.uploadedImages.filter(i => i.publicId !== image.publicId),
+            });
+        } catch (e: any) {
+            console.error('IMAGE REMOVE ERROR:', e);
+        } finally {
+            setRemoving(p => ({ ...p, [image.publicId]: false }));
+        }
+    };
+
     return (
         <>
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 20 }}
             >
-                <StepHeader title="Step 5: Photos" current={5} />
+                {/* <StepHeader title="Step 5: Photos" current={5} /> */}
                 <View style={s.banner}>
                     <View style={s.bannerIcon}>
                         <Ionicons name="images-outline" size={18} color={Colors.primary} />
@@ -128,6 +157,7 @@ export default function Step5Photos({ data, onChange, onPrev, onNext }: Props) {
                         const count = counts[sec.key] || 0;
                         const isDone = count > 0;
                         const isUploading = uploading[sec.key] ?? false;
+                        const sectionImages = imagesFor(sec.key);
                         return (
                             <View
                                 key={sec.key}
@@ -136,72 +166,129 @@ export default function Step5Photos({ data, onChange, onPrev, onNext }: Props) {
                                     idx < PHOTO_SECTIONS.length - 1 && s.photoBorder,
                                 ]}
                             >
-                                <View style={s.photoLeft}>
-                                    <View style={[s.photoIconWrap, isDone && s.photoIconWrapDone]}>
-                                        {isUploading ? (
-                                            <ActivityIndicator
-                                                size="small"
-                                                color={Colors.primary}
-                                            />
-                                        ) : (
-                                            <Ionicons
-                                                name={isDone ? 'checkmark' : 'image-outline'}
-                                                size={16}
-                                                color={
-                                                    isDone ? Colors.success : Colors.charcoalLight
-                                                }
-                                            />
-                                        )}
+                                <View style={s.photoTopRow}>
+                                    <View style={s.photoLeft}>
+                                        <View
+                                            style={[s.photoIconWrap, isDone && s.photoIconWrapDone]}
+                                        >
+                                            {isUploading ? (
+                                                <ActivityIndicator
+                                                    size="small"
+                                                    color={Colors.primary}
+                                                />
+                                            ) : (
+                                                <Ionicons
+                                                    name={isDone ? 'checkmark' : 'image-outline'}
+                                                    size={16}
+                                                    color={
+                                                        isDone
+                                                            ? Colors.success
+                                                            : Colors.charcoalLight
+                                                    }
+                                                />
+                                            )}
+                                        </View>
+                                        <View>
+                                            <Text style={s.photoLabel}>
+                                                {sec.label}
+                                                {sec.required && <Text style={s.req}> *</Text>}
+                                            </Text>
+                                            <Text
+                                                style={[s.photoCount, isDone && s.photoCountDone]}
+                                            >
+                                                {isUploading
+                                                    ? 'Uploading…'
+                                                    : `${count} photo${
+                                                          count !== 1 ? 's' : ''
+                                                      } uploaded`}
+                                            </Text>
+                                        </View>
                                     </View>
-                                    <View>
-                                        <Text style={s.photoLabel}>
-                                            {sec.label}
-                                            {sec.required && <Text style={s.req}> *</Text>}
-                                        </Text>
-                                        <Text style={[s.photoCount, isDone && s.photoCountDone]}>
+                                    <TouchableOpacity
+                                        style={[
+                                            s.uploadBtn,
+                                            isDone && s.uploadBtnDone,
+                                            isUploading && s.uploadBtnDisabled,
+                                        ]}
+                                        onPress={() => !isUploading && handleUpload(sec.key)}
+                                        activeOpacity={0.8}
+                                        disabled={isUploading}
+                                    >
+                                        <Ionicons
+                                            name="cloud-upload-outline"
+                                            size={14}
+                                            color={
+                                                isUploading
+                                                    ? Colors.charcoalLight
+                                                    : isDone
+                                                    ? Colors.success
+                                                    : Colors.primary
+                                            }
+                                        />
+                                        <Text
+                                            style={[
+                                                s.uploadText,
+                                                isDone && s.uploadTextDone,
+                                                isUploading && s.uploadTextDisabled,
+                                            ]}
+                                        >
                                             {isUploading
                                                 ? 'Uploading…'
-                                                : `${count} photo${
-                                                      count !== 1 ? 's' : ''
-                                                  } uploaded`}
-                                        </Text>
-                                    </View>
-                                </View>
-                                <TouchableOpacity
-                                    style={[
-                                        s.uploadBtn,
-                                        isDone && s.uploadBtnDone,
-                                        isUploading && s.uploadBtnDisabled,
-                                    ]}
-                                    onPress={() => !isUploading && handleUpload(sec.key)}
-                                    activeOpacity={0.8}
-                                    disabled={isUploading}
-                                >
-                                    <Ionicons
-                                        name="cloud-upload-outline"
-                                        size={14}
-                                        color={
-                                            isUploading
-                                                ? Colors.charcoalLight
                                                 : isDone
-                                                ? Colors.success
-                                                : Colors.primary
-                                        }
-                                    />
-                                    <Text
-                                        style={[
-                                            s.uploadText,
-                                            isDone && s.uploadTextDone,
-                                            isUploading && s.uploadTextDisabled,
-                                        ]}
+                                                ? 'Add More'
+                                                : 'Upload'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                {/* ── Thumbnails with remove option ── */}
+                                {sectionImages.length > 0 && (
+                                    <ScrollView
+                                        horizontal
+                                        showsHorizontalScrollIndicator={false}
+                                        style={s.thumbRow}
+                                        contentContainerStyle={{ gap: Spacing.sm }}
                                     >
-                                        {isUploading
-                                            ? 'Uploading…'
-                                            : isDone
-                                            ? 'Add More'
-                                            : 'Upload'}
-                                    </Text>
-                                </TouchableOpacity>
+                                        {sectionImages.map(img => {
+                                            const isRemoving = removing[img.publicId] ?? false;
+                                            return (
+                                                <View key={img.publicId} style={s.thumbWrap}>
+                                                    <Image
+                                                        source={{ uri: img.url }}
+                                                        style={s.thumbImage}
+                                                        resizeMode="cover"
+                                                    />
+                                                    {isRemoving ? (
+                                                        <View style={s.thumbOverlay}>
+                                                            <ActivityIndicator
+                                                                size="small"
+                                                                color={Colors.white}
+                                                            />
+                                                        </View>
+                                                    ) : (
+                                                        <TouchableOpacity
+                                                            style={s.thumbRemoveBtn}
+                                                            onPress={() => confirmRemove(img)}
+                                                            hitSlop={{
+                                                                top: 6,
+                                                                bottom: 6,
+                                                                left: 6,
+                                                                right: 6,
+                                                            }}
+                                                            activeOpacity={0.8}
+                                                        >
+                                                            <Ionicons
+                                                                name="close"
+                                                                size={12}
+                                                                color={Colors.white}
+                                                            />
+                                                        </TouchableOpacity>
+                                                    )}
+                                                </View>
+                                            );
+                                        })}
+                                    </ScrollView>
+                                )}
                             </View>
                         );
                     })}
@@ -311,13 +398,15 @@ const s = StyleSheet.create({
         lineHeight: 17,
     },
     photoRow: {
+        paddingVertical: Spacing.lg,
+    },
+    photoBorder: { borderBottomWidth: 1, borderBottomColor: Colors.border },
+    photoTopRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingVertical: Spacing.lg,
         gap: Spacing.md,
     },
-    photoBorder: { borderBottomWidth: 1, borderBottomColor: Colors.border },
     photoLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, flex: 1 },
     photoIconWrap: {
         width: 38,
@@ -353,6 +442,41 @@ const s = StyleSheet.create({
     uploadText: { fontSize: Typography.base, fontWeight: Typography.bold, color: Colors.primary },
     uploadTextDone: { color: Colors.success },
     uploadTextDisabled: { color: Colors.charcoalLight },
+
+    // ── Thumbnails ──
+    thumbRow: { marginTop: Spacing.md },
+    thumbWrap: {
+        width: 72,
+        height: 72,
+        borderRadius: Radii.sm,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: Colors.border,
+        backgroundColor: Colors.background,
+    },
+    thumbImage: { width: '100%', height: '100%' },
+    thumbRemoveBtn: {
+        position: 'absolute',
+        top: 4,
+        right: 4,
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: 'rgba(0,0,0,0.55)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    thumbOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0,0,0,0.35)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+
     reqBox: {
         marginHorizontal: Spacing.lg,
         marginTop: Spacing.md,

@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Geolocation from '@react-native-community/geolocation';
-import Config from 'react-native-config';
 import { Colors, Typography, Spacing, Radii } from '../../../theme/theme';
 import Field from '../../../components/UI/InputField';
 import {
@@ -23,8 +22,11 @@ import {
     Textarea,
 } from '../../../components/UI/shared-components';
 import { VenueFormData } from '../types/VenueFormData';
+import { config } from '@/config/env';
+import SearchableDropdown, { DropdownOption } from '@/components/UI/SearchableDropDown';
+import { getCitiesByState, getStates } from '@/utils/location';
 
-const GOOGLE_API_KEY = Config.GOOGLEAPI;
+const GOOGLE_API_KEY = config.GOOGLEAPI;
 const PARKING_TYPES = ['Select parking type', 'Free', 'Paid', 'Limited', 'No'];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -46,236 +48,6 @@ interface Props {
     onPrev: () => void;
     onNext: () => void;
 }
-
-// ─── CityStatePicker ─────────────────────────────────────────────────────────
-
-interface PickerProps {
-    label: string;
-    placeholder: string;
-    icon: string;
-    value: string;
-    onSelect: (v: string) => void;
-    error?: string;
-    types: '(cities)' | 'administrative_area_level_1';
-}
-
-function CityStatePicker({ label, placeholder, icon, value, onSelect, error, types }: PickerProps) {
-    const [query, setQuery] = useState(value);
-    const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
-    const [showDropdown, setShowDropdown] = useState(false);
-    const [fetching, setFetching] = useState(false);
-    const [layout, setLayout] = useState<DropdownLayout | null>(null);
-    const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-    const wrapperRef = React.useRef<View>(null);
-
-    React.useEffect(() => {
-        setQuery(value);
-    }, [value]);
-
-    const measure = () => {
-        wrapperRef.current?.measure((_x, _y, width, _h, pageX, pageY) => {
-            // 6 = label line-height approx + gap; 48 = input height; 4 = gap
-            setLayout({ x: pageX, y: pageY + 6 + 48 + 4, width });
-        });
-    };
-
-    const fetchPredictions = async (input: string) => {
-        if (!input || input.length < 2) {
-            setPredictions([]);
-            return;
-        }
-        setFetching(true);
-        try {
-            const typeParam = types === '(cities)' ? 'locality' : 'administrative_area_level_1';
-            const url =
-                `https://maps.googleapis.com/maps/api/place/autocomplete/json` +
-                `?input=${encodeURIComponent(input)}` +
-                `&types=${typeParam}` +
-                `&components=country:in` +
-                `&key=${GOOGLE_API_KEY}`;
-            const res = await fetch(url);
-            const json = await res.json();
-            setPredictions(json.status === 'OK' ? json.predictions : []);
-        } catch {
-            setPredictions([]);
-        } finally {
-            setFetching(false);
-        }
-    };
-
-    const handleChangeText = (text: string) => {
-        setQuery(text);
-        setShowDropdown(true);
-        if (debounceRef.current) clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(() => fetchPredictions(text), 350);
-    };
-
-    const handleSelect = (item: PlacePrediction) => {
-        const name = item.structured_formatting.main_text;
-        setQuery(name);
-        onSelect(name);
-        setPredictions([]);
-        setShowDropdown(false);
-    };
-
-    return (
-        <View style={ps.wrapper}>
-            <Text style={ps.label}>{label}</Text>
-
-            <View ref={wrapperRef} collapsable={false}>
-                <View style={[ps.inputRow, !!error && ps.inputRowError]}>
-                    <Ionicons name={icon as any} size={16} color={Colors.charcoalLight} />
-                    <TextInput
-                        style={ps.input}
-                        value={query}
-                        onChangeText={handleChangeText}
-                        placeholder={placeholder}
-                        placeholderTextColor={Colors.charcoalLight}
-                        autoCapitalize="words"
-                        autoCorrect={false}
-                        onFocus={() => {
-                            measure();
-                            if (query.length >= 2) setShowDropdown(true);
-                        }}
-                        onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-                    />
-                    {fetching ? (
-                        <ActivityIndicator size="small" color={Colors.charcoalLight} />
-                    ) : (
-                        !!query && (
-                            <TouchableOpacity
-                                onPress={() => {
-                                    setQuery('');
-                                    onSelect('');
-                                    setPredictions([]);
-                                }}
-                            >
-                                <Ionicons
-                                    name="close-circle"
-                                    size={16}
-                                    color={Colors.charcoalLight}
-                                />
-                            </TouchableOpacity>
-                        )
-                    )}
-                </View>
-            </View>
-
-            {!!error && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
-                    <Ionicons name="alert-circle" size={12} color={Colors.danger} />
-                    <Text
-                        style={{
-                            fontSize: 11,
-                            color: Colors.danger,
-                            fontWeight: Typography.semiBold,
-                        }}
-                    >
-                        {error}
-                    </Text>
-                </View>
-            )}
-
-            {/* Portal dropdown */}
-            {showDropdown && predictions.length > 0 && layout && (
-                <Modal
-                    visible
-                    transparent
-                    animationType="none"
-                    onRequestClose={() => setShowDropdown(false)}
-                >
-                    <TouchableOpacity
-                        style={StyleSheet.absoluteFillObject}
-                        activeOpacity={1}
-                        onPress={() => setShowDropdown(false)}
-                    />
-                    <View
-                        style={[
-                            ps.dropdown,
-                            { top: layout.y, left: layout.x, width: layout.width },
-                        ]}
-                    >
-                        <FlatList
-                            data={predictions}
-                            keyExtractor={i => i.place_id}
-                            keyboardShouldPersistTaps="handled"
-                            bounces={false}
-                            renderItem={({ item }) => (
-                                <TouchableOpacity
-                                    style={ps.suggestion}
-                                    onPress={() => handleSelect(item)}
-                                    activeOpacity={0.75}
-                                >
-                                    <Ionicons
-                                        name="location-outline"
-                                        size={14}
-                                        color={Colors.charcoalLight}
-                                        style={{ marginRight: 8, marginTop: 1 }}
-                                    />
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={ps.sugMain}>
-                                            {item.structured_formatting.main_text}
-                                        </Text>
-                                        <Text style={ps.sugSub} numberOfLines={1}>
-                                            {item.structured_formatting.secondary_text}
-                                        </Text>
-                                    </View>
-                                </TouchableOpacity>
-                            )}
-                        />
-                    </View>
-                </Modal>
-            )}
-        </View>
-    );
-}
-
-const ps = StyleSheet.create({
-    wrapper: { marginBottom: Spacing.sm },
-    label: {
-        fontSize: Typography.sm,
-        fontWeight: Typography.bold,
-        color: Colors.charcoal,
-        marginBottom: 6,
-    },
-    inputRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        backgroundColor: Colors.background,
-        borderRadius: Radii.sm,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        paddingHorizontal: Spacing.md,
-        height: 48,
-    },
-    inputRowError: { borderColor: Colors.danger },
-    input: { flex: 1, fontSize: 14, color: Colors.charcoal, paddingVertical: 0 },
-    dropdown: {
-        position: 'absolute',
-        backgroundColor: Colors.surface,
-        borderRadius: Radii.sm,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        maxHeight: 220,
-        elevation: 20,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 8,
-        zIndex: 9999,
-    },
-    suggestion: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        paddingVertical: 10,
-        paddingHorizontal: Spacing.md,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: Colors.border,
-    },
-    sugMain: { fontSize: 13, fontWeight: Typography.bold, color: Colors.charcoal },
-    sugSub: { fontSize: 11, color: Colors.charcoalLight, marginTop: 1 },
-});
 
 // ─── Geocoding helper ─────────────────────────────────────────────────────────
 
@@ -404,7 +176,7 @@ export default function Step2Location({ data, onChange, onPrev, onNext }: Props)
             contentContainerStyle={{ paddingBottom: 20 }}
             keyboardShouldPersistTaps="handled"
         >
-            <StepHeader title="Step 2: Location" current={2} />
+            {/* <StepHeader title="Step 2: Location" current={2} /> */}
             <SectionCard>
                 {/* ── Current location button ── */}
                 <TouchableOpacity
@@ -457,20 +229,59 @@ export default function Step2Location({ data, onChange, onPrev, onNext }: Props)
                     error={errors.landmark}
                 />
 
-                {/* ── City + Area ── */}
+                {/* ── State + Village ── */}
                 <View style={s.row}>
                     <View style={{ flex: 1 }}>
-                        <CityStatePicker
+                        <SearchableDropdown
+                            label="State *"
+                            icon="globe-outline"
+                            placeholder="Madhya Pradesh"
+                            value={data.state}
+                            onChangeText={v => {
+                                set({ state: v, city: '' }); // reset city if state text is edited
+                                clearErr('state');
+                            }}
+                            fetchOptions={query => getStates(query)}
+                            onSelect={(option: DropdownOption) => {
+                                set({ state: option.name, city: '' }); // clear city on state change
+                                clearErr('state');
+                            }}
+                            error={errors.state}
+                            minQueryLength={1}
+                        />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <SearchableDropdown
                             label="City *"
-                            placeholder="Bhopal"
                             icon="location-outline"
+                            placeholder="Bhopal"
                             value={data.city}
-                            onSelect={v => {
+                            onChangeText={v => {
                                 set({ city: v });
                                 clearErr('city');
                             }}
+                            fetchOptions={query => getCitiesByState(query, data.state)}
+                            onSelect={(option: DropdownOption) => {
+                                set({ city: option.name });
+                                clearErr('city');
+                            }}
                             error={errors.city}
-                            types="(cities)"
+                            disabled={!data.state.trim()}
+                            disabledHint="Select a state first"
+                            minQueryLength={1}
+                        />
+                    </View>
+                </View>
+
+                {/* ── City + Area ── */}
+                <View style={s.row}>
+                    <View style={{ flex: 1 }}>
+                        <Field
+                            label="Village (optional)"
+                            placeholder="Village name"
+                            icon="home-outline"
+                            value={data.village}
+                            onChangeText={v => set({ village: v })}
                         />
                     </View>
                     <View style={{ flex: 1 }}>
@@ -484,33 +295,6 @@ export default function Step2Location({ data, onChange, onPrev, onNext }: Props)
                                 clearErr('area');
                             }}
                             error={errors.area}
-                        />
-                    </View>
-                </View>
-
-                {/* ── State + Village ── */}
-                <View style={s.row}>
-                    <View style={{ flex: 1 }}>
-                        <CityStatePicker
-                            label="State *"
-                            placeholder="Madhya Pradesh"
-                            icon="globe-outline"
-                            value={data.state}
-                            onSelect={v => {
-                                set({ state: v });
-                                clearErr('state');
-                            }}
-                            error={errors.state}
-                            types="administrative_area_level_1"
-                        />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <Field
-                            label="Village (optional)"
-                            placeholder="Village name"
-                            icon="home-outline"
-                            value={data.village}
-                            onChangeText={v => set({ village: v })}
                         />
                     </View>
                 </View>
@@ -645,7 +429,7 @@ const s = StyleSheet.create({
         color: Colors.charcoalLight,
         fontWeight: Typography.medium,
     },
-    row: { flexDirection: 'row', gap: Spacing.sm },
+    row: { flexDirection: 'column', gap: Spacing.sm },
     hint: {
         fontSize: Typography.xs,
         color: Colors.charcoalLight,

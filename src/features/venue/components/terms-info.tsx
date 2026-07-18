@@ -55,19 +55,11 @@ const TERMS = [
     },
 ];
 
-const CONFIRMATION_HOURS: Array<1 | 2 | 3> = [1, 2, 3];
-
 interface Props {
     data: VenueFormData['terms'];
     onChange: (data: VenueFormData['terms']) => void;
     onPrev: () => void;
-    /**
-     * Synchronous — the parent (RegisterVenueScreen) owns the async mutation.
-     * FIX: was async, but the parent's handleSubmit is sync (mutation is fire-and-forget).
-     * The loading spinner is now driven by `isSubmitting` passed from the parent.
-     */
     onSubmit: () => void;
-    /** True while the createVenue mutation is in flight */
     isSubmitting?: boolean;
 }
 
@@ -85,7 +77,7 @@ export default function Step7Terms({
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 20 }}
         >
-            <StepHeader title="Step 7: Terms" current={7} />
+            {/* <StepHeader title="Step 7: Terms" current={7} /> */}
 
             {/* ── Info banner ── */}
             <View style={s.infoBanner}>
@@ -94,67 +86,6 @@ export default function Step7Terms({
                     <Text style={s.infoTitle}>Terms & Conditions</Text>
                     <Text style={s.infoSub}>
                         Please read and accept the terms before submitting
-                    </Text>
-                </View>
-            </View>
-
-            {/* ── Confirmation hours ── */}
-            <View style={s.confirmCard}>
-                <View style={s.confirmHeader}>
-                    <View style={s.confirmIconWrap}>
-                        <Ionicons name="timer-outline" size={18} color={Colors.info} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                        <Text style={s.confirmTitle}>Booking Confirmation Time</Text>
-                        <Text style={s.confirmSub}>
-                            How long will you take to confirm a booking request?
-                        </Text>
-                    </View>
-                </View>
-
-                <View style={s.hoursRow}>
-                    {CONFIRMATION_HOURS.map(hr => {
-                        const active = data.confirmationHours === hr;
-                        return (
-                            <TouchableOpacity
-                                key={hr}
-                                style={[s.hourChip, active && s.hourChipActive]}
-                                onPress={() => set({ confirmationHours: hr })}
-                                activeOpacity={0.75}
-                                disabled={isSubmitting}
-                            >
-                                <View style={[s.hourCircle, active && s.hourCircleActive]}>
-                                    <Text style={[s.hourNum, active && s.hourNumActive]}>{hr}</Text>
-                                </View>
-                                <Text style={[s.hourLabel, active && s.hourLabelActive]}>
-                                    {hr === 1 ? '1 Hour' : `${hr} Hours`}
-                                </Text>
-                                {active && (
-                                    <Ionicons
-                                        name="checkmark-circle"
-                                        size={16}
-                                        color={Colors.info}
-                                        style={{ marginLeft: 4 }}
-                                    />
-                                )}
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
-
-                <View style={s.confirmNote}>
-                    <Ionicons
-                        name="information-circle-outline"
-                        size={13}
-                        color={Colors.charcoalLight}
-                    />
-                    <Text style={s.confirmNoteText}>
-                        You must confirm or decline booking requests within{' '}
-                        <Text style={s.confirmNoteHighlight}>
-                            {data.confirmationHours}{' '}
-                            {data.confirmationHours === 1 ? 'hour' : 'hours'}
-                        </Text>{' '}
-                        of receiving them.
                     </Text>
                 </View>
             </View>
@@ -252,91 +183,7 @@ const s = StyleSheet.create({
     },
     infoTitle: { fontSize: Typography.md, fontWeight: Typography.bold, color: Colors.charcoal },
     infoSub: { fontSize: Typography.sm, color: Colors.charcoalLight, marginTop: 2 },
-    confirmCard: {
-        marginHorizontal: Spacing.lg,
-        marginTop: Spacing.md,
-        padding: Spacing.md,
-        backgroundColor: Colors.surface,
-        borderRadius: Radii.md,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        ...Shadows.card,
-    },
-    confirmHeader: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: Spacing.sm,
-        marginBottom: Spacing.md,
-    },
-    confirmIconWrap: {
-        width: 34,
-        height: 34,
-        borderRadius: Radii.sm,
-        backgroundColor: Colors.infoLight,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    confirmTitle: {
-        fontSize: Typography.md,
-        fontWeight: Typography.bold,
-        color: Colors.charcoal,
-    },
-    confirmSub: { fontSize: Typography.sm, color: Colors.charcoalLight, marginTop: 2 },
-    hoursRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
-    hourChip: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        paddingVertical: Spacing.sm,
-        paddingHorizontal: Spacing.xs,
-        borderRadius: Radii.md,
-        borderWidth: 1.5,
-        borderColor: Colors.border,
-        backgroundColor: Colors.background,
-        gap: Spacing.xs,
-    },
-    hourChipActive: {
-        borderColor: Colors.info ?? Colors.primary,
-        backgroundColor: Colors.infoLight ?? Colors.primaryLight,
-    },
-    hourCircle: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: Colors.border,
-    },
-    hourCircleActive: { backgroundColor: Colors.info ?? Colors.primary },
-    hourNum: {
-        fontSize: Typography.base,
-        fontWeight: Typography.extraBold,
-        color: Colors.charcoalLight,
-    },
-    hourNumActive: { color: Colors.white },
-    hourLabel: {
-        fontSize: Typography.sm,
-        fontWeight: Typography.semiBold,
-        color: Colors.charcoalLight,
-    },
-    hourLabelActive: { color: Colors.info ?? Colors.primary },
-    confirmNote: {
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        gap: Spacing.xs,
-        backgroundColor: Colors.background,
-        borderRadius: Radii.sm,
-        padding: Spacing.sm,
-        marginTop: Spacing.xs,
-    },
-    confirmNoteText: {
-        flex: 1,
-        fontSize: Typography.xs,
-        color: Colors.charcoalLight,
-        lineHeight: 16,
-    },
-    confirmNoteHighlight: { fontWeight: Typography.bold, color: Colors.charcoalMid },
+    
     termsBox: {
         marginHorizontal: Spacing.lg,
         marginTop: Spacing.md,
@@ -345,7 +192,7 @@ const s = StyleSheet.create({
         borderRadius: Radii.md,
         borderWidth: 1,
         borderColor: Colors.border,
-        height: 300,
+        height: 400,
         ...Shadows.card,
     },
     agreementTitle: {

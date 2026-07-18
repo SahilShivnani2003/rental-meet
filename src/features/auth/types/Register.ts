@@ -7,6 +7,7 @@ export interface RegisterClient {
     password: string;
     role: 'customer'
     referralCode?: string;
+    deviceId?: string;
 }
 
 export interface RegisterOwner {
@@ -14,8 +15,11 @@ export interface RegisterOwner {
     email: string;
     phone: string;
     password: string;
+    city: string;
+    state: string;
     role: 'owner';
     referralCode?: string;
+    deviceId?: string;
 }
 
 export interface RegisterVendor {
@@ -27,4 +31,5 @@ export interface RegisterVendor {
     referralCode?: string;
     city: string;
     state: string;
+    deviceId?: string;
 }

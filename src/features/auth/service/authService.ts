@@ -17,7 +17,7 @@ export const registerUser = async (data: RegisterClient | RegisterVendor | Regis
     }
 }
 
-export const login = async (data: { email: string, password: string }) => {
+export const login = async (data: { email: string, password: string, deviceId: string }) => {
     try {
         console.log('Loggin user.....');
 

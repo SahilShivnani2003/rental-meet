@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { getNotification, registerDevice } from "../services/notificationService"
+import { deviceLogout, getNotification, registerDevice } from "../services/notificationService"
 
 export const useGetNotification = () => {
     return useQuery({

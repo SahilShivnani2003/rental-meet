@@ -47,6 +47,7 @@ import { KycDocCard } from '../components/KycDocCard';
 import { getCitiesByState, getStates, City, State } from '@/utils/location';
 import SearchableDropdown, { DropdownOption } from '@/components/UI/SearchableDropDown';
 import { User } from '@/features/profile/types/User';
+import DeviceInfo from 'react-native-device-info';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -335,13 +336,15 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
     };
 
     // ── Build the payload shared by both the single-step and 2-step flows ─────
-    const buildRegisterData = () => {
+    const buildRegisterData = async() => {
+        const deviceId = await DeviceInfo.getUniqueId();
         const base = {
             name: fullName,
             email,
             phone,
             password,
             referralCode: referralCode.trim() || undefined,
+            deviceId: deviceId
         };
 
         return role === 'customer'
@@ -366,8 +369,8 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
         ]).start();
 
         setLoading(true);
-
-        register(buildRegisterData(), {
+        const payload = await buildRegisterData();
+        register(payload, {
             onSuccess: data => {
                 setLoading(false);
                 setUser(data?.user, data?.token);
@@ -393,7 +396,7 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
     };
 
     // ── Submit: customer step 1 → creates the account, then advances to step 2 ─
-    const handleContinueToKyc = () => {
+    const handleContinueToKyc = async() => {
         const e = validate();
         setErrors(e);
         if (Object.keys(e).length > 0) {
@@ -407,8 +410,8 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
         ]).start();
 
         setLoading(true);
-
-        register(buildRegisterData(), {
+        const payload = await buildRegisterData();
+        register(payload, {
             onSuccess: data => {
                 setLoading(false);
                 setUser(data?.user, data?.token);

@@ -108,7 +108,8 @@ export default function LoginScreen({ navigation }: LoginProps) {
         ]).start();
 
         setLoading(true);
-        login({email, password},
+        const deviceId = await DeviceInfo.getUniqueId();
+        login({email, password, deviceId},
             {
                 onSuccess:(data)=>{
                     setLoading(false)

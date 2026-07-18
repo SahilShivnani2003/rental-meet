@@ -10,7 +10,16 @@ import {
     NavButtons,
     PickerRow,
 } from '../../../components/UI/shared-components';
-import { AdditionalForm, BasicAmenityForm, BeverageForm, FacilityForm, FoodPackForm, ThaliForm, VenueFormData } from '../types/VenueFormData';
+import {
+    AdditionalForm,
+    BasicAmenityForm,
+    BeverageForm,
+    FacilityForm,
+    FoodPackForm,
+    ThaliCategoryEntry,
+    ThaliForm,
+    VenueFormData,
+} from '../types/VenueFormData';
 
 const THALI_TYPES = [
     'Select Thali Type',
@@ -28,7 +37,7 @@ const THALI_TYPES = [
     'Festive/Banquet Thali',
 ];
 
-const THALI_CATEGORIES = ['Select Category', 'Regular Thali', 'Special Thali', 'Maharaja Thali'];
+const THALI_CATEGORIES = ['Regular Thali', 'Special Thali', 'Maharaja Thali'];
 
 const RATE_TYPES: Array<'Fixed' | 'Per Use'> = ['Fixed', 'Per Use'];
 
@@ -57,21 +66,55 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
             ),
         });
 
-    const updateThali = (idx: number, patch: Partial<ThaliForm>) =>
-        set({ lunchThalis: data.lunchThalis.map((t, i) => (i === idx ? { ...t, ...patch } : t)) });
+    // ── Thali (multi-category) ──────────────────────────────────────────────
+
+    const addThali = (thaliType: string) => {
+        if (thaliType === THALI_TYPES[0]) return;
+        if (data.lunchThalis.find(t => t.thaliType === thaliType)) return;
+        set({ lunchThalis: [...data.lunchThalis, { thaliType, categories: [] }] });
+    };
 
     const removeThali = (idx: number) =>
         set({ lunchThalis: data.lunchThalis.filter((_, i) => i !== idx) });
 
-    const addThali = (thaliType: string) => {
-        if (thaliType === THALI_TYPES[0]) return;
+    const toggleThaliCategory = (idx: number, category: string) =>
         set({
-            lunchThalis: [
-                ...data.lunchThalis,
-                { thaliType, category: '', ratePerPlate: '', items: '' },
-            ],
+            lunchThalis: data.lunchThalis.map((thali, i) => {
+                if (i !== idx) return thali;
+                const exists = thali.categories.find(c => c.category === category);
+                if (exists) {
+                    return {
+                        ...thali,
+                        categories: thali.categories.filter(c => c.category !== category),
+                    };
+                }
+                return {
+                    ...thali,
+                    categories: [
+                        ...thali.categories,
+                        { category, ratePerPlate: '', numberOfItems: '', itemNames: '' },
+                    ],
+                };
+            }),
         });
-    };
+
+    const updateThaliCategory = (
+        idx: number,
+        category: string,
+        patch: Partial<ThaliCategoryEntry>,
+    ) =>
+        set({
+            lunchThalis: data.lunchThalis.map((thali, i) =>
+                i === idx
+                    ? {
+                          ...thali,
+                          categories: thali.categories.map(c =>
+                              c.category === category ? { ...c, ...patch } : c,
+                          ),
+                      }
+                    : thali,
+            ),
+        });
 
     const updateAdditional = (idx: number, patch: Partial<AdditionalForm>) =>
         set({ additional: data.additional.map((a, i) => (i === idx ? { ...a, ...patch } : a)) });
@@ -90,7 +133,7 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 20 }}
         >
-            <StepHeader title="Step 3: Amenities" current={3} />
+            {/* <StepHeader title="Step 3: Amenities" current={3} /> */}
 
             {/* ── Basic Amenities ── */}
             <SectionCard accentColor={Colors.primary}>
@@ -136,17 +179,7 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                                         size={11}
                                         color={Colors.danger}
                                     />
-                                    <Text style={s.lockedBadgeText}>Mandatory</Text>
-                                </View>
-                            )}
-                            {item.isDefault && !item.locked && (
-                                <View style={s.defaultBadge}>
-                                    <Ionicons
-                                        name="checkmark-circle"
-                                        size={11}
-                                        color={Colors.success}
-                                    />
-                                    <Text style={s.defaultBadgeText}>Default</Text>
+                                    <Text style={s.lockedBadgeText}>Included (Default)</Text>
                                 </View>
                             )}
                         </TouchableOpacity>
@@ -157,7 +190,14 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                                 <View style={s.radioRow}>
                                     <PricingRadio
                                         value={item.type}
-                                        onChange={v => updateBasic(idx, { type: v, rate: '' })}
+                                        onChange={v =>
+                                            updateBasic(idx, {
+                                                type: v,
+                                                rate: v === 'Included' ? '' : item.rate,
+                                                maxQuantity:
+                                                    v === 'Included' ? '' : item.maxQuantity,
+                                            })
+                                        }
                                     />
                                     {item.type === 'Paid' && (
                                         <View style={s.rateRow}>
@@ -186,6 +226,23 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                                         </View>
                                     )}
                                 </View>
+                                {item.type === 'Paid' && (
+                                    <View style={[s.rateRow, { marginTop: Spacing.xs }]}>
+                                        <Text style={s.rateLabel}>Max:</Text>
+                                        <View style={s.rateInputBox}>
+                                            <TextInput
+                                                style={s.rateInputText}
+                                                placeholder="Unlimited"
+                                                placeholderTextColor={Colors.charcoalLight}
+                                                value={item.maxQuantity}
+                                                onChangeText={v =>
+                                                    updateBasic(idx, { maxQuantity: v })
+                                                }
+                                                keyboardType="numeric"
+                                            />
+                                        </View>
+                                    </View>
+                                )}
                             </View>
                         )}
                     </View>
@@ -383,8 +440,10 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
 
                 {/* Lunch Thalis */}
                 <Text style={[s.foodGroupLabel, { marginTop: Spacing.md }]}>Lunch Thalis</Text>
-                <Text style={s.foodGroupSub}>Select thali type and add rate + items</Text>
-                <ThaliAddRow onAdd={addThali} />
+                <Text style={s.foodGroupSub}>
+                    Select thali type, then choose categories (Regular/Special/Maharaja)
+                </Text>
+                <ThaliAddRow existing={data.lunchThalis} onAdd={addThali} />
                 {data.lunchThalis.length === 0 ? (
                     <View style={s.emptyThali}>
                         <Text style={s.emptyThaliText}>
@@ -394,10 +453,11 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                 ) : (
                     data.lunchThalis.map((thali, idx) => (
                         <ThaliCard
-                            key={idx}
+                            key={thali.thaliType}
                             thali={thali}
                             idx={idx}
-                            onUpdate={updateThali}
+                            onToggleCategory={toggleThaliCategory}
+                            onUpdateCategory={updateThaliCategory}
                             onRemove={removeThali}
                         />
                     ))
@@ -464,7 +524,7 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                                 </View>
                                 {item.type === 'Paid' && (
                                     <View style={[s.rateRow, { marginTop: Spacing.xs }]}>
-                                        <Text style={s.rateLabel}>Rate:</Text>
+                                        <Text style={s.rateLabel}>Charges:</Text>
                                         <View style={s.rateInputBox}>
                                             <Text style={s.rupee}>₹</Text>
                                             <TextInput
@@ -552,16 +612,26 @@ function RateTypePicker({
     );
 }
 
-/** Thali add row */
-function ThaliAddRow({ onAdd }: { onAdd: (type: string) => void }) {
+/** Thali add row — hides types already added, matches web's filtered dropdown */
+function ThaliAddRow({
+    existing,
+    onAdd,
+}: {
+    existing: ThaliForm[];
+    onAdd: (type: string) => void;
+}) {
     const [selected, setSelected] = useState(THALI_TYPES[0]);
     const [open, setOpen] = useState(false);
+    const options = [
+        THALI_TYPES[0],
+        ...THALI_TYPES.slice(1).filter(t => !existing.find(e => e.thaliType === t)),
+    ];
     return (
         <View style={ft.row}>
             <View style={{ flex: 1 }}>
                 <PickerRow
                     value={selected}
-                    options={THALI_TYPES}
+                    options={options}
                     open={open}
                     onToggle={() => setOpen(o => !o)}
                     onSelect={v => {
@@ -640,21 +710,24 @@ function FacilityToggle({
     );
 }
 
-/** Individual thali card with type label, category picker, rate + items */
+/**
+ * Thali card — one thali type with up to 3 selectable categories
+ * (Regular / Special / Maharaja), each with its own rate, item count,
+ * and item names. Mirrors the web's per-category expansion.
+ */
 function ThaliCard({
     thali,
     idx,
-    onUpdate,
+    onToggleCategory,
+    onUpdateCategory,
     onRemove,
 }: {
     thali: ThaliForm;
     idx: number;
-    onUpdate: (idx: number, patch: Partial<ThaliForm>) => void;
+    onToggleCategory: (idx: number, category: string) => void;
+    onUpdateCategory: (idx: number, category: string, patch: Partial<ThaliCategoryEntry>) => void;
     onRemove: (idx: number) => void;
 }) {
-    const [catOpen, setCatOpen] = useState(false);
-    const categoryValue = thali.category || THALI_CATEGORIES[0];
-
     return (
         <View style={s.expandedFields}>
             {/* Header — thali type name + remove */}
@@ -665,45 +738,69 @@ function ThaliCard({
                 </TouchableOpacity>
             </View>
 
-            {/* Category picker */}
-            <Text style={s.thaliCategoryLabel}>
-                Category <Text style={{ color: Colors.danger }}>*</Text>
-            </Text>
-            <View style={{ marginBottom: Spacing.sm }}>
-                <PickerRow
-                    value={categoryValue}
-                    options={THALI_CATEGORIES}
-                    open={catOpen}
-                    onToggle={() => setCatOpen(o => !o)}
-                    onSelect={v => {
-                        onUpdate(idx, { category: v === THALI_CATEGORIES[0] ? '' : v });
-                        setCatOpen(false);
-                    }}
-                />
-            </View>
+            {THALI_CATEGORIES.map(category => {
+                const entry = thali.categories.find(c => c.category === category);
+                return (
+                    <View key={category} style={s.thaliCatCard}>
+                        <TouchableOpacity
+                            style={s.thaliCatRow}
+                            onPress={() => onToggleCategory(idx, category)}
+                            activeOpacity={0.75}
+                        >
+                            <View style={[s.checkbox, !!entry && s.checkboxActive]}>
+                                {!!entry && (
+                                    <Ionicons name="checkmark" size={11} color={Colors.white} />
+                                )}
+                            </View>
+                            <Text style={[s.amenText, !!entry && s.amenTextActive]}>
+                                {category}
+                            </Text>
+                        </TouchableOpacity>
 
-            {/* Rate + Items */}
-            <View style={s.fieldRow}>
-                <View style={{ flex: 1 }}>
-                    <Field
-                        label="Rate per plate (₹)"
-                        placeholder="0"
-                        icon="cash-outline"
-                        value={thali.ratePerPlate}
-                        onChangeText={v => onUpdate(idx, { ratePerPlate: v })}
-                        keyboardType="numeric"
-                    />
-                </View>
-                <View style={{ flex: 1 }}>
-                    <Field
-                        label="Item names"
-                        placeholder="Dal, Sabzi, Roti..."
-                        icon="list-outline"
-                        value={thali.items}
-                        onChangeText={v => onUpdate(idx, { items: v })}
-                    />
-                </View>
-            </View>
+                        {entry && (
+                            <View style={s.thaliCatFields}>
+                                <View style={s.fieldRow}>
+                                    <View style={{ flex: 1 }}>
+                                        <Field
+                                            label="Rate per plate (₹)"
+                                            placeholder="0"
+                                            icon="cash-outline"
+                                            value={entry.ratePerPlate}
+                                            onChangeText={v =>
+                                                onUpdateCategory(idx, category, { ratePerPlate: v })
+                                            }
+                                            keyboardType="numeric"
+                                        />
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Field
+                                            label="# Items"
+                                            placeholder="0"
+                                            icon="list-outline"
+                                            value={entry.numberOfItems}
+                                            onChangeText={v =>
+                                                onUpdateCategory(idx, category, {
+                                                    numberOfItems: v,
+                                                })
+                                            }
+                                            keyboardType="numeric"
+                                        />
+                                    </View>
+                                </View>
+                                <Field
+                                    label="Item names"
+                                    placeholder="e.g. Dal, Rice, Roti..."
+                                    icon="restaurant-outline"
+                                    value={entry.itemNames}
+                                    onChangeText={v =>
+                                        onUpdateCategory(idx, category, { itemNames: v })
+                                    }
+                                />
+                            </View>
+                        )}
+                    </View>
+                );
+            })}
         </View>
     );
 }
@@ -749,26 +846,12 @@ const s = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 3,
-        backgroundColor: Colors.dangerLight ?? '#fff0f0',
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: 3,
-        borderRadius: Radii.full,
-    },
-    lockedBadgeText: {
-        fontSize: Typography.xs,
-        fontWeight: Typography.semiBold,
-        color: Colors.danger,
-    },
-    defaultBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 3,
         backgroundColor: Colors.successLight,
         paddingHorizontal: Spacing.sm,
         paddingVertical: 3,
         borderRadius: Radii.full,
     },
-    defaultBadgeText: {
+    lockedBadgeText: {
         fontSize: Typography.xs,
         fontWeight: Typography.semiBold,
         color: Colors.success,
@@ -860,14 +943,16 @@ const s = StyleSheet.create({
         marginBottom: Spacing.xs,
     },
     thaliType: { fontSize: Typography.sm, fontWeight: Typography.bold, color: Colors.charcoalMid },
-    thaliCategoryLabel: {
-        fontSize: 11,
-        fontWeight: Typography.bold,
-        color: Colors.charcoalMid,
-        letterSpacing: 0.6,
-        textTransform: 'uppercase',
-        marginBottom: 5,
+    thaliCatCard: {
+        backgroundColor: Colors.surface,
+        borderRadius: Radii.sm,
+        borderWidth: 1,
+        borderColor: Colors.primaryBorder,
+        padding: Spacing.sm,
+        marginBottom: Spacing.xs,
     },
+    thaliCatRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    thaliCatFields: { marginTop: Spacing.sm, paddingLeft: 30 },
 });
 
 const ft = StyleSheet.create({

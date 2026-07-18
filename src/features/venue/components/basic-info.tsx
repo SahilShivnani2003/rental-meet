@@ -18,7 +18,7 @@ import {
     Textarea,
 } from '../../../components/UI/shared-components';
 import Field from '../../../components/UI/InputField';
-import { VenueFormData, CAPACITY_RANGES } from '../types/VenueFormData';
+import { VenueFormData, CAPACITY_RANGES, FOOD_TYPES } from '../types/VenueFormData';
 import { useGetVenueType } from '@/features/venueType/hooks/useGetVenueType';
 
 interface VenueType {
@@ -39,10 +39,11 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
 
     const [errors, setErrors] = useState<Record<string, string>>({});
     const { data: venueTypeData, isLoading: loadingTypes } = useGetVenueType();
-    const venueTypes: VenueType[] = venueTypeData?.venueTypes ?? []; 
+    const venueTypes: VenueType[] = venueTypeData?.venueTypes ?? [];
     const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
     const [typeSearch, setTypeSearch] = useState('');
     const [capOpen, setCapOpen] = useState(false);
+    const [foodOpen, setFoodOpen] = useState(false);
 
     const wordCount =
         data.description.trim() === '' ? 0 : data.description.trim().split(/\s+/).length;
@@ -69,6 +70,7 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
         if (data.venueTypes.length === 0) e.venueType = 'Select at least one venue type';
         if (!data.description.trim()) e.description = 'Description is required';
         if (wordCount > 200) e.description = 'Maximum 200 words allowed';
+        if (!data.foodType) e.foodType = 'Select a food type';
         if (data.capacity === CAPACITY_RANGES[0]) e.capacity = 'Select a capacity range';
         if (!data.areaSqft.trim()) e.totalArea = 'Total area is required';
         setErrors(e);
@@ -243,6 +245,30 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
                         }}
                     />
                     {!!errors.capacity && <ErrorRow msg={errors.capacity} />}
+                </View>
+
+                {/* ── Food Type picker ── */}
+                <View style={s.pickerSection}>
+                    <Text style={s.typeLabel}>
+                        FOOD TYPE <Text style={s.req}>*</Text>
+                    </Text>
+                    <PickerRow
+                        value={data.foodType ?? FOOD_TYPES[0]}
+                        options={FOOD_TYPES}
+                        open={foodOpen}
+                        onToggle={() => setFoodOpen(v => !v)}
+                        onSelect={v => {
+                            set({
+                                foodType:
+                                    v === FOOD_TYPES[0]
+                                        ? undefined
+                                        : (v as 'Veg' | 'Non Veg' | 'Both'),
+                            });
+                            setFoodOpen(false);
+                            setErrors(p => ({ ...p, foodType: '' }));
+                        }}
+                    />
+                    {!!errors.foodType && <ErrorRow msg={errors.foodType} />}
                 </View>
 
                 <Field
