@@ -132,6 +132,7 @@ export interface VenueFormData {
         idType: 'aadhaar' | 'pan';
         idNumber: string;
         bizProofType: string;
+        bizProofOther: string;
         accountHolder: string;
         accountNumber: string;
         ifsc: string;
@@ -296,6 +297,7 @@ export const initialVenueFormData: VenueFormData = {
         idType: 'aadhaar',
         idNumber: '',
         bizProofType: BUSINESS_PROOF_TYPES[0],
+        bizProofOther: '',
         accountHolder: '',
         accountNumber: '',
         ifsc: '',

@@ -16,7 +16,7 @@ import { User } from '@/features/profile/types/User';
 
 const { width: W } = Dimensions.get('window');
 
-const CARD_H = 240;
+const CARD_H = 220;
 const THUMB_W = 82;
 
 function usePressScale(to = 0.98) {
@@ -226,7 +226,7 @@ export default function FeaturedCard({
                 onPressOut={onOut}
             >
                 <Animated.View
-                    style={[fc.card, { transform: [{ scale }] }, isInactive && fc.cardInactive]}
+                    style={[fc.card, { transform: [{ scale }] }, isInactive && fc.cardInactive, {height: status==='rejected' ? 280 : CARD_H}]}
                 >
                     {/* ── Left: Featured image ── */}
                     <View style={fc.featuredWrap}>
@@ -357,6 +357,18 @@ export default function FeaturedCard({
                             )}
                         </View>
 
+                        {/* Rejection reason (owner + rejected only) */}
+                        {isOwner && status === 'rejected' && v.rejectionReason && (
+                            <View style={fc.rejectionBox}>
+                                <View style={fc.rejectionHeader}>
+                                    <Ionicons name="alert-circle" size={12} color={Colors.danger} />
+                                    <Text style={fc.rejectionTitle}>Rejection reason</Text>
+                                </View>
+                                <Text style={fc.rejectionText} numberOfLines={2}>
+                                    {v.rejectionReason}
+                                </Text>
+                            </View>
+                        )}
                         {/* Coupon tag */}
                         {(v?.activeCouponCount ?? 0) > 0 &&
                             v?.activeCoupons?.length > 0 &&
@@ -389,7 +401,6 @@ const fc = StyleSheet.create({
         marginBottom: Spacing.md,
     },
     card: {
-        height: CARD_H,
         flexDirection: 'row',
         backgroundColor: Colors.surface,
         borderRadius: Radii.xl,
@@ -532,6 +543,39 @@ const fc = StyleSheet.create({
     // Coupon
     couponRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     couponText: { fontSize: 10, color: Colors.success, fontWeight: Typography.semiBold },
+
+    rejectionBox: {
+        backgroundColor: '#FEF2F2',
+        borderWidth: 1,
+        borderColor: '#FECACA',
+        borderRadius: Radii.sm,
+        paddingHorizontal: 8,
+        paddingVertical: 6,
+        marginTop: 2,
+        gap: 2,
+    },
+    rejectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    rejectionTitle: {
+        fontSize: 10,
+        fontWeight: Typography.bold,
+        color: Colors.danger,
+        letterSpacing: 0.2,
+    },
+    rejectionCount: {
+        fontSize: 9,
+        fontWeight: Typography.medium,
+        color: Colors.charcoalLight,
+        marginLeft: 'auto',
+    },
+    rejectionText: {
+        fontSize: 11,
+        color: Colors.charcoal,
+        lineHeight: 14,
+    },
 
     // ── Action buttons ───────────────────────────────────────────────────────
     actions: { flexDirection: 'row', gap: 6, marginTop: 4 },

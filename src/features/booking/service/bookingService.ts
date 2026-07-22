@@ -102,7 +102,7 @@ export const approveSoon = async (id: string) => {
 
 export const createBooking = async (data: Booking) => {
     try {
-        console.log('Creating booking ....', )
+        console.log('Creating booking ....',)
 
         const response = await privateClient.post('/bookings', data);
 
@@ -111,6 +111,18 @@ export const createBooking = async (data: Booking) => {
         return response.data
     } catch (error) {
         console.log('Creating booking error : ', error);
+        throw error;
+    }
+}
+
+export const getVenueBlockedDates = async (sku: string) => {
+    try {
+        console.log('fetching blocked dates.');
+        const response = await privateClient.get(`/bookings/booked-dates/${sku}`);
+        console.log('Blocked dates responsed: ', response.data);
+        return response.data
+    } catch (error) {
+        console.error('failed to fetch blocked dates : ', error);
         throw error;
     }
 }

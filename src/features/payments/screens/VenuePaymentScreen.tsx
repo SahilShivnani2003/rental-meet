@@ -151,14 +151,18 @@ type StatCardProps = {
 
 function StatCard({ label, value, icon, color, bg, border }: StatCardProps) {
     return (
-        <View style={[s.statCard, { backgroundColor: bg, borderColor: border }]}>
-            <View style={s.statCardTop}>
-                <Text style={s.statCardLabel}>{label}</Text>
-                <Ionicons name={icon} size={15} color={color} />
+        <View style={[s.statChip, { backgroundColor: bg, borderColor: border }]}>
+            <View style={s.statChipIcon}>
+                <Ionicons name={icon} size={14} color={color} />
             </View>
-            <Text style={[s.statCardValue, { color }]} numberOfLines={1}>
-                {value}
-            </Text>
+            <View>
+                <Text style={[s.statChipValue, { color }]} numberOfLines={1}>
+                    {value}
+                </Text>
+                <Text style={s.statChipLabel} numberOfLines={1}>
+                    {label}
+                </Text>
+            </View>
         </View>
     );
 }
@@ -528,10 +532,72 @@ function VenueFilterModal({
     );
 }
 
-type PaymentScreenProps = NativeBottomTabScreenProps<OwnerTabParamList, 'payment'>
+const PAYMENT_FILTER_OPTIONS: {
+    value: 'all' | 'paid' | 'pending' | 'refunded';
+    label: string;
+    icon: string;
+}[] = [
+    { value: 'all', label: 'All Status', icon: 'layers-outline' },
+    { value: 'paid', label: 'Paid', icon: 'checkmark-circle-outline' },
+    { value: 'pending', label: 'Pending', icon: 'time-outline' },
+    { value: 'refunded', label: 'Refunded', icon: 'sync-outline' },
+];
+
+function PaymentFilterModal({
+    visible,
+    selected,
+    onSelect,
+    onClose,
+}: {
+    visible: boolean;
+    selected: string;
+    onSelect: (v: 'all' | 'paid' | 'pending' | 'refunded') => void;
+    onClose: () => void;
+}) {
+    return (
+        <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+            <TouchableOpacity style={s.modalOverlay} activeOpacity={1} onPress={onClose}>
+                <View style={s.modalSheet}>
+                    <Text style={s.modalTitle}>Filter by Status</Text>
+                    {PAYMENT_FILTER_OPTIONS.map(opt => (
+                        <TouchableOpacity
+                            key={opt.value}
+                            style={[s.modalOption, selected === opt.value && s.modalOptionActive]}
+                            onPress={() => {
+                                onSelect(opt.value);
+                                onClose();
+                            }}
+                        >
+                            <Ionicons
+                                name={opt.icon}
+                                size={16}
+                                color={
+                                    selected === opt.value ? Colors.primaryDark : Colors.charcoalMid
+                                }
+                            />
+                            <Text
+                                style={[
+                                    s.modalOptionText,
+                                    selected === opt.value && s.modalOptionTextActive,
+                                ]}
+                            >
+                                {opt.label}
+                            </Text>
+                            {selected === opt.value && (
+                                <Ionicons name="checkmark" size={16} color={Colors.primaryDark} />
+                            )}
+                        </TouchableOpacity>
+                    ))}
+                </View>
+            </TouchableOpacity>
+        </Modal>
+    );
+}
+
+type PaymentScreenProps = NativeBottomTabScreenProps<OwnerTabParamList, 'payment'>;
 // ─── Screen ────────────────────────────────────────────────────────────────────
 export default function PaymentsScreen() {
-    const { data, isLoading, isRefetching, refetch } = useGetVenuePayment({page: 1, limit: 100});
+    const { data, isLoading, isRefetching, refetch } = useGetVenuePayment({ page: 1, limit: 100 });
 
     const [search, setSearch] = useState('');
     const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'pending' | 'refunded'>(
@@ -542,6 +608,7 @@ export default function PaymentsScreen() {
 
     const headerFade = useRef(new Animated.Value(0)).current;
     const headerSlide = useRef(new Animated.Value(-14)).current;
+    const [paymentModalVisible, setPaymentModalVisible] = useState(false);
 
     useEffect(() => {
         Animated.parallel([
@@ -588,7 +655,7 @@ export default function PaymentsScreen() {
     const selectedVenueName =
         venueFilter === 'all'
             ? 'All Venues'
-            : data?.venues.find((v:any) => v._id === venueFilter)?.businessName ?? 'All Venues';
+            : data?.venues.find((v: any) => v._id === venueFilter)?.businessName ?? 'All Venues';
 
     const stats = data?.stats;
 
@@ -618,9 +685,14 @@ export default function PaymentsScreen() {
                 </View>
 
                 {/* Stat cards */}
-                <View style={s.statsGrid}>
+                {/* Stat chips — single scrollable row */}
+                <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={s.statsRow}
+                >
                     <StatCard
-                        label="TOTAL REVENUE"
+                        label="Revenue"
                         value={fmtCurrency(stats?.totalRevenue ?? 0)}
                         icon="trending-up-outline"
                         color={Colors.success}
@@ -628,15 +700,15 @@ export default function PaymentsScreen() {
                         border="rgba(22,163,74,0.25)"
                     />
                     <StatCard
-                        label="PAID"
+                        label="Paid"
                         value={String(stats?.paid ?? 0)}
                         icon="cash-outline"
                         color={Colors.charcoal}
-                        bg={Colors.surface}
+                        bg={Colors.background}
                         border={Colors.border}
                     />
                     <StatCard
-                        label="PENDING"
+                        label="Pending"
                         value={String(stats?.pending ?? 0)}
                         icon="time-outline"
                         color={Colors.warning}
@@ -644,14 +716,14 @@ export default function PaymentsScreen() {
                         border={Colors.primaryBorder}
                     />
                     <StatCard
-                        label="REFUNDED"
+                        label="Refunded"
                         value={String(stats?.refunded ?? 0)}
                         icon="sync-outline"
                         color={Colors.info}
                         bg={Colors.infoLight}
                         border="rgba(37,99,235,0.25)"
                     />
-                </View>
+                </ScrollView>
 
                 {/* Search */}
                 <View style={s.searchWrap}>
@@ -671,38 +743,36 @@ export default function PaymentsScreen() {
                 </View>
 
                 {/* Filters */}
-                <View style={s.filterRow}>
-                    {(['all', 'paid', 'pending', 'refunded'] as const).map(f => (
-                        <TouchableOpacity
-                            key={f}
-                            style={[s.filterTab, paymentFilter === f && s.filterTabActive]}
-                            onPress={() => setPaymentFilter(f)}
-                            activeOpacity={0.7}
-                        >
-                            <Text
-                                style={[
-                                    s.filterTabText,
-                                    paymentFilter === f && s.filterTabTextActive,
-                                ]}
-                            >
-                                {f === 'all' ? 'All' : f.charAt(0).toUpperCase() + f.slice(1)}
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
+                {/* Filters — status + venue, side by side dropdowns */}
+                <View style={s.filtersRow}>
+                    <TouchableOpacity
+                        style={s.filterDropdownBtn}
+                        activeOpacity={0.7}
+                        onPress={() => setPaymentModalVisible(true)}
+                    >
+                        <Ionicons name="filter-outline" size={14} color={Colors.charcoalMid} />
+                        <Text style={s.filterDropdownText} numberOfLines={1}>
+                            {paymentFilter === 'all'
+                                ? 'All Status'
+                                : paymentFilter.charAt(0).toUpperCase() + paymentFilter.slice(1)}
+                        </Text>
+                        <Ionicons name="chevron-down" size={14} color={Colors.charcoalLight} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        style={s.filterDropdownBtn}
+                        activeOpacity={0.7}
+                        onPress={() => setVenueModalVisible(true)}
+                    >
+                        <Ionicons name="business-outline" size={14} color={Colors.charcoalMid} />
+                        <Text style={s.filterDropdownText} numberOfLines={1}>
+                            {selectedVenueName}
+                        </Text>
+                        <Ionicons name="chevron-down" size={14} color={Colors.charcoalLight} />
+                    </TouchableOpacity>
                 </View>
 
-                <TouchableOpacity
-                    style={s.venueFilterBtn}
-                    activeOpacity={0.7}
-                    onPress={() => setVenueModalVisible(true)}
-                >
-                    <Ionicons name="business-outline" size={14} color={Colors.charcoalMid} />
-                    <Text style={s.venueFilterText} numberOfLines={1}>
-                        {selectedVenueName}
-                    </Text>
-                    <Ionicons name="chevron-down" size={14} color={Colors.charcoalLight} />
-                    <Text style={s.resultCount}>{filtered.length} bookings</Text>
-                </TouchableOpacity>
+                <Text style={s.resultCountStandalone}>{filtered.length} bookings found</Text>
             </Animated.View>
 
             <ScrollView
@@ -768,6 +838,12 @@ export default function PaymentsScreen() {
                 selected={venueFilter}
                 onSelect={setVenueFilter}
                 onClose={() => setVenueModalVisible(false)}
+            />
+            <PaymentFilterModal
+                visible={paymentModalVisible}
+                selected={paymentFilter}
+                onSelect={setPaymentFilter}
+                onClose={() => setPaymentModalVisible(false)}
             />
         </View>
     );
@@ -852,6 +928,74 @@ const s = StyleSheet.create({
     },
     statCardValue: { fontSize: 18, fontWeight: Typography.extraBold, letterSpacing: -0.4 },
 
+    statsRow: {
+        flexDirection: 'row',
+        gap: Spacing.sm,
+        paddingHorizontal: Spacing.xl,
+        marginBottom: Spacing.lg,
+    },
+    statChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        borderRadius: Radii.full,
+        borderWidth: 1,
+        paddingVertical: 8,
+        paddingHorizontal: Spacing.md,
+        minWidth: 118,
+    },
+    statChipIcon: {
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        backgroundColor: Colors.surface,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    statChipValue: {
+        fontSize: 14,
+        fontWeight: Typography.extraBold,
+        letterSpacing: -0.3,
+    },
+    statChipLabel: {
+        fontSize: 9,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalLight,
+        textTransform: 'uppercase',
+        letterSpacing: 0.4,
+    },
+
+    filtersRow: {
+        flexDirection: 'row',
+        gap: Spacing.sm,
+        paddingHorizontal: Spacing.xl,
+        marginBottom: Spacing.xs,
+    },
+    filterDropdownBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.md,
+        borderRadius: Radii.md,
+        backgroundColor: Colors.background,
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
+    filterDropdownText: {
+        flex: 1,
+        fontSize: 12,
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoalMid,
+    },
+    resultCountStandalone: {
+        fontSize: 11,
+        color: Colors.charcoalLight,
+        fontWeight: Typography.medium,
+        paddingHorizontal: Spacing.xl,
+        marginTop: Spacing.xs,
+    },
     // Search
     searchWrap: {
         flexDirection: 'row',

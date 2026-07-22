@@ -51,12 +51,20 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
     const filteredTypes = venueTypes.filter(t =>
         t.name.toLowerCase().includes(typeSearch.toLowerCase()),
     );
-    const toggleType = (id: string) => {
-        const next = data.venueTypes.includes(id)
-            ? data.venueTypes.filter(x => x !== id)
-            : [...data.venueTypes, id];
+    // const toggleType = (id: string) => {
+    //     const next = data.venueTypes.includes(id)
+    //         ? data.venueTypes.filter(x => x !== id)
+    //         : [...data.venueTypes, id];
+    //     set({ venueTypes: next });
+    //     setErrors(p => ({ ...p, venueType: '' }));
+    // };
+
+    const toggleType = (name: string) => {
+        debugger
+        const next = data.venueTypes.includes(name) ? [] : [name];
         set({ venueTypes: next });
         setErrors(p => ({ ...p, venueType: '' }));
+        setTypeDropdownOpen(false); // auto-close since only one pick is needed
     };
 
     const removeType = (id: string) => set({ venueTypes: data.venueTypes.filter(x => x !== id) });
@@ -176,7 +184,7 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
                                                 key={type._id}
                                                 style={[s.item, selected && s.itemActive]}
                                                 // FIX: was toggleType(type.name) — must use _id
-                                                onPress={() => toggleType(type._id)}
+                                                onPress={() => toggleType(type.name)}
                                                 activeOpacity={0.7}
                                             >
                                                 <View style={s.itemLeft}>

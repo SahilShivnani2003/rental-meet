@@ -15,6 +15,7 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Colors, Radii, Shadows, Spacing, Typography } from '@/theme/theme';
+import { useBlockedDates } from '@/features/booking/hooks/useGetBlockedDates';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,6 +65,7 @@ export type ModalSection = {
 };
 
 interface ManageAvailabilityModalProps {
+    venueSku: string;
     visible: boolean;
     onClose: () => void;
     title: string;
@@ -351,10 +353,18 @@ export default function ManageAvailabilityModal({
     title,
     subtitle,
     sections,
+    venueSku,
 }: ManageAvailabilityModalProps) {
     const translateY = useRef(new Animated.Value(400)).current;
     const backdropOpacity = useRef(new Animated.Value(0)).current;
-
+    const { data: blockedDateData } = useBlockedDates(venueSku);
+    const blockedDates = React.useMemo(
+        () =>
+            [...(blockedDateData?.dates ?? [])].sort(
+                (a, b) => new Date(a).getTime() - new Date(b).getTime(),
+            ),
+        [blockedDateData],
+    );
     useEffect(() => {
         if (visible) {
             Animated.parallel([
@@ -435,6 +445,37 @@ export default function ManageAvailabilityModal({
                         {sections.map((section, i) => (
                             <ModalSectionCard key={i} section={section} />
                         ))}
+
+                        {blockedDates.length > 0 && (
+                            <View style={ms.blockedCard}>
+                                <View style={ms.blockedHeader}>
+                                    <View style={ms.blockedHeaderLeft}>
+                                        <Ionicons
+                                            name="lock-closed-outline"
+                                            size={14}
+                                            color={Colors.charcoalMid}
+                                        />
+                                        <Text style={ms.blockedTitle}>
+                                            Blocked Dates ({blockedDates.length})
+                                        </Text>
+                                    </View>
+                                </View>
+                                <View style={ms.blockedChipRow}>
+                                    {blockedDates.map(d => (
+                                        <View key={d} style={ms.blockedChip}>
+                                            <Ionicons
+                                                name="calendar-outline"
+                                                size={11}
+                                                color={Colors.charcoalMid}
+                                            />
+                                            <Text style={ms.blockedChipText}>
+                                                {fmtDate(new Date(d))}
+                                            </Text>
+                                        </View>
+                                    ))}
+                                </View>
+                            </View>
+                        )}
                     </ScrollView>
                 </Animated.View>
             </KeyboardAvoidingView>
@@ -633,5 +674,49 @@ const ms = StyleSheet.create({
         fontSize: Typography.base,
         fontWeight: Typography.extraBold,
         letterSpacing: 0.2,
+    },
+    blockedCard: {
+        backgroundColor: Colors.background,
+        borderRadius: Radii.lg,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        padding: Spacing.md,
+        gap: Spacing.sm,
+    },
+    blockedHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    blockedHeaderLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    blockedTitle: {
+        fontSize: Typography.base,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalMid,
+    },
+    blockedChipRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.xs,
+    },
+    blockedChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: Radii.full,
+        backgroundColor: Colors.surface,
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
+    blockedChipText: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoalMid,
     },
 });

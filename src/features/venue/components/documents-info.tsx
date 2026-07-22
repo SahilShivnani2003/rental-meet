@@ -17,7 +17,13 @@ import {
     ImagePickerResponse,
     Asset,
 } from 'react-native-image-picker';
-import { pick, types, DocumentPickerResponse, errorCodes } from '@react-native-documents/picker';
+import {
+    pick,
+    types,
+    keepLocalCopy,
+    DocumentPickerResponse,
+    errorCodes,
+} from '@react-native-documents/picker';
 import { Colors, Typography, Spacing, Radii } from '../../../theme/theme';
 import Field from '../../../components/UI/InputField';
 import {
@@ -31,6 +37,7 @@ import {
 import { useAuthStore } from '../../../store/useAuthStore';
 import { VenueFormData } from '../types/VenueFormData';
 import { useUploadDocument, useUploadImage } from '../hooks/useUpload';
+import RNFS from 'react-native-fs';
 
 const ROLES = ['Select role', 'Owner', 'Manager', 'Partner', 'Director'];
 const BUSINESS_PROOF_TYPES = [
@@ -261,15 +268,28 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                     presentationStyle: 'pageSheet',
                 });
                 if (!res) return;
-                const fileResponse = await fetch(res.uri);
-                const blob = await fileResponse.blob();
-                const base64 = await new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = () => resolve(reader.result as string);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(blob);
+                const [copyResult] = await keepLocalCopy({
+                    files: [
+                        {
+                            uri: res.uri,
+                            fileName: res.name ?? 'document',
+                        },
+                    ],
+                    destination: 'cachesDirectory',
                 });
-                await uploadFile(key, base64, res.name ?? 'document');
+
+                console.log('Copy result : ', copyResult);
+                if (copyResult.status !== 'success') {
+                    console.warn('Failed to copy picked file locally:', copyResult);
+                    return;
+                }
+                const base64Data = await RNFS.readFile(copyResult.localUri, 'base64');
+
+                await uploadFile(
+                    key,
+                    `data:${res.type};base64,${base64Data}`,
+                    res.name ?? 'document',
+                );
             } catch (e: any) {
                 if (e?.code !== errorCodes.OPERATION_CANCELED) console.warn(e);
             }
@@ -587,6 +607,17 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                             setBpOpen(false);
                         }}
                     />
+                    {data.bizProofType === 'Other' && (
+                        <View style={{marginTop: '5%'}}>
+                            <Field
+                                label="Please Specify"
+                                placeholder="e.g. Shop & Establishment License"
+                                icon="create-outline"
+                                value={data.bizProofOther}
+                                onChangeText={v => set({ bizProofOther: v })}
+                            />
+                        </View>
+                    )}
                     <View style={s.formatBadgeRow}>
                         {['PDF', 'Word', 'Excel', 'PPT', 'JPG', 'PNG'].map(fmt => (
                             <View key={fmt} style={s.formatBadge}>

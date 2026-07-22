@@ -95,6 +95,7 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
     // ── Availability modal ────────────────────────────────────────────────────
     const [availabilityModalVisible, setAvailabilityModalVisible] = useState(false);
     const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
+    const [venueSku, setVenueSku] = useState<string>('');
     const [blockDate, setBlockDate] = useState<Date | null>(null);
     const [reason, setReason] = useState('');
 
@@ -234,6 +235,7 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
 
     const handleOpenAvailabilityModal = useCallback((venue: Venue) => {
         setSelectedVenue(venue);
+        setVenueSku(venue.sku ?? '');
         setBlockDate(null);
         setReason('');
         setAvailabilityModalVisible(true);
@@ -243,17 +245,18 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
         setAvailabilityModalVisible(false);
         setTimeout(() => {
             setSelectedVenue(null);
+            setVenueSku('')
             setBlockDate(null);
             setReason('');
         }, 300);
     }, []);
 
     const handleToggleActive = useCallback(() => {
+        debugger
         if (!selectedVenue?._id) return;
-        if (!selectedVenue.isActive) return;
         setOperationLoading(selectedVenue.isActive ? 'Disabling venue…' : 'Enabling venue…');
         toggleActive(
-            { id: selectedVenue._id, payload: { currentIsActive: selectedVenue?.isActive } },
+            { id: selectedVenue._id, payload: { currentIsActive: selectedVenue?.isActive ?? false } },
             {
                 onSuccess: () => {
                     alert.success(
@@ -914,6 +917,7 @@ export default function VenuesScreen({ navigation, route }: VenueProps) {
             />
 
             <ManageAvailabilityModal
+                venueSku={venueSku}
                 visible={availabilityModalVisible}
                 onClose={handleCloseAvailabilityModal}
                 title="Manage Availability"

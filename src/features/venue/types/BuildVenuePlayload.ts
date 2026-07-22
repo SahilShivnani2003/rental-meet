@@ -1,10 +1,9 @@
 import { VenueFormData } from './VenueFormData';
-import { Venue } from './Venue'; // your existing Venue interface
+import { Venue } from './Venue';
 
 export function buildVenuePayload(form: VenueFormData): Omit<Venue, '_id' | 'owner'> {
     const { basic, location, amenities, pricing, photos, documents, terms } = form;
 
-    // ── Basic ─────────────────────────────────────────────────────────────────
     const basePayload: Omit<Venue, '_id' | 'owner'> = {
         businessName: basic.businessName.trim(),
         venueType: basic.venueTypes,
@@ -13,7 +12,6 @@ export function buildVenuePayload(form: VenueFormData): Omit<Venue, '_id' | 'own
         areaSqft: Number(basic.areaSqft) || 0,
         foodType: basic.foodType,
 
-        // ── Location ─────────────────────────────────────────────────────────
         location: {
             address: location.address.trim(),
             landmark: location.landmark.trim(),
@@ -28,7 +26,6 @@ export function buildVenuePayload(form: VenueFormData): Omit<Venue, '_id' | 'own
             nearestMetroTrain: location.nearestMetroTrain.trim() || undefined,
         },
 
-        // ── Amenities ─────────────────────────────────────────────────────────
         amenities: {
             basic: amenities.basic
                 .filter(a => a.selected)
@@ -55,20 +52,21 @@ export function buildVenuePayload(form: VenueFormData): Omit<Venue, '_id' | 'own
                     ratePerPlate: f.ratePerPlate ? Number(f.ratePerPlate) : undefined,
                     items: f.items.trim() || undefined,
                 })),
-            lunchThalis: amenities.lunchThalis.map(t => ({
-                thaliType: t.thaliType as any,
-                available: true,
-                categories: t.category
-                    ? [
-                        {
-                            category: t.category as any,
-                            ratePerPlate: Number(t.ratePerPlate) || 0,
-                            numberOfItems: 0,
-                            itemNames: t.items.trim(),
-                        },
-                    ]
-                    : [],
-            })),
+
+            // ── FIXED: map over the actual `categories` array on each thali ──
+            lunchThalis: amenities.lunchThalis
+                .filter(t => t.categories.length > 0)
+                .map(t => ({
+                    thaliType: t.thaliType as any,
+                    available: true,
+                    categories: t.categories.map(c => ({
+                        category: c.category as any,
+                        ratePerPlate: Number(c.ratePerPlate) || 0,
+                        numberOfItems: Number(c.numberOfItems) || 0,
+                        itemNames: c.itemNames.trim(),
+                    })),
+                })),
+
             kitchenAccess: {
                 available: amenities.kitchenAccess.available,
                 type: amenities.kitchenAccess.type,
@@ -95,8 +93,12 @@ export function buildVenuePayload(form: VenueFormData): Omit<Venue, '_id' | 'own
                 })),
         },
 
-        // ── Pricing ───────────────────────────────────────────────────────────
         pricing: {
+            enabledOptions: {
+                perHour: pricing.enabledOptions?.perHour,
+                halfDay: pricing.enabledOptions?.halfDay,
+                fullDay: pricing.enabledOptions?.fullDay,
+            },
             perHour: {
                 weekday: num(pricing.prices.perHour?.weekday),
                 weekend: num(pricing.prices.perHour?.weekend),
@@ -115,7 +117,6 @@ export function buildVenuePayload(form: VenueFormData): Omit<Venue, '_id' | 'own
             },
         },
 
-        // ── Availability ──────────────────────────────────────────────────────
         availability: {
             openingTime: pricing.openTime,
             closingTime: pricing.closeTime,
@@ -126,10 +127,9 @@ export function buildVenuePayload(form: VenueFormData): Omit<Venue, '_id' | 'own
             blackoutDates: pricing.blackoutDate
                 ? [{ date: new Date(pricing.blackoutDate) }]
                 : [],
-            confirmationHours: terms.confirmationHours,
+            confirmationHours: pricing.confirmationHours,
         },
 
-        // ── Images ────────────────────────────────────────────────────────────
         images: photos.uploadedImages.map(img => ({
             url: img.url,
             category: sectionKeyToCategory(img.sectionKey),
@@ -137,7 +137,6 @@ export function buildVenuePayload(form: VenueFormData): Omit<Venue, '_id' | 'own
             uploadedAt: new Date(),
         })),
 
-        // ── Owner Info ────────────────────────────────────────────────────────
         ownerInfo: {
             fullName: documents.fullName.trim(),
             email: documents.email.trim(),
@@ -148,7 +147,6 @@ export function buildVenuePayload(form: VenueFormData): Omit<Venue, '_id' | 'own
             gstNumber: documents.hasGST ? documents.gstNumber.trim() : undefined,
         },
 
-        // ── Documents ─────────────────────────────────────────────────────────
         documents: {
             idProof: {
                 type: documents.idType === 'aadhaar' ? 'Aadhaar' : 'PAN',
@@ -160,11 +158,11 @@ export function buildVenuePayload(form: VenueFormData): Omit<Venue, '_id' | 'own
             businessProof: {
                 type: documents.bizProofType as any,
                 documentUrl: documents.uploadedDocs.find(d => d.uploadKey === 'biz_doc')?.url,
+                otherSpecify: documents.bizProofOther,
             },
             verified: false,
         },
 
-        // ── Bank Details ──────────────────────────────────────────────────────
         bankDetails: {
             accountHolderName: documents.accountHolder.trim(),
             accountNumber: documents.accountNumber.trim(),
@@ -172,6 +170,8 @@ export function buildVenuePayload(form: VenueFormData): Omit<Venue, '_id' | 'own
             bankName: documents.bankName.trim(),
             branchName: documents.branchName.trim(),
             accountType: documents.accountType as any,
+            bankProofUrl: documents.bankProofUrl,
+            bankProofPublicId: documents.bankProofPublicId,
         },
 
         termsAccepted: terms.agreed,
