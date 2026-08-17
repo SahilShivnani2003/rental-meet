@@ -14,7 +14,7 @@ type Props = {
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-const PRIMARY = '#6C63FF';
+const PRIMARY = Colors.primary;
 
 const ROLES = [
     { value: 'owner', label: 'Owner', icon: 'person-circle-outline' },
@@ -46,29 +46,6 @@ export default function Step1Contact({ data, onChange }: Props) {
             contentContainerStyle={s.container}
             keyboardShouldPersistTaps="handled"
         >
-            {/* ── Header ──────────────────────────────────────────────── */}
-            <View style={s.headerRow}>
-                <View style={s.headerIcon}>
-                    <Ionicons name="person" size={18} color="#fff" />
-                </View>
-                <View>
-                    <Text style={s.sectionTitle}>Contact Information</Text>
-                    <Text style={s.sectionSub}>How customers and we'll reach you</Text>
-                </View>
-            </View>
-
-            {/* ── Progress bar ─────────────────────────────────────────── */}
-            <View style={s.progressWrap}>
-                <View style={s.progressRow}>
-                    <Text style={s.progressLabel}>
-                        {requiredFilled}/{totalRequired} required fields
-                    </Text>
-                    <Text style={s.progressPct}>{pct}%</Text>
-                </View>
-                <View style={s.progressTrack}>
-                    <View style={[s.progressFill, { width: `${pct}%` as any }]} />
-                </View>
-            </View>
 
             {/* ── Full Name ────────────────────────────────────────────── */}
             <Field
@@ -172,7 +149,7 @@ export default function Step1Contact({ data, onChange }: Props) {
 
 // ─── Styles ────────────────────────────────────────────────────────────────
 
-const PRIMARY_COLOR = '#6C63FF';
+const PRIMARY_COLOR = Colors.primary;
 
 const s = StyleSheet.create({
     container: { paddingBottom: Spacing.xl },
@@ -226,7 +203,7 @@ const s = StyleSheet.create({
     },
 
     // Layout
-    rowWrap: { flexDirection: 'row', gap: Spacing.md },
+    rowWrap: { flexDirection: "column", gap: Spacing.md },
     fieldWrap: { marginBottom: Spacing.lg },
 
     // Label

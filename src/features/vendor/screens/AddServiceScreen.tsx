@@ -26,7 +26,7 @@ import { ApiError } from '@/types/ApiError';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const PRIMARY = '#6C63FF';
+const PRIMARY = Colors.primary;
 const SUCCESS = '#22C55E';
 
 // ─── Step Config ──────────────────────────────────────────────────────────────

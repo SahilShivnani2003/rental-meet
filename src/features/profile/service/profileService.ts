@@ -79,7 +79,7 @@ export const deactivateAccount = async () => {
 export const uploadKycDoc = async (data: FormData) => {
     try {
         console.log('Uploading kyc docs...');
-
+        debugger;
         const response = await privateClient.post('/auth/kyc-upload', data, {
             headers: {
                 'Content-Type': 'multipart/form-data'

@@ -49,7 +49,7 @@ export default async function requestNotificationPermission() {
                 platform: 'android'
             };
 
-            //await registerDevice({data: registerDevicePayload, isLoggedIn: isAuthenticated});
+            await registerDevice({data: registerDevicePayload, isLoggedIn: isAuthenticated});
         }
     } catch (error) {
         console.log('Notification Permission & Registration Error:', error);

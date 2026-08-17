@@ -552,7 +552,7 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
     const pickKycImage = (slot: KycSlot) => {
         const setter = getKycSetter(slot);
         launchImageLibrary(
-            { mediaType: 'photo', quality: 0.8, includeBase64: false },
+            { mediaType: 'photo', quality: 0.6, includeBase64: false },
             (response: ImagePickerResponse) => {
                 if (response.didCancel || response.errorCode) return;
                 const asset = response.assets?.[0];
@@ -570,7 +570,7 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
     const openKycCamera = (slot: KycSlot) => {
         const setter = getKycSetter(slot);
         launchCamera(
-            { mediaType: 'photo', quality: 0.8, saveToPhotos: false },
+            { mediaType: 'photo', quality: 0.6, saveToPhotos: false },
             (response: ImagePickerResponse) => {
                 if (response.didCancel || response.errorCode) return;
                 const asset = response.assets?.[0];

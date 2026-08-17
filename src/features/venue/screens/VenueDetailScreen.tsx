@@ -570,7 +570,10 @@ export default function VenueDetailScreen({ route, navigation }: Props) {
                 buttons: [
                     {
                         label: 'Login',
-                        onPress: () => navigation.navigate('login'),
+                        onPress: () => {
+                            alert.dismiss();
+                            navigation.navigate('login')
+                        },
                         style: 'primary',
                     },
                     { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },

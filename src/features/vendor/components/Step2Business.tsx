@@ -14,20 +14,24 @@ type Props = {
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-const PRIMARY = '#6C63FF';
+const PRIMARY = Colors.primary;
 
-const CATEGORIES = [
-    { value: 'Photography', icon: 'camera-outline' },
-    { value: 'Videography', icon: 'videocam-outline' },
-    { value: 'Catering', icon: 'restaurant-outline' },
-    { value: 'Decoration', icon: 'color-palette-outline' },
-    { value: 'Music & DJ', icon: 'musical-notes-outline' },
-    { value: 'Venue', icon: 'business-outline' },
-    { value: 'Makeup & Beauty', icon: 'rose-outline' },
-    { value: 'Event Management', icon: 'calendar-outline' },
-    { value: 'Mehendi', icon: 'hand-left-outline' },
-    { value: 'Wedding Planning', icon: 'heart-outline' },
-    { value: 'Other', icon: 'ellipsis-horizontal-outline' },
+export const CATEGORIES = [
+    { value: 'Catering & Food', icon: 'restaurant-outline' },
+
+    { value: 'Makeup & Beauty', icon: 'sparkles-outline' },
+
+    { value: 'Photography & Video', icon: 'camera-outline' },
+
+    { value: 'Entertainment', icon: 'musical-notes-outline' },
+
+    { value: 'Decor & Floral', icon: 'flower-outline' },
+
+    { value: 'Security', icon: 'shield-outline' },
+
+    { value: 'Celebrity', icon: 'star-outline' },
+
+    { value: 'Logistics & Support', icon: 'cube-outline' },
 ];
 
 // Required fields for progress
@@ -128,30 +132,6 @@ export default function Step2Business({ data, onChange }: Props) {
             contentContainerStyle={s.container}
             keyboardShouldPersistTaps="handled"
         >
-            {/* ── Header ──────────────────────────────────────────────── */}
-            <View style={s.headerRow}>
-                <View style={s.headerIcon}>
-                    <Ionicons name="briefcase" size={18} color="#fff" />
-                </View>
-                <View>
-                    <Text style={s.sectionTitle}>Business Information</Text>
-                    <Text style={s.sectionSub}>Tell customers what you offer</Text>
-                </View>
-            </View>
-
-            {/* ── Progress bar ─────────────────────────────────────────── */}
-            <View style={s.progressWrap}>
-                <View style={s.progressRow}>
-                    <Text style={s.progressLabel}>
-                        {requiredFilled}/{totalRequired} required fields
-                    </Text>
-                    <Text style={s.progressPct}>{pct}%</Text>
-                </View>
-                <View style={s.progressTrack}>
-                    <View style={[s.progressFill, { width: `${pct}%` as any }]} />
-                </View>
-            </View>
-
             {/* ── Service Title ────────────────────────────────────────── */}
             <Field
                 label="Service Title *"
@@ -233,12 +213,6 @@ export default function Step2Business({ data, onChange }: Props) {
                         (data.description?.length ?? 0) > 0 && s.textareaBoxFocused,
                     ]}
                 >
-                    <Ionicons
-                        name="document-text-outline"
-                        size={18}
-                        color={Colors.charcoalLight}
-                        style={s.textareaIcon}
-                    />
                     <TextInput
                         style={s.textarea}
                         placeholder="Describe your service, what makes you unique, packages offered..."
@@ -327,7 +301,7 @@ export default function Step2Business({ data, onChange }: Props) {
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-const PRIMARY_COLOR = '#6C63FF';
+const PRIMARY_COLOR = Colors.primary;
 
 // ─── Styles ────────────────────────────────────────────────────────────────
 
@@ -383,7 +357,7 @@ const s = StyleSheet.create({
     },
 
     // Layout
-    rowWrap: { flexDirection: 'row', gap: Spacing.md },
+    rowWrap: { flexDirection: 'column', gap: Spacing.md },
     fieldWrap: { marginBottom: Spacing.md },
 
     // Label row (for fields with right-aligned accessory like char count)
