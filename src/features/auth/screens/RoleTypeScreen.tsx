@@ -29,9 +29,13 @@ export default function RegisterTypeScreen({ navigation }: registerTypeParams) {
     }, []);
 
     const handleSelect = (roleId: string) => {
-        navigation.navigate('register',{
-            role:roleId
-        });
+        if (roleId === 'ambassador') {
+            navigation.navigate('ambassadorRegister');
+        } else {
+            navigation.navigate('register', {
+                role: roleId,
+            });
+        }
     };
 
     return (
@@ -93,7 +97,7 @@ export default function RegisterTypeScreen({ navigation }: registerTypeParams) {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: Colors.background
+        backgroundColor: Colors.background,
     },
 
     arcTop: {
@@ -111,7 +115,7 @@ const styles = StyleSheet.create({
     header: {
         paddingHorizontal: Spacing.xl,
         paddingTop: SCREEN_HEIGHT * 0.03,
-        paddingBottom: Spacing.lg
+        paddingBottom: Spacing.lg,
     },
     backBtn: {
         width: 44,
@@ -120,48 +124,51 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.surface,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: Spacing.lg, ...Shadows.card
+        marginBottom: Spacing.lg,
+        ...Shadows.card,
     },
     headerEyebrow: {
         fontSize: Typography.sm,
         fontWeight: Typography.bold,
         color: Colors.primary,
         letterSpacing: Typography.wider,
-        marginBottom: Spacing.xxs
+        marginBottom: Spacing.xxs,
     },
     headerTitle: {
         fontSize: 34,
         fontWeight: Typography.extraBold,
-        color: Colors.charcoal, letterSpacing: -0.8,
-        lineHeight: 40
+        color: Colors.charcoal,
+        letterSpacing: -0.8,
+        lineHeight: 40,
     },
     headerSubtitle: {
         fontSize: Typography.md,
         color: Colors.charcoalLight,
-        lineHeight: 22, marginTop: Spacing.xs
+        lineHeight: 22,
+        marginTop: Spacing.xs,
     },
     content: {
-        flex: 1
+        flex: 1,
     },
     contentPadding: {
         paddingHorizontal: Spacing.lg,
         paddingTop: Spacing.sm,
-        paddingBottom: 48
+        paddingBottom: 48,
     },
     // Already have account
     loginRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        marginTop: Spacing.lg
+        marginTop: Spacing.lg,
     },
     loginText: {
         fontSize: 14,
-        color: Colors.charcoalLight
+        color: Colors.charcoalLight,
     },
     loginLink: {
         fontSize: 14,
         fontWeight: Typography.extraBold,
-        color: Colors.primary
+        color: Colors.primary,
     },
 });

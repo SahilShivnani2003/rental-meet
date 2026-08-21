@@ -15,6 +15,7 @@ export type RootStackParamList = {
     client: NavigatorScreenParams<ClientTabParamList> | undefined;
     owner: NavigatorScreenParams<OwnerTabParamList> | undefined;
     vendor: NavigatorScreenParams<VendorTabParamList> | undefined;
+    ambassadorRegister: undefined;
     register: {
         role: string;
     };

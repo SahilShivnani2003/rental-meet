@@ -30,7 +30,7 @@ export const Colors = {
     successLight: '#DCFCE7',
     successHighLight: '#F6FEF9',
     warning: '#D98E0E',   // reuse primaryDark for "pending"
-    warningLight: '#FEF3DC',   // reuse primaryLight
+    warningLight: '#FEF3DC',
     danger: '#DC2626',
     dangerLight: '#FEE2E2',
     info: '#2563EB',

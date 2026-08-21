@@ -34,6 +34,7 @@ import { Colors } from '@/theme/theme';
 import QuotationDownloadsScreen from '@/features/quotation/screens/QuotationDownloadScreen';
 import { NotificationScreen } from '@/features/notification/screens/NotificationScreen';
 import { VenueCouponScreen } from '@/features/coupon/screens/VenueCouponScreen';
+import AmbassadorRegistrationScreen from '@/features/auth/screens/AmbassadorRegistrationScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -55,6 +56,10 @@ export default function RootNavigator() {
                         <Stack.Screen name="login" component={LoginScreen} />
                         <Stack.Screen name="registerType" component={RegisterTypeScreen} />
                         <Stack.Screen name="register" component={RegisterScreen} />
+                        <Stack.Screen
+                            name="ambassadorRegister"
+                            component={AmbassadorRegistrationScreen}
+                        />
                         <Stack.Screen name="forgotPassword" component={ForgotPasswordScreen} />
                         <Stack.Screen
                             name="client"

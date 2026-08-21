@@ -102,7 +102,7 @@ export const approveSoon = async (id: string) => {
 
 export const createBooking = async (data: Booking) => {
     try {
-        console.log('Creating booking ....',)
+        console.log('Creating booking ....', )
 
         const response = await privateClient.post('/bookings', data);
 

@@ -1,6 +1,6 @@
 import { privateClient } from "@/service/apiClient";
 
-export const createPaymentOrder = async (data: { bookingId: string, amount: number, bookingType: string }) => {
+export const createPaymentOrder = async (data: { amount: number, bookingType: string }) => {
     try {
         console.log('Creating payment order ....');
 
