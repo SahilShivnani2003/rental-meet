@@ -34,7 +34,7 @@ type LoginProps = NativeStackScreenProps<RootStackParamList, 'login'>;
 
 export default function LoginScreen({ navigation }: LoginProps) {
     const { setUser } = useAuthStore();
-    const {mutate: login} = useLogin();
+    const { mutate: login } = useLogin();
     const alert = useAlert();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -109,40 +109,43 @@ export default function LoginScreen({ navigation }: LoginProps) {
 
         setLoading(true);
         const deviceId = await DeviceInfo.getUniqueId();
-        login({email, password, deviceId},
+        login(
+            { email, password, deviceId },
             {
-                onSuccess:(data)=>{
-                    setLoading(false)
+                onSuccess: data => {
+                    setLoading(false);
                     alert.success('Success', data.message || 'Login successful');
                     setUser(data?.user, data?.token);
 
                     const userData = data?.user as User;
 
-                    if(userData.role === 'owner'){
+                    if (userData.role === 'owner') {
                         navigation.replace('owner');
-                    }else if(userData.role === 'vendor'){
+                    } else if (userData.role === 'vendor') {
                         navigation.replace('vendor');
-                    }else if(userData.role === 'customer'){
+                    } else if (userData.role === 'customer') {
                         navigation.replace('client');
-                    }else{
-                        navigation.replace('login')
+                    } else if (userData.role === 'ambassador') {
+                        navigation.replace('ambassador');
+                    } else {
+                        navigation.replace('login');
                     }
-                    
                 },
-                onError:(error:ApiError)=>{
-                    setLoading(false)
+                onError: (error: ApiError) => {
+                    setLoading(false);
                     alert.error('Login failed', error?.message || 'Something went wrong');
-                }
-            }
-        )
+                },
+            },
+        );
     };
 
     // ── Skip — navigates as a guest client ──────────────────────────────────────
     const handleSkip = () => {
-        console.log('Skip press')
+        console.log('Skip press');
         alert.show({
             title: 'Continue as Guest',
-            message: 'You can browse venues & services without singing in. Some features will be limited',
+            message:
+                'You can browse venues & services without singing in. Some features will be limited',
             buttons: [
                 { label: 'Cancel', onPress: alert.dismiss, style: 'ghost' },
                 {
@@ -253,7 +256,7 @@ export default function LoginScreen({ navigation }: LoginProps) {
 
                     <TouchableOpacity
                         style={styles.forgotRow}
-                        onPress={() =>navigation.navigate('forgotPassword')}
+                        onPress={() => navigation.navigate('forgotPassword')}
                     >
                         <Text style={styles.forgotText}>Forgot password?</Text>
                     </TouchableOpacity>

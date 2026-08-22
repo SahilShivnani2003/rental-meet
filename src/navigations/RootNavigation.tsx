@@ -35,6 +35,7 @@ import QuotationDownloadsScreen from '@/features/quotation/screens/QuotationDown
 import { NotificationScreen } from '@/features/notification/screens/NotificationScreen';
 import { VenueCouponScreen } from '@/features/coupon/screens/VenueCouponScreen';
 import AmbassadorRegistrationScreen from '@/features/auth/screens/AmbassadorRegistrationScreen';
+import { AmbassadorTabNavigation } from './tabNavigations/AmbassadorTabNavigation';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -71,6 +72,7 @@ export default function RootNavigator() {
                             component={OwnerTabNavigation}
                             options={{ animation: 'fade' }}
                         />
+                        <Stack.Screen name="ambassador" component={AmbassadorTabNavigation}/>
                         <Stack.Screen name="vendor" component={VendorTabNavigation} />
                         <Stack.Screen name="venueDetail" component={VenueDetailScreen} />
                         <Stack.Screen name="category" component={BrowseCategoryScreen} />

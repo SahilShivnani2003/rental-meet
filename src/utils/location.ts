@@ -6,7 +6,7 @@ export type City = {
 };
 
 export type State = {
-    name: string;
+    name: string; 
     placeId: string;
 };
 

@@ -2,6 +2,7 @@ import { Booking } from "@/features/booking/types/Booking";
 import { VendorService } from "@/features/otherService/types/VendorService";
 import { SelectedAmenityItem } from "@/features/venue/models/BookingSheet";
 import { Venue } from "@/features/venue/types/Venue";
+import { AmbassadorTabParamList } from "@/navigations/tabNavigations/AmbassadorTabNavigation";
 import { ClientTabParamList } from "@/navigations/tabNavigations/ClientTabNavigation";
 import { OwnerTabParamList } from "@/navigations/tabNavigations/OwnerTabNavigation";
 import { VendorTabParamList } from "@/navigations/tabNavigations/VendorTabNavigation";
@@ -15,6 +16,7 @@ export type RootStackParamList = {
     client: NavigatorScreenParams<ClientTabParamList> | undefined;
     owner: NavigatorScreenParams<OwnerTabParamList> | undefined;
     vendor: NavigatorScreenParams<VendorTabParamList> | undefined;
+    ambassador: NavigatorScreenParams<AmbassadorTabParamList> | undefined;
     ambassadorRegister: undefined;
     register: {
         role: string;
@@ -66,7 +68,7 @@ export type RootStackParamList = {
     serviceBookingDetail: {
         bookingData: any
     },
-    referral:undefined;
+    referral: undefined;
     quotationDownload: undefined;
     notification: undefined;
     venueCoupon: undefined;

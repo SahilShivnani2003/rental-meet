@@ -46,3 +46,22 @@ export interface AmbassadorPayout {
     createdAt?: Date;
     updatedAt?: Date;
 }
+
+export interface CreateAmbassadorPayout {
+    amount: number;
+    payoutMethod:
+    | 'UPI'
+    | 'Bank Transfer'
+    | 'upi'
+    | 'bank'
+    | 'bank_transfer'
+    | 'Bank'
+    | 'upi_transfer';
+    upiId?: string;
+    bankDetails: {
+        accountHolderName:string;
+        bankName: string;
+        accountNumber: string;
+        ifscCode: string;
+    }
+}
