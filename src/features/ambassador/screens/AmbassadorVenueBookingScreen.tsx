@@ -1,5 +1,5 @@
 import { Colors, Shadows, StatusConfig, Spacing, Typography, Radii } from '@/theme/theme';
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useRef, useEffect } from 'react';
 import {
     View,
     Text,
@@ -12,13 +12,16 @@ import {
     RefreshControl,
     Modal,
     Pressable,
-    SafeAreaView,
+    Animated,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { useGetAmbassadorBookings } from '../hooks/useAmbassador';
 import { NativeBottomTabScreenProps } from '@react-navigation/bottom-tabs/unstable';
 import { AmbassadorTabParamList } from '@/navigations/tabNavigations/AmbassadorTabNavigation';
+import useEntrance from '@/hooks/useEntrance';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '@/types/RootStackParamList';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type BookingStatus = 'confirmed' | 'pending' | 'cancelled' | 'completed';
@@ -42,15 +45,87 @@ const FILTERS: { key: 'all' | BookingStatus; label: string }[] = [
     { key: 'cancelled', label: 'Cancelled' },
 ];
 
+// Extra accent colors, shared visual language with the Ambassador Dashboard
+// screen so the two feel like the same app rather than two different apps.
+// Ideally this palette gets lifted into theme.ts as a shared export.
+const ACCENTS = {
+    navyDark: '#0F1230',
+    navyMid: '#1E1B4B',
+    purpleLight: '#EDE9FE',
+    purpleDark: '#4C3B96',
+    teal: '#0EA5A5',
+    tealLight: '#CCFBF1',
+    tealDark: '#0F766E',
+    amber: '#F5A623',
+    amberLight: '#FDECC8',
+    amberDark: '#8A5A00',
+    slateLight: '#E2E8F0',
+    slateDark: '#1E293B',
+};
+
+// Fallback so an unrecognized/unmapped booking status never crashes the row
+// instead of silently trusting StatusConfig[booking.status] to exist.
+const FALLBACK_STATUS = {
+    bg: ACCENTS.slateLight,
+    color: ACCENTS.slateDark,
+    icon: 'help-circle-outline',
+    label: 'Unknown',
+};
+
 const currency = (n: number) =>
-    `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+    `₹${(n ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+
+// ── Pressable scale wrapper ──────────────────────────────────────────────────
+// Shared "press-in shrinks slightly" micro-interaction used across the app
+// (see GuestProfile's LockedRow / OpenRow) so every tappable row here feels
+// consistent with the rest of the product.
+function Pressy({
+    onPress,
+    style,
+    children,
+    disabled,
+}: {
+    onPress?: () => void;
+    style?: any;
+    children: React.ReactNode;
+    disabled?: boolean;
+}) {
+    const scale = useRef(new Animated.Value(1)).current;
+    return (
+        <Animated.View style={{ transform: [{ scale }] }}>
+            <TouchableOpacity
+                style={style}
+                onPress={onPress}
+                disabled={disabled}
+                activeOpacity={1}
+                onPressIn={() =>
+                    Animated.spring(scale, {
+                        toValue: 0.97,
+                        useNativeDriver: true,
+                        speed: 30,
+                    }).start()
+                }
+                onPressOut={() =>
+                    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 22 }).start()
+                }
+            >
+                {children}
+            </TouchableOpacity>
+        </Animated.View>
+    );
+}
 
 // ── Screen ─────────────────────────────────────────────────────────────────
-type AmbassadorVenueBookingScreenProps = NativeBottomTabScreenProps<AmbassadorTabParamList, 'bookings'>
+type AmbassadorVenueBookingScreenProps = NativeBottomTabScreenProps<
+    AmbassadorTabParamList,
+    'bookings'
+>;
 
-export default function AmbasssadorVenueBookingScreen({ navigation }: AmbassadorVenueBookingScreenProps) {
+export default function AmbasssadorVenueBookingScreen({
+    navigation,
+}: AmbassadorVenueBookingScreenProps) {
     const { data, isLoading, isRefetching, refetch } = useGetAmbassadorBookings();
-
+    const rootNav = navigation.getParent<NativeStackNavigationProp<RootStackParamList>>();
     const [search, setSearch] = useState('');
     const [filter, setFilter] = useState<'all' | BookingStatus>('all');
     const [filterOpen, setFilterOpen] = useState(false);
@@ -60,14 +135,43 @@ export default function AmbasssadorVenueBookingScreen({ navigation }: Ambassador
     const totalPaidVolume = bookings.reduce((sum, b) => sum + (b.amount ?? 0), 0);
     const totalShareEarnings = data?.totalShareEarnings ?? 0;
 
+    // Ambassador identity for the header. This screen's own hook only
+    // returns booking data, so fall back gracefully rather than hardcoding
+    // a specific person's name — wire in the real profile source (e.g. a
+    // shared useAmbassadorProfile hook / auth context) when available.
+    const ambassadorName = (data as any)?.ambassador?.name ?? 'Ambassador';
+    const ambassadorInitial = ambassadorName.trim().charAt(0).toUpperCase() || 'A';
+
+    // ── Entrance animations ──
+    // Same choreography as GuestProfile: header fades/slides in immediately,
+    // then the banner, stats & list stagger in behind it.
+    const headerFade = useRef(new Animated.Value(0)).current;
+    const heroSlide = useRef(new Animated.Value(-16)).current;
+    const { fade: bannerFade, slide: bannerSlide } = useEntrance(150);
+    const { fade: statsFade, slide: statsSlide } = useEntrance(280);
+    const { fade: listFade, slide: listSlide } = useEntrance(420);
+
+    useEffect(() => {
+        Animated.parallel([
+            Animated.timing(headerFade, { toValue: 1, duration: 400, useNativeDriver: true }),
+            Animated.spring(heroSlide, {
+                toValue: 0,
+                useNativeDriver: true,
+                speed: 16,
+                bounciness: 6,
+            }),
+        ]).start();
+    }, []);
+
     const filtered = useMemo(() => {
-        return bookings.filter((b) => {
+        return bookings.filter(b => {
             const matchesFilter = filter === 'all' || b.status === filter;
             const q = search.trim().toLowerCase();
             const matchesSearch =
                 !q ||
                 b.bookingNumber?.toLowerCase().includes(q) ||
-                b.venueName?.toLowerCase().includes(q);
+                b.venueName?.toLowerCase().includes(q) ||
+                b.guestName?.toLowerCase().includes(q);
             return matchesFilter && matchesSearch;
         });
     }, [bookings, filter, search]);
@@ -76,45 +180,45 @@ export default function AmbasssadorVenueBookingScreen({ navigation }: Ambassador
         refetch();
     }, [refetch]);
 
+    // Navigation helpers — adjust route names to match your actual
+    // AmbassadorTabParamList / parent stack navigator.
+    const goToOnboardVenue = () => rootNav.navigate('addVenue');
+    const goToBookingDetail = (booking: AmbassadorBooking) =>navigation.navigate('bookings');
+
+    const activeFilterLabel = FILTERS.find(f => f.key === filter)?.label ?? 'All Bookings';
+
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             {/* ── Header ─────────────────────────────────────────── */}
-            <View style={styles.header}>
-                <View>
-                    <Text style={styles.headerTitle}>Venue Bookings (25%)</Text>
-                    <Text style={styles.headerSubtitle}>
-                        RentalMeet™ Venue Acquisition & Ambassador Portal
-                    </Text>
-                </View>
-
-                <View style={styles.headerRight}>
-                    <TouchableOpacity style={styles.listVenueBtn} activeOpacity={0.85}>
-                        <Icon name="add-circle" size={16} color={Colors.white} />
-                        <Text style={styles.listVenueBtnText}>List Venue</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.iconBtn} activeOpacity={0.7}>
-                        <Icon
-                            name="notifications-outline"
-                            size={20}
-                            color={Colors.charcoal}
-                        />
-                    </TouchableOpacity>
-
-                    <View style={styles.divider} />
-
-                    <View style={styles.avatar}>
-                        <Text style={styles.avatarText}>S</Text>
+            <Animated.View
+                style={[
+                    styles.header,
+                    { opacity: headerFade, transform: [{ translateY: heroSlide }] },
+                ]}
+            >
+                <View style={styles.headerAccentBar} />
+                <View style={styles.headerContent}>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.headerEyebrow}>AMBASSADOR PORTAL</Text>
+                        <Text style={styles.headerTitle}>Venue Bookings</Text>
+                        <View style={styles.shareChip}>
+                            <Icon name="trending-up" size={10} color={Colors.primary} />
+                            <Text style={styles.shareChipText}>25% PROFIT SHARE · 12 MONTHS</Text>
+                        </View>
                     </View>
-                    <View>
-                        <Text style={styles.userName}>Sahil Shivnani</Text>
-                        <Text style={styles.userRole}>Ambassador Partner</Text>
+
+                    <View style={styles.headerActions}>
+                        <Pressy style={styles.listVenueBtn} onPress={goToOnboardVenue}>
+                            <Icon name="add-circle" size={16} color={Colors.white} />
+                            <Text style={styles.listVenueBtnText}>List Venue</Text>
+                        </Pressy>                        
                     </View>
                 </View>
-            </View>
+            </Animated.View>
 
             <ScrollView
-                contentContainerStyle={styles.scrollContent}
+                style={styles.content}
+                contentContainerStyle={styles.contentPadding}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
                     <RefreshControl
@@ -126,52 +230,57 @@ export default function AmbasssadorVenueBookingScreen({ navigation }: Ambassador
                 }
             >
                 {/* ── Profit share banner ───────────────────────── */}
-                <LinearGradient
-                    colors={['#6C2BD9', Colors.primary]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0.4 }}
-                    style={styles.banner}
+                <Animated.View
+                    style={{ opacity: bannerFade, transform: [{ translateY: bannerSlide }] }}
                 >
-                    <View style={styles.bannerBadge}>
-                        <Icon name="trending-up" size={12} color={Colors.white} />
-                        <Text style={styles.bannerBadgeText}>
-                            12-MONTH 25% RECURRING PROFIT SHARE
-                        </Text>
-                    </View>
-
-                    <Text style={styles.bannerTitle}>Venue Bookings & Revenue Share</Text>
-                    <Text style={styles.bannerDesc}>
-                        You automatically receive 25% of RentalMeet platform profit on all
-                        bookings completed at your listed venues for a full 12 months from
-                        their approval date.
-                    </Text>
-
-                    <TouchableOpacity
-                        style={styles.bannerRefreshBtn}
-                        onPress={onRefresh}
-                        activeOpacity={0.8}
+                    <LinearGradient
+                        colors={[ACCENTS.navyMid, ACCENTS.navyDark]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0.4 }}
+                        style={styles.banner}
                     >
-                        <Icon name="refresh" size={18} color={Colors.white} />
-                    </TouchableOpacity>
-                </LinearGradient>
+                        <View style={styles.bannerBadge}>
+                            <Icon name="trending-up" size={12} color={ACCENTS.purpleDark} />
+                            <Text style={styles.bannerBadgeText}>
+                                12-MONTH 25% RECURRING PROFIT SHARE
+                            </Text>
+                        </View>
+
+                        <Text style={styles.bannerTitle}>Venue Bookings & Revenue Share</Text>
+                        <Text style={styles.bannerDesc}>
+                            You automatically receive 25% of RentalMeet platform profit on all
+                            bookings completed at your listed venues for a full 12 months from their
+                            approval date.
+                        </Text>
+
+                        <Pressy style={styles.bannerRefreshBtn} onPress={onRefresh}>
+                            <Icon name="refresh" size={18} color={Colors.white} />
+                        </Pressy>
+                    </LinearGradient>
+                </Animated.View>
 
                 {/* ── Stat cards ─────────────────────────────────── */}
-                <View style={styles.statsRow}>
+                <Animated.View
+                    style={[
+                        styles.statsRow,
+                        { opacity: statsFade, transform: [{ translateY: statsSlide }] },
+                    ]}
+                >
                     <StatCard
                         label="Total Bookings"
                         value={String(totalBookings)}
                         caption="Across all your listed venues"
                         iconName="calendar-outline"
-                        iconBg={Colors.infoLight}
-                        iconColor={Colors.info}
+                        iconBg={ACCENTS.tealLight}
+                        iconColor={ACCENTS.tealDark}
                     />
                     <StatCard
                         label="Total Paid Booking Volume"
                         value={currency(totalPaidVolume)}
                         caption="Gross booking transaction value"
                         iconName="cash-outline"
-                        iconBg={Colors.primaryLight}
-                        iconColor={Colors.primaryDark}
+                        iconBg={ACCENTS.amberLight}
+                        iconColor={ACCENTS.amberDark}
                     />
                     <StatCard
                         label="Your 25% Profit Share"
@@ -181,66 +290,136 @@ export default function AmbasssadorVenueBookingScreen({ navigation }: Ambassador
                         iconBg={Colors.successLight}
                         iconColor={Colors.success}
                     />
-                </View>
+                </Animated.View>
 
                 {/* ── Search + filter ────────────────────────────── */}
-                <View style={styles.searchRow}>
+                <Animated.View
+                    style={[
+                        styles.searchRow,
+                        { opacity: listFade, transform: [{ translateY: listSlide }] },
+                    ]}
+                >
                     <View style={styles.searchBox}>
                         <Icon name="search" size={16} color={Colors.charcoalLight} />
                         <TextInput
                             style={styles.searchInput}
-                            placeholder="Search booking #, venue name..."
+                            placeholder="Search booking #, venue, guest..."
                             placeholderTextColor={Colors.charcoalLight}
                             value={search}
                             onChangeText={setSearch}
+                            returnKeyType="search"
                         />
+                        {search.length > 0 && (
+                            <TouchableOpacity
+                                onPress={() => setSearch('')}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                accessibilityRole="button"
+                                accessibilityLabel="Clear search"
+                            >
+                                <Icon name="close-circle" size={16} color={Colors.charcoalLight} />
+                            </TouchableOpacity>
+                        )}
                     </View>
 
-                    <TouchableOpacity
-                        style={styles.filterBtn}
-                        activeOpacity={0.8}
+                    <Pressy
+                        style={[styles.filterBtn, filter !== 'all' && styles.filterBtnActive]}
                         onPress={() => setFilterOpen(true)}
                     >
-                        <Text style={styles.filterBtnText}>
-                            {FILTERS.find((f) => f.key === filter)?.label}
+                        <Text
+                            style={[
+                                styles.filterBtnText,
+                                filter !== 'all' && styles.filterBtnTextActive,
+                            ]}
+                            numberOfLines={1}
+                        >
+                            {activeFilterLabel}
                         </Text>
-                        <Icon name="chevron-down" size={16} color={Colors.charcoalMid} />
-                    </TouchableOpacity>
-                </View>
-
-                {/* ── List / empty / loading ─────────────────────── */}
-                <View style={styles.listCard}>
-                    {isLoading ? (
-                        <View style={styles.centerState}>
-                            <ActivityIndicator size="large" color={Colors.primary} />
-                            <Text style={styles.centerStateText}>Loading bookings...</Text>
-                        </View>
-                    ) : filtered.length === 0 ? (
-                        <View style={styles.centerState}>
-                            <View style={styles.emptyIconWrap}>
-                                <Icon
-                                    name="calendar-clear-outline"
-                                    size={26}
-                                    color={Colors.primaryDark}
-                                />
-                            </View>
-                            <Text style={styles.emptyTitle}>No bookings yet</Text>
-                            <Text style={styles.centerStateText}>
-                                Bookings made at your listed venues will show up here.
-                            </Text>
-                        </View>
-                    ) : (
-                        <FlatList
-                            data={filtered}
-                            keyExtractor={(item) => item.id}
-                            scrollEnabled={false}
-                            ItemSeparatorComponent={() => (
-                                <View style={styles.rowSeparator} />
-                            )}
-                            renderItem={({ item }) => <BookingRow booking={item} />}
+                        <Icon
+                            name="chevron-down"
+                            size={16}
+                            color={filter !== 'all' ? ACCENTS.tealDark : Colors.charcoalMid}
                         />
-                    )}
-                </View>
+                    </Pressy>
+                </Animated.View>
+
+                {/* ── Section label + results count ───────────────── */}
+                <Animated.View
+                    style={{ opacity: listFade, transform: [{ translateY: listSlide }] }}
+                >
+                    <View style={styles.sectionLabelRow}>
+                        <Text style={styles.menuSectionLabel}>BOOKINGS</Text>
+                        {!isLoading && bookings.length > 0 && (
+                            <Text style={styles.resultsCount}>
+                                {filtered.length} of {bookings.length}
+                                {filter !== 'all' ? ` · ${activeFilterLabel}` : ''}
+                            </Text>
+                        )}
+                    </View>
+
+                    {/* ── List / empty / loading ─────────────────────── */}
+                    <View style={styles.listCard}>
+                        {isLoading ? (
+                            <View style={styles.centerState}>
+                                <ActivityIndicator size="large" color={Colors.primary} />
+                                <Text style={styles.centerStateText}>Loading bookings...</Text>
+                            </View>
+                        ) : filtered.length === 0 ? (
+                            <View style={styles.centerState}>
+                                <View style={styles.emptyIconRing}>
+                                    <View style={styles.emptyIconWrap}>
+                                        <Icon
+                                            name={
+                                                bookings.length === 0
+                                                    ? 'calendar-clear-outline'
+                                                    : 'search-outline'
+                                            }
+                                            size={24}
+                                            color={Colors.primaryDark}
+                                        />
+                                    </View>
+                                </View>
+                                <Text style={styles.emptyTitle}>
+                                    {bookings.length === 0
+                                        ? 'No bookings yet'
+                                        : 'No matching bookings'}
+                                </Text>
+                                <Text style={styles.centerStateText}>
+                                    {bookings.length === 0
+                                        ? 'Bookings made at your listed venues will show up here.'
+                                        : 'Try a different search term or filter.'}
+                                </Text>
+                                {bookings.length > 0 && (search || filter !== 'all') && (
+                                    <TouchableOpacity
+                                        style={styles.clearFiltersBtn}
+                                        onPress={() => {
+                                            setSearch('');
+                                            setFilter('all');
+                                        }}
+                                        accessibilityRole="button"
+                                        accessibilityLabel="Clear search and filters"
+                                    >
+                                        <Text style={styles.clearFiltersBtnText}>
+                                            Clear search & filters
+                                        </Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        ) : (
+                            <FlatList
+                                data={filtered}
+                                keyExtractor={item => item.id}
+                                scrollEnabled={false}
+                                ItemSeparatorComponent={() => <View style={styles.menuDivider} />}
+                                renderItem={({ item }) => (
+                                    <BookingRow
+                                        booking={item}
+                                        onPress={() => goToBookingDetail(item)}
+                                    />
+                                )}
+                            />
+                        )}
+                    </View>
+                </Animated.View>
             </ScrollView>
 
             {/* ── Filter modal ───────────────────────────────────── */}
@@ -250,12 +429,11 @@ export default function AmbasssadorVenueBookingScreen({ navigation }: Ambassador
                 animationType="fade"
                 onRequestClose={() => setFilterOpen(false)}
             >
-                <Pressable
-                    style={styles.modalOverlay}
-                    onPress={() => setFilterOpen(false)}
-                >
+                <Pressable style={styles.modalOverlay} onPress={() => setFilterOpen(false)}>
                     <View style={styles.filterSheet}>
-                        {FILTERS.map((f) => (
+                        <View style={styles.filterSheetHandle} />
+                        <Text style={styles.filterSheetTitle}>FILTER BOOKINGS</Text>
+                        {FILTERS.map(f => (
                             <TouchableOpacity
                                 key={f.key}
                                 style={styles.filterOption}
@@ -263,6 +441,8 @@ export default function AmbasssadorVenueBookingScreen({ navigation }: Ambassador
                                     setFilter(f.key);
                                     setFilterOpen(false);
                                 }}
+                                accessibilityRole="button"
+                                accessibilityLabel={f.label}
                             >
                                 <Text
                                     style={[
@@ -280,7 +460,7 @@ export default function AmbasssadorVenueBookingScreen({ navigation }: Ambassador
                     </View>
                 </Pressable>
             </Modal>
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -315,37 +495,75 @@ function StatCard({
 }
 
 // ── Booking row ───────────────────────────────────────────────────────────
-function BookingRow({ booking }: { booking: AmbassadorBooking }) {
-    const status = StatusConfig[booking.status];
+// Reworked to mirror GuestProfile's menu-row anatomy: a colored icon wrap on
+// the left, title/subtitle in the middle, and a circular chevron affordance
+// on the right — with the same press-in scale micro-interaction.
+function BookingRow({ booking, onPress }: { booking: AmbassadorBooking; onPress?: () => void }) {
+    const scale = useRef(new Animated.Value(1)).current;
+
+    // Guard against a status value the app doesn't recognize instead of
+    // crashing on status.bg / status.color / status.icon being undefined.
+    const status = StatusConfig[booking.status] ?? {
+        ...FALLBACK_STATUS,
+        label: booking.status ?? FALLBACK_STATUS.label,
+    };
+
+    const formattedDate = (() => {
+        const d = new Date(booking.date);
+        if (Number.isNaN(d.getTime())) return booking.date ?? '';
+        return d.toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+        });
+    })();
 
     return (
-        <TouchableOpacity style={styles.bookingRow} activeOpacity={0.7}>
-            <View style={styles.bookingRowLeft}>
-                <Text style={styles.bookingNumber}>{booking.bookingNumber}</Text>
-                <Text style={styles.bookingVenue} numberOfLines={1}>
-                    {booking.venueName}
-                </Text>
-                <Text style={styles.bookingMeta}>
-                    {booking.guestName} · {new Date(booking.date).toLocaleDateString(
-                        'en-IN',
-                        { day: '2-digit', month: 'short', year: 'numeric' }
-                    )}
-                </Text>
-            </View>
-
-            <View style={styles.bookingRowRight}>
-                <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
-                    <Icon name={status.icon} size={12} color={status.color} />
-                    <Text style={[styles.statusPillText, { color: status.color }]}>
-                        {status.label}
-                    </Text>
+        <Animated.View style={{ transform: [{ scale }] }}>
+            <TouchableOpacity
+                style={styles.bookingRow}
+                activeOpacity={1}
+                onPress={onPress}
+                onPressIn={() =>
+                    Animated.spring(scale, {
+                        toValue: 0.98,
+                        useNativeDriver: true,
+                        speed: 30,
+                    }).start()
+                }
+                onPressOut={() =>
+                    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 22 }).start()
+                }
+            >
+                <View style={[styles.bookingIconWrap, { backgroundColor: status.bg }]}>
+                    <Icon name="business-outline" size={18} color={status.color} />
                 </View>
-                <Text style={styles.bookingAmount}>{currency(booking.amount)}</Text>
-                <Text style={styles.bookingShare}>
-                    +{currency(booking.shareAmount)} share
-                </Text>
-            </View>
-        </TouchableOpacity>
+
+                <View style={styles.bookingRowLeft}>
+                    <Text style={styles.bookingVenue} numberOfLines={1}>
+                        {booking.venueName}
+                    </Text>
+                    <Text style={styles.bookingMeta} numberOfLines={1}>
+                        {booking.bookingNumber} · {booking.guestName} · {formattedDate}
+                    </Text>
+                    <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
+                        <Icon name={status.icon} size={11} color={status.color} />
+                        <Text style={[styles.statusPillText, { color: status.color }]}>
+                            {status.label}
+                        </Text>
+                    </View>
+                </View>
+
+                <View style={styles.bookingRowRight}>
+                    <Text style={styles.bookingAmount}>{currency(booking.amount)}</Text>
+                    <Text style={styles.bookingShare}>+{currency(booking.shareAmount)}</Text>
+                </View>
+
+                <View style={styles.menuChevronWrap}>
+                    <Icon name="chevron-forward" size={15} color={Colors.charcoalLight} />
+                </View>
+            </TouchableOpacity>
+        </Animated.View>
     );
 }
 
@@ -355,112 +573,128 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: Colors.background,
     },
-    scrollContent: {
-        paddingHorizontal: Spacing.lg,
-        paddingBottom: Spacing.xxl * 2,
-    },
 
-    // Header
+    // ── Header ── (matches GuestProfile: accent bar + eyebrow + title)
     header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: Spacing.lg,
-        paddingVertical: Spacing.md,
         backgroundColor: Colors.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
+        borderBottomLeftRadius: Radii.xxl,
+        borderBottomRightRadius: Radii.xxl,
+        paddingBottom: Spacing.lg,
+        ...Shadows.header,
+        zIndex: 10,
+    },
+    headerAccentBar: { height: 4, backgroundColor: Colors.primary },
+    headerContent: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        paddingHorizontal: Spacing.lg,
+        paddingTop: Spacing.lg,
+    },
+    headerEyebrow: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.primary,
+        letterSpacing: Typography.wider,
+        marginBottom: Spacing.xxs,
     },
     headerTitle: {
-        fontSize: Typography.lg,
+        fontSize: Typography.xxl,
         fontWeight: Typography.extraBold,
         color: Colors.charcoal,
         letterSpacing: Typography.tight,
+        marginBottom: Spacing.sm,
     },
-    headerSubtitle: {
-        fontSize: Typography.xs,
-        color: Colors.charcoalLight,
-        marginTop: 2,
-    },
-    headerRight: {
+    shareChip: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 5,
+        alignSelf: 'flex-start',
+        backgroundColor: Colors.primaryLight,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: Radii.full,
     },
+    shareChipText: {
+        fontSize: 9,
+        fontWeight: Typography.extraBold,
+        color: Colors.primary,
+        letterSpacing: 0.6,
+    },
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
     listVenueBtn: {
         flexDirection: 'row',
         alignItems: 'center',
+        gap: 4,
         backgroundColor: Colors.primary,
         paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.xs,
-        borderRadius: Radii.full,
-        marginRight: Spacing.sm,
+        height: 38,
+        borderRadius: Radii.md,
         ...Shadows.primary,
     },
     listVenueBtnText: {
         color: Colors.white,
         fontSize: Typography.sm,
         fontWeight: Typography.semiBold,
-        marginLeft: 4,
     },
     iconBtn: {
-        width: 34,
-        height: 34,
-        borderRadius: Radii.full,
+        width: 38,
+        height: 38,
+        borderRadius: Radii.md,
+        backgroundColor: Colors.background,
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: Colors.background,
-        marginRight: Spacing.sm,
     },
-    divider: {
-        width: 1,
-        height: 24,
-        backgroundColor: Colors.divider,
-        marginRight: Spacing.sm,
+    avatarBtn: {
+        width: 38,
+        height: 38,
+        borderRadius: Radii.md,
+        backgroundColor: Colors.background,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     avatar: {
-        width: 32,
-        height: 32,
+        width: 28,
+        height: 28,
         borderRadius: Radii.full,
         backgroundColor: Colors.primaryLight,
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 6,
     },
     avatarText: {
         color: Colors.primaryDark,
         fontWeight: Typography.bold,
-        fontSize: Typography.sm,
-    },
-    userName: {
-        fontSize: Typography.sm,
-        fontWeight: Typography.semiBold,
-        color: Colors.charcoal,
-    },
-    userRole: {
         fontSize: Typography.xs,
-        color: Colors.primaryDark,
-        fontWeight: Typography.medium,
     },
 
-    // Banner
+    // ── Content ──
+    content: { flex: 1 },
+    contentPadding: {
+        paddingHorizontal: Spacing.lg,
+        paddingTop: Spacing.xl,
+        paddingBottom: 120,
+    },
+
+    // ── Banner ──
     banner: {
-        marginTop: Spacing.lg,
-        borderRadius: Radii.xl,
+        borderRadius: 24,
         padding: Spacing.xl,
         overflow: 'hidden',
+        marginBottom: Spacing.xl,
+        ...Shadows.floating,
     },
     bannerBadge: {
         flexDirection: 'row',
         alignItems: 'center',
         alignSelf: 'flex-start',
-        backgroundColor: 'rgba(255,255,255,0.18)',
+        backgroundColor: ACCENTS.purpleLight,
         paddingHorizontal: Spacing.sm,
         paddingVertical: 4,
         borderRadius: Radii.full,
         marginBottom: Spacing.sm,
     },
     bannerBadgeText: {
-        color: Colors.white,
+        color: ACCENTS.purpleDark,
         fontSize: Typography.xs,
         fontWeight: Typography.bold,
         letterSpacing: Typography.normal,
@@ -471,9 +705,10 @@ const styles = StyleSheet.create({
         fontSize: Typography.xxl,
         fontWeight: Typography.extraBold,
         marginBottom: Spacing.xs,
+        letterSpacing: -0.3,
     },
     bannerDesc: {
-        color: 'rgba(255,255,255,0.9)',
+        color: 'rgba(255,255,255,0.75)',
         fontSize: Typography.base,
         lineHeight: 19,
         paddingRight: Spacing.xxl,
@@ -485,15 +720,15 @@ const styles = StyleSheet.create({
         width: 34,
         height: 34,
         borderRadius: Radii.full,
-        backgroundColor: 'rgba(255,255,255,0.2)',
+        backgroundColor: 'rgba(255,255,255,0.16)',
         alignItems: 'center',
         justifyContent: 'center',
     },
 
-    // Stat cards
+    // ── Stat cards ──
     statsRow: {
         flexDirection: 'row',
-        marginTop: Spacing.lg,
+        marginBottom: Spacing.xl,
         marginHorizontal: -Spacing.xs / 2,
     },
     statCard: {
@@ -536,10 +771,10 @@ const styles = StyleSheet.create({
         marginTop: 2,
     },
 
-    // Search + filter
+    // ── Search + filter ──
     searchRow: {
         flexDirection: 'row',
-        marginTop: Spacing.lg,
+        marginBottom: Spacing.lg,
     },
     searchBox: {
         flex: 1,
@@ -552,12 +787,12 @@ const styles = StyleSheet.create({
         paddingHorizontal: Spacing.md,
         height: 42,
         marginRight: Spacing.sm,
+        gap: Spacing.xs,
     },
     searchInput: {
         flex: 1,
         fontSize: Typography.base,
         color: Colors.charcoal,
-        marginLeft: Spacing.xs,
         padding: 0,
     },
     filterBtn: {
@@ -569,23 +804,54 @@ const styles = StyleSheet.create({
         borderRadius: Radii.md,
         paddingHorizontal: Spacing.md,
         height: 42,
+        maxWidth: 150,
+        gap: 6,
+    },
+    filterBtnActive: {
+        backgroundColor: ACCENTS.tealLight,
+        borderColor: ACCENTS.teal,
     },
     filterBtnText: {
         fontSize: Typography.base,
         color: Colors.charcoal,
         fontWeight: Typography.medium,
-        marginRight: 6,
+        flexShrink: 1,
+    },
+    filterBtnTextActive: {
+        color: ACCENTS.tealDark,
+        fontWeight: Typography.semiBold,
     },
 
-    // List card
+    // ── Section label ──
+    sectionLabelRow: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        justifyContent: 'space-between',
+        marginBottom: Spacing.sm,
+        paddingHorizontal: Spacing.xxs,
+    },
+    menuSectionLabel: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalLight,
+        letterSpacing: 2,
+    },
+    resultsCount: {
+        fontSize: Typography.xs,
+        color: Colors.charcoalLight,
+    },
+
+    // ── List card ──
     listCard: {
-        marginTop: Spacing.lg,
         backgroundColor: Colors.surface,
-        borderRadius: Radii.lg,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        minHeight: 220,
+        borderRadius: Radii.xl,
+        shadowColor: Colors.charcoal,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.06,
+        shadowRadius: 10,
+        elevation: 3,
         overflow: 'hidden',
+        minHeight: 220,
     },
     centerState: {
         alignItems: 'center',
@@ -599,14 +865,22 @@ const styles = StyleSheet.create({
         color: Colors.charcoalLight,
         textAlign: 'center',
     },
+    emptyIconRing: {
+        width: 68,
+        height: 68,
+        borderRadius: 34,
+        borderWidth: 2,
+        borderColor: Colors.border,
+        borderStyle: 'dashed',
+        padding: 3,
+        marginBottom: Spacing.sm,
+    },
     emptyIconWrap: {
-        width: 52,
-        height: 52,
-        borderRadius: Radii.full,
+        flex: 1,
+        borderRadius: 30,
         backgroundColor: Colors.primaryLight,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: Spacing.sm,
     },
     emptyTitle: {
         fontSize: Typography.md,
@@ -614,38 +888,49 @@ const styles = StyleSheet.create({
         color: Colors.charcoal,
         marginBottom: 2,
     },
+    clearFiltersBtn: {
+        marginTop: Spacing.md,
+        paddingVertical: Spacing.xs,
+        paddingHorizontal: Spacing.md,
+        borderRadius: Radii.full,
+        backgroundColor: ACCENTS.tealLight,
+    },
+    clearFiltersBtnText: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.semiBold,
+        color: ACCENTS.tealDark,
+    },
 
-    // Booking row
+    // ── Booking row ──
     bookingRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
         paddingVertical: Spacing.md,
         paddingHorizontal: Spacing.lg,
+        gap: 12,
     },
-    rowSeparator: {
-        height: 1,
-        backgroundColor: Colors.divider,
+    bookingIconWrap: {
+        width: 42,
+        height: 42,
+        borderRadius: 13,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     bookingRowLeft: {
         flex: 1,
-        marginRight: Spacing.md,
-    },
-    bookingNumber: {
-        fontSize: Typography.xs,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.medium,
+        marginRight: Spacing.sm,
     },
     bookingVenue: {
-        fontSize: Typography.md,
-        fontWeight: Typography.semiBold,
+        fontSize: 15,
+        fontWeight: Typography.bold,
         color: Colors.charcoal,
-        marginTop: 2,
+        marginBottom: 2,
     },
     bookingMeta: {
-        fontSize: Typography.xs,
+        fontSize: 11.5,
         color: Colors.charcoalLight,
-        marginTop: 2,
+        fontWeight: Typography.regular,
+        marginBottom: 6,
     },
     bookingRowRight: {
         alignItems: 'flex-end',
@@ -653,15 +938,16 @@ const styles = StyleSheet.create({
     statusPill: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: Spacing.sm,
-        paddingVertical: 3,
+        alignSelf: 'flex-start',
+        gap: 4,
+        paddingHorizontal: 9,
+        paddingVertical: 4,
         borderRadius: Radii.full,
-        marginBottom: Spacing.xs,
     },
     statusPillText: {
-        fontSize: Typography.xs,
-        fontWeight: Typography.semiBold,
-        marginLeft: 4,
+        fontSize: 10,
+        fontWeight: Typography.bold,
+        letterSpacing: 0.2,
     },
     bookingAmount: {
         fontSize: Typography.base,
@@ -669,13 +955,22 @@ const styles = StyleSheet.create({
         color: Colors.charcoal,
     },
     bookingShare: {
-        fontSize: Typography.xs,
+        fontSize: 11,
         color: Colors.success,
-        fontWeight: Typography.medium,
-        marginTop: 1,
+        fontWeight: Typography.semiBold,
+        marginTop: 2,
     },
+    menuChevronWrap: {
+        width: 28,
+        height: 28,
+        borderRadius: Spacing.sm,
+        backgroundColor: Colors.background,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    menuDivider: { height: 1, backgroundColor: Colors.background, marginLeft: 72 },
 
-    // Filter modal
+    // ── Filter modal ──
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(30,27,20,0.4)',
@@ -688,6 +983,21 @@ const styles = StyleSheet.create({
         paddingVertical: Spacing.sm,
         paddingHorizontal: Spacing.lg,
         paddingBottom: Spacing.xxl,
+    },
+    filterSheetHandle: {
+        alignSelf: 'center',
+        width: 36,
+        height: 4,
+        borderRadius: Radii.full,
+        backgroundColor: Colors.border,
+        marginBottom: Spacing.sm,
+    },
+    filterSheetTitle: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalLight,
+        letterSpacing: 1.5,
+        marginBottom: Spacing.xs,
     },
     filterOption: {
         flexDirection: 'row',

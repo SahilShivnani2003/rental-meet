@@ -6,7 +6,7 @@ export type City = {
 };
 
 export type State = {
-    name: string; 
+    name: string;
     placeId: string;
 };
 
@@ -112,6 +112,49 @@ export async function getCities(query: string): Promise<City[]> {
         return cities;
     } catch (error) {
         console.error("Error fetching cities:", error);
+        return [];
+    }
+}
+
+export async function getDistrictByState(
+    query: string,
+    state: string,
+): Promise<City[]> {
+    if (!query || !state) return [];
+
+    const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
+        query,
+    )}&types=(regions)&components=country:${countryCode}&key=${apiKey}`;
+
+    try {
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+            throw new Error(
+                data.error_message || "Failed to fetch districts",
+            );
+        }
+
+        const districts: City[] = (data.predictions ?? [])
+            .filter((prediction: any) => {
+                const types = prediction.types ?? [];
+                const description =
+                    prediction.description?.toLowerCase() ?? "";
+
+                return (
+                    types.includes("administrative_area_level_2") &&
+                    description.includes(state.toLowerCase())
+                );
+            })
+            .map((prediction: any) => ({
+                name: prediction.description.split(",")[0].trim(),
+                placeId: prediction.place_id,
+            }));
+
+        return districts;
+    } catch (error) {
+        console.error("Error fetching districts:", error);
         return [];
     }
 }

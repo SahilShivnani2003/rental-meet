@@ -1,10 +1,15 @@
+import { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import DocumentUploadCard from '../components/DocumentUploadCard';
 import Checkbox from '../components/Checkbox';
 import { Colors, Radii, Spacing, Typography } from '@/theme/theme';
 import Field from '@/components/UI/InputField';
-import { FieldErrors } from '@/utils/validation';
 import { AmbassadorRegistration } from '../types/AmbassadarRegister';
+import { FieldErrors } from '../validation/ambassadorValidation';
+import { useAlert } from '@/context/AlertContext';
+import { ApiError } from '@/types/ApiError';
+import { useUploadImage } from '@/features/profile/hooks/useUploadImage';
+import { useUploadDocument } from '@/features/venue/hooks/useUpload';
 
 interface StepDocumentsDeclarationProps {
     data: AmbassadorRegistration;
@@ -20,12 +25,37 @@ const DECLARATION_POINTS = [
     'I agree to RentalMeet™ Ambassador Program terms & conditions.',
 ];
 
+type DocumentField = keyof AmbassadorRegistration['documents'];
+
+// DocumentUploadCard only hands us a local file uri, so we build the
+// {uri, name, type} object the upload service expects from it here.
+const buildFileFromUri = (uri: string) => {
+    const name = uri.split('/').pop() || `upload-${Date.now()}.jpg`;
+    const extMatch = /\.(\w+)$/.exec(name);
+    const ext = extMatch ? extMatch[1].toLowerCase() : 'jpg';
+    const type = ext === 'png' ? 'image/png' : ext === 'pdf' ? 'application/pdf' : 'image/jpeg';
+    return { uri, name, type };
+};
+
 export default function StepDocumentsDeclaration({
     data,
     onChange,
     errors,
 }: StepDocumentsDeclarationProps) {
     const { documents, declaration } = data;
+    const alert = useAlert();
+
+    const { mutate: uploadDocument } = useUploadDocument();
+    const { mutate: uploadImage } = useUploadImage();
+
+    // The card has no "loading" prop and only ever reports a local uri, so we
+    // show that local uri as an optimistic preview while the upload is in
+    // flight, then swap it out for the server URL (or revert) once it settles.
+    const [localPreviews, setLocalPreviews] = useState<Partial<Record<DocumentField, string>>>({});
+    const [uploadingFields, setUploadingFields] = useState<Partial<Record<DocumentField, boolean>>>(
+        {},
+    );
+    const [uploadErrors, setUploadErrors] = useState<Partial<Record<DocumentField, string>>>({});
 
     const setDocument = <K extends keyof AmbassadorRegistration['documents']>(
         key: K,
@@ -41,37 +71,115 @@ export default function StepDocumentsDeclaration({
         onChange(prev => ({ ...prev, declaration: { ...prev.declaration, [key]: value } }));
     };
 
+    const handleDocumentPick = (
+        field: DocumentField,
+        localUri: string,
+        kind: 'document' | 'image' = 'document',
+    ) => {
+        setUploadErrors(prev => ({ ...prev, [field]: undefined }));
+        setLocalPreviews(prev => ({ ...prev, [field]: localUri }));
+        setUploadingFields(prev => ({ ...prev, [field]: true }));
+
+        const onDone = () => setUploadingFields(prev => ({ ...prev, [field]: false }));
+
+        const onSuccess = (result: any) => {
+            const url = result?.url ?? result?.data?.url;
+            if (!url) {
+                setUploadErrors(prev => ({
+                    ...prev,
+                    [field]: 'Upload succeeded but no URL was returned',
+                }));
+                alert.error('Upload failed', 'Upload succeeded but no URL was returned');
+                setLocalPreviews(prev => ({ ...prev, [field]: undefined }));
+                onDone();
+                return;
+            }
+            setDocument(field, url);
+            setLocalPreviews(prev => ({ ...prev, [field]: undefined }));
+            onDone();
+        };
+
+        const onError = (error: ApiError) => {
+            const message = error?.message || 'Failed to upload file. Please try again.';
+            setUploadErrors(prev => ({ ...prev, [field]: message }));
+            alert.error('Upload failed', message);
+            setLocalPreviews(prev => ({ ...prev, [field]: undefined }));
+            onDone();
+        };
+
+        if (kind === 'image') {
+            // useUploadImage (profile feature) expects a real FormData instance.
+            const formData = new FormData();
+            const file = buildFileFromUri(localUri);
+            formData.append('file', file as any);
+            formData.append('folder', 'ambassador-documents');
+
+            uploadImage(formData, { onSuccess, onError });
+        } else {
+            // useUploadDocument (venue feature) expects { file, folder }.
+            uploadDocument(
+                { file: buildFileFromUri(localUri), folder: 'ambassador-documents' },
+                { onSuccess, onError },
+            );
+        }
+    };
+
+    const displayUri = (field: DocumentField) => localPreviews[field] ?? documents[field];
+
     return (
         <View>
             <Text style={styles.heading}>Part I & J: Document Upload & Declaration</Text>
 
             <View style={styles.docRow}>
-                <DocumentUploadCard
-                    title="Aadhaar Card (Front Side)"
-                    required
-                    uri={documents.aadhaarFront}
-                    onChange={t => setDocument('aadhaarFront', t)}
-                    error={errors.aadhaarFront}
-                />
-                <DocumentUploadCard
-                    title="Aadhaar Card (Back Side)"
-                    uri={documents.aadhaarBack}
-                    onChange={t => setDocument('aadhaarBack', t)}
-                />
+                <View style={styles.docCell}>
+                    <DocumentUploadCard
+                        title="Aadhaar Card (Front Side)"
+                        required
+                        uri={displayUri('aadhaarFront')}
+                        onChange={uri => handleDocumentPick('aadhaarFront', uri, 'document')}
+                        error={errors.aadhaarFront || uploadErrors.aadhaarFront}
+                    />
+                    {uploadingFields.aadhaarFront && (
+                        <Text style={styles.uploadingText}>Uploading…</Text>
+                    )}
+                </View>
+                <View style={styles.docCell}>
+                    <DocumentUploadCard
+                        title="Aadhaar Card (Back Side)"
+                        uri={displayUri('aadhaarBack')}
+                        onChange={uri => handleDocumentPick('aadhaarBack', uri, 'document')}
+                        error={uploadErrors.aadhaarBack}
+                    />
+                    {uploadingFields.aadhaarBack && (
+                        <Text style={styles.uploadingText}>Uploading…</Text>
+                    )}
+                </View>
             </View>
 
             <View style={styles.docRow}>
-                <DocumentUploadCard
-                    title="PAN Card"
-                    optionalLabel
-                    uri={documents.panCard}
-                    onChange={t => setDocument('panCard', t)}
-                />
-                <DocumentUploadCard
-                    title="Passport Size Photo"
-                    uri={documents.passportPhoto}
-                    onChange={t => setDocument('passportPhoto', t)}
-                />
+                <View style={styles.docCell}>
+                    <DocumentUploadCard
+                        title="PAN Card"
+                        optionalLabel
+                        uri={displayUri('panCard')}
+                        onChange={uri => handleDocumentPick('panCard', uri, 'document')}
+                        error={uploadErrors.panCard}
+                    />
+                    {uploadingFields.panCard && (
+                        <Text style={styles.uploadingText}>Uploading…</Text>
+                    )}
+                </View>
+                <View style={styles.docCell}>
+                    <DocumentUploadCard
+                        title="Passport Size Photo"
+                        uri={displayUri('passportPhoto')}
+                        onChange={uri => handleDocumentPick('passportPhoto', uri, 'image')}
+                        error={uploadErrors.passportPhoto}
+                    />
+                    {uploadingFields.passportPhoto && (
+                        <Text style={styles.uploadingText}>Uploading…</Text>
+                    )}
+                </View>
             </View>
 
             <View style={[styles.declarationBox, !!errors.agreed && styles.declarationBoxError]}>
@@ -127,7 +235,15 @@ const styles = StyleSheet.create({
         color: Colors.charcoal,
         marginBottom: Spacing.lg,
     },
-    docRow: { flexDirection: 'row', gap: Spacing.md, marginBottom: Spacing.md },
+    docRow: { flexDirection: 'column', gap: Spacing.md, marginBottom: Spacing.md },
+    docCell: { flex: 1, minWidth: '46%' },
+    uploadingText: {
+        fontSize: 10.5,
+        fontWeight: Typography.semiBold,
+        color: Colors.primaryDark,
+        textAlign: 'center',
+        marginTop: 4,
+    },
     declarationBox: {
         backgroundColor: Colors.primaryLight,
         borderWidth: 1.5,
@@ -147,7 +263,12 @@ const styles = StyleSheet.create({
     bulletRow: { flexDirection: 'row', gap: 6, marginBottom: 5, paddingRight: Spacing.xs },
     bullet: { fontSize: 13, color: Colors.primaryDark, lineHeight: 19 },
     bulletText: { flex: 1, fontSize: 12.5, color: Colors.charcoalMid, lineHeight: 19 },
-    agreeRow: { marginTop: Spacing.sm, paddingTop: Spacing.sm, borderTopWidth: 1, borderTopColor: Colors.primaryBorder },
-    pairRow: { flexDirection: 'row', gap: Spacing.md },
+    agreeRow: {
+        marginTop: Spacing.sm,
+        paddingTop: Spacing.sm,
+        borderTopWidth: 1,
+        borderTopColor: Colors.primaryBorder,
+    },
+    pairRow: { flexDirection: 'column', gap: Spacing.md },
     pairItem: { flex: 1 },
 });

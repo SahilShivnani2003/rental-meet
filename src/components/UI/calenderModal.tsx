@@ -45,6 +45,12 @@ interface CalendarModalProps {
     selectedDate: string;
     onSelect: (date: string) => void;
     onClose: () => void;
+    /** Earliest selectable date. Defaults to tomorrow (original booking behavior). */
+    minDate?: Date;
+    /** Latest selectable date. Defaults to unbounded (original booking behavior). */
+    maxDate?: Date;
+    /** Label shown for out-of-range days in the legend. Defaults to "Unavailable". */
+    outOfRangeLabel?: string;
 }
 
 export default function CalendarModal({
@@ -52,20 +58,44 @@ export default function CalendarModal({
     selectedDate,
     onSelect,
     onClose,
+    minDate,
+    maxDate,
+    outOfRangeLabel = 'Unavailable',
 }: CalendarModalProps) {
     const todayDate = new Date();
     todayDate.setHours(0, 0, 0, 0);
-    const minDate = new Date(todayDate);
-    minDate.setDate(minDate.getDate() + 1);
+
+    const defaultMinDate = new Date(todayDate);
+    defaultMinDate.setDate(defaultMinDate.getDate() + 1);
+
+    const effectiveMin = useMemo(() => {
+        const d = minDate ? new Date(minDate) : defaultMinDate;
+        d.setHours(0, 0, 0, 0);
+        return d;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [minDate]);
+
+    const effectiveMax = useMemo(() => {
+        if (!maxDate) return null;
+        const d = new Date(maxDate);
+        d.setHours(0, 0, 0, 0);
+        return d;
+    }, [maxDate]);
+
     const parsedSelected = selectedDate ? new Date(selectedDate + 'T00:00:00') : null;
-    const initialViewDate = parsedSelected && parsedSelected >= minDate ? parsedSelected : minDate;
+    const withinRange = (d: Date) => d >= effectiveMin && (!effectiveMax || d <= effectiveMax);
+
+    const fallbackViewDate = effectiveMax ?? effectiveMin;
+    const initialViewDate =
+        parsedSelected && withinRange(parsedSelected) ? parsedSelected : fallbackViewDate;
 
     const [viewYear, setViewYear] = useState(initialViewDate.getFullYear());
     const [viewMonth, setViewMonth] = useState(initialViewDate.getMonth());
 
     useEffect(() => {
         if (visible) {
-            const d = parsedSelected && parsedSelected >= minDate ? parsedSelected : minDate;
+            const d =
+                parsedSelected && withinRange(parsedSelected) ? parsedSelected : fallbackViewDate;
             setViewYear(d.getFullYear());
             setViewMonth(d.getMonth());
         }
@@ -88,8 +118,13 @@ export default function CalendarModal({
     };
 
     const canGoPrev =
-        viewYear > minDate.getFullYear() ||
-        (viewYear === minDate.getFullYear() && viewMonth > minDate.getMonth());
+        viewYear > effectiveMin.getFullYear() ||
+        (viewYear === effectiveMin.getFullYear() && viewMonth > effectiveMin.getMonth());
+
+    const canGoNext =
+        !effectiveMax ||
+        viewYear < effectiveMax.getFullYear() ||
+        (viewYear === effectiveMax.getFullYear() && viewMonth < effectiveMax.getMonth());
 
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -111,8 +146,16 @@ export default function CalendarModal({
                     <Text style={cal.monthLabel}>
                         {MONTH_NAMES[viewMonth]} {viewYear}
                     </Text>
-                    <TouchableOpacity style={cal.navBtn} onPress={nextMonth} activeOpacity={0.7}>
-                        <Ionicons name="chevron-forward" size={18} color={Colors.charcoal} />
+                    <TouchableOpacity
+                        style={[cal.navBtn, !canGoNext && cal.navBtnDisabled]}
+                        onPress={canGoNext ? nextMonth : undefined}
+                        activeOpacity={0.7}
+                    >
+                        <Ionicons
+                            name="chevron-forward"
+                            size={18}
+                            color={canGoNext ? Colors.charcoal : Colors.border}
+                        />
                     </TouchableOpacity>
                 </View>
                 <View style={cal.dayHeader}>
@@ -132,7 +175,8 @@ export default function CalendarModal({
                     {grid.map((date, idx) => {
                         if (!date) return <View key={`empty-${idx}`} style={cal.cell} />;
                         const dateStr = toDateStr(date);
-                        const isPast = date < minDate;
+                        const isOutOfRange =
+                            date < effectiveMin || (!!effectiveMax && date > effectiveMax);
                         const isSelected = dateStr === selectedDate;
                         const isToday = toDateStr(date) === toDateStr(todayDate);
                         const isWknd = date.getDay() === 0 || date.getDay() === 6;
@@ -142,24 +186,27 @@ export default function CalendarModal({
                                 style={[
                                     cal.cell,
                                     isSelected && cal.cellSelected,
-                                    !isPast && !isSelected && isWknd && cal.cellWeekend,
-                                    isPast && cal.cellDisabled,
+                                    !isOutOfRange && !isSelected && isWknd && cal.cellWeekend,
+                                    isOutOfRange && cal.cellDisabled,
                                 ]}
                                 onPress={() => {
-                                    if (!isPast) {
+                                    if (!isOutOfRange) {
                                         onSelect(dateStr);
                                         onClose();
                                     }
                                 }}
-                                activeOpacity={isPast ? 1 : 0.75}
-                                disabled={isPast}
+                                activeOpacity={isOutOfRange ? 1 : 0.75}
+                                disabled={isOutOfRange}
                             >
                                 <Text
                                     style={[
                                         cal.cellText,
                                         isSelected && cal.cellTextSelected,
-                                        isPast && cal.cellTextDisabled,
-                                        !isPast && !isSelected && isWknd && cal.cellTextWeekend,
+                                        isOutOfRange && cal.cellTextDisabled,
+                                        !isOutOfRange &&
+                                            !isSelected &&
+                                            isWknd &&
+                                            cal.cellTextWeekend,
                                     ]}
                                 >
                                     {date.getDate()}
@@ -173,7 +220,7 @@ export default function CalendarModal({
                     {[
                         { color: Colors.primary, label: 'Selected' },
                         { color: Colors.primaryLight, label: 'Weekend', bordered: true },
-                        { color: Colors.background, label: 'Unavailable' },
+                        { color: Colors.background, label: outOfRangeLabel },
                     ].map(item => (
                         <View key={item.label} style={cal.legendItem}>
                             <View

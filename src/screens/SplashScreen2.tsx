@@ -33,6 +33,7 @@ export default function SplashScreen2({ navigation }: SplashScreenProps) {
                 if (user?.role === 'owner') navigation.replace('owner');
                 else if (user?.role === 'vendor') navigation.replace('vendor');
                 else if (user?.role === 'customer') navigation.replace('client');
+                else if (user?.role === 'ambassador') navigation.replace('ambassador');
                 else navigation.replace('onBoarding');
             } else {
                 navigation.replace('onBoarding');

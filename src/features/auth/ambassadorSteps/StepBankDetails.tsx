@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors, Spacing, Typography } from '@/theme/theme';
 import Field from '@/components/UI/InputField';
-import { FieldErrors } from '@/utils/validation';
 import { AmbassadorRegistration } from '../types/AmbassadarRegister';
+import { FieldErrors } from '../validation/ambassadorValidation';
 
 interface StepBankDetailsProps {
     data: AmbassadorRegistration;
@@ -94,8 +94,8 @@ export default function StepBankDetails({ data, onChange, errors }: StepBankDeta
                 label="Referred By (Ambassador Referral Code)"
                 placeholder="E.G. AMB82910X (OPTIONAL)"
                 icon="gift-outline"
-                value={data.referredBy ?? ''}
-                onChangeText={t => onChange(prev => ({ ...prev, referredBy: t.toUpperCase() }))}
+                value={data.referralCode ?? ''}
+                onChangeText={t => onChange(prev => ({ ...prev, referralCode: t.toUpperCase() }))}
                 autoCapitalize="characters"
             />
         </View>
@@ -114,6 +114,6 @@ const styles = StyleSheet.create({
         color: Colors.info,
         marginBottom: Spacing.lg,
     },
-    pairRow: { flexDirection: 'row', gap: Spacing.md },
+    pairRow: { flexDirection: 'column', gap: Spacing.md },
     pairItem: { flex: 1 },
 });

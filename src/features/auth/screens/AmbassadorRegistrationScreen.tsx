@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
     View,
     Text,
@@ -8,9 +8,12 @@ import {
     KeyboardAvoidingView,
     Platform,
     ActivityIndicator,
-    Alert,
+    Animated,
+    Dimensions,
+    StatusBar,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Radii, Shadows, Spacing, Typography } from '@/theme/theme';
 import StepAddressDetails from '../ambassadorSteps/StepAddressDetails';
 import StepBankDetails from '../ambassadorSteps/StepBankDetails';
@@ -19,13 +22,24 @@ import StepPersonalInfo from '../ambassadorSteps/StepPersonalInfo';
 import StepProfessionalBackground from '../ambassadorSteps/StepProfessionalBackground';
 import StepVenueNetwork from '../ambassadorSteps/StepVenueNetwork';
 import StepIndicator from '../components/StepIndicator';
-import { submitAmbassadorRegistration } from '../service/ambassadorApi';
 import { AmbassadorRegistration } from '../types/AmbassadarRegister';
-import { createEmptyAmbassadorForm } from '@/utils/defaults';
-import { FieldErrors, validatePersonalInfo, validateAddressDetails, validateProfessionalBackground, validateVenueNetwork, validateBankDetails, validateDocumentsAndDeclaration } from '@/utils/validation';
+import {
+    FieldErrors,
+    validatePersonalInfo,
+    validateAddressDetails,
+    validateProfessionalBackground,
+    validateVenueNetwork,
+    validateBankDetails,
+    validateDocumentsAndDeclaration,
+} from '../validation/ambassadorValidation';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '@/types/RootStackParamList';
 import { useAlert } from '@/context/AlertContext';
+import { createEmptyAmbassadorForm } from '../validation/createAmbassadorForm';
+import { useAmbassadorApply } from '../hooks/useRegister';
+import { ApiError } from '@/types/ApiError';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const STEP_LABELS = [
     'Personal Information',
@@ -36,9 +50,26 @@ const STEP_LABELS = [
     'Documents & Declaration',
 ];
 
-type AmbassadorRegistrationScreenProps = NativeStackScreenProps<RootStackParamList, 'ambassadorRegister'>
-export default function AmbassadorRegistrationScreen({navigation}: AmbassadorRegistrationScreenProps) {
+// Short, friendly sub-copy shown under the big heading for each step.
+const STEP_SUBTITLES = [
+    "Tell us a bit about yourself so we know who's joining.",
+    'Where are you based, and where would you like to work?',
+    'Your experience helps us match you to the right venues.',
+    'Share the venues and network you already bring to the table.',
+    'Add your payout details and referral info, if you have one.',
+    'Upload your documents and confirm the declaration to finish up.',
+];
+
+type AmbassadorRegistrationScreenProps = NativeStackScreenProps<
+    RootStackParamList,
+    'ambassadorRegister'
+>;
+
+export default function AmbassadorRegistrationScreen({
+    navigation,
+}: AmbassadorRegistrationScreenProps) {
     const alert = useAlert();
+    const insets = useSafeAreaInsets();
     const [stepIndex, setStepIndex] = useState(0);
     const [form, setForm] = useState<AmbassadorRegistration>(createEmptyAmbassadorForm());
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -46,6 +77,55 @@ export default function AmbassadorRegistrationScreen({navigation}: AmbassadorReg
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const scrollRef = useRef<ScrollView>(null);
+    const { mutate: applyAmbassador } = useAmbassadorApply();
+
+    // ── Animations ────────────────────────────────────────────────────────────
+    const fadeAnim = useRef(new Animated.Value(0)).current;
+    const slideAnim = useRef(new Animated.Value(28)).current;
+    const shakeAnim = useRef(new Animated.Value(0)).current;
+    const btnScale = useRef(new Animated.Value(1)).current;
+
+    // Initial mount entrance.
+    useEffect(() => {
+        Animated.parallel([
+            Animated.timing(fadeAnim, { toValue: 1, duration: 380, useNativeDriver: true }),
+            Animated.spring(slideAnim, {
+                toValue: 0,
+                useNativeDriver: true,
+                speed: 14,
+                bounciness: 6,
+            }),
+        ]).start();
+    }, []);
+
+    useEffect(() => {
+        fadeAnim.setValue(0);
+        slideAnim.setValue(20);
+        Animated.parallel([
+            Animated.timing(fadeAnim, { toValue: 1, duration: 320, useNativeDriver: true }),
+            Animated.spring(slideAnim, {
+                toValue: 0,
+                useNativeDriver: true,
+                speed: 16,
+                bounciness: 5,
+            }),
+        ]).start();
+    }, [stepIndex]);
+
+    const shakeCard = () =>
+        Animated.sequence([
+            Animated.timing(shakeAnim, { toValue: 9, duration: 55, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: -9, duration: 55, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: 7, duration: 55, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: -7, duration: 55, useNativeDriver: true }),
+            Animated.timing(shakeAnim, { toValue: 0, duration: 55, useNativeDriver: true }),
+        ]).start();
+
+    const bounceButton = () =>
+        Animated.sequence([
+            Animated.timing(btnScale, { toValue: 0.95, duration: 80, useNativeDriver: true }),
+            Animated.spring(btnScale, { toValue: 1, useNativeDriver: true, speed: 20 }),
+        ]).start();
 
     const updateForm = (updater: (prev: AmbassadorRegistration) => AmbassadorRegistration) => {
         setForm(updater);
@@ -78,7 +158,11 @@ export default function AmbassadorRegistrationScreen({navigation}: AmbassadorReg
     };
 
     const goNext = () => {
-        if (!validateCurrentStep()) return;
+        bounceButton();
+        if (!validateCurrentStep()) {
+            shakeCard();
+            return;
+        }
         if (stepIndex < STEP_LABELS.length - 1) {
             setErrors({});
             setStepIndex(i => i + 1);
@@ -95,20 +179,37 @@ export default function AmbassadorRegistrationScreen({navigation}: AmbassadorReg
         scrollRef.current?.scrollTo({ y: 0, animated: false });
     };
 
+    // Screen-level back button: step back through the form first, then leave.
+    const handleBackPress = () => {
+        if (stepIndex > 0) {
+            goBack();
+        } else {
+            navigation.goBack();
+        }
+    };
+
     const handleSubmit = async () => {
         setSubmitError(null);
         setSubmitting(true);
-        try {
-            const result = await submitAmbassadorRegistration(form);
-            if (result.success) {
 
-                alert.success('Registration submitted', 'Form submitted successfully wait for approval.');
-            }
-        } catch (err) {
-            setSubmitError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
-        } finally {
-            setSubmitting(false);
-        }
+        applyAmbassador(form, {
+            onSuccess: data => {
+                if (data.success) {
+                    navigation.replace('login');
+                    alert.success(
+                        'Applicatio submitted',
+                        'Form submitted successfully wait for approval.',
+                    );
+                }
+
+                setSubmitting(false);
+            },
+            onError: (error: ApiError) => {
+                alert.error('Application failed', error?.message || 'Something went wrong');
+                shakeCard();
+                setSubmitting(false);
+            },
+        });
     };
 
     const renderStep = () => {
@@ -126,13 +227,17 @@ export default function AmbassadorRegistrationScreen({navigation}: AmbassadorReg
             case 1:
                 return <StepAddressDetails data={form} onChange={updateForm} errors={errors} />;
             case 2:
-                return <StepProfessionalBackground data={form} onChange={updateForm} errors={errors} />;
+                return (
+                    <StepProfessionalBackground data={form} onChange={updateForm} errors={errors} />
+                );
             case 3:
                 return <StepVenueNetwork data={form} onChange={updateForm} errors={errors} />;
             case 4:
                 return <StepBankDetails data={form} onChange={updateForm} errors={errors} />;
             case 5:
-                return <StepDocumentsDeclaration data={form} onChange={updateForm} errors={errors} />;
+                return (
+                    <StepDocumentsDeclaration data={form} onChange={updateForm} errors={errors} />
+                );
             default:
                 return null;
         }
@@ -143,83 +248,184 @@ export default function AmbassadorRegistrationScreen({navigation}: AmbassadorReg
     return (
         <KeyboardAvoidingView
             style={styles.flex}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
-            <View style={styles.header}>
-                <Text style={styles.headerTitle}>Ambassador Registration</Text>
-                <StepIndicator steps={STEP_LABELS} currentIndex={stepIndex} />
-            </View>
-
             <ScrollView
                 ref={scrollRef}
-                style={styles.flex}
-                contentContainerStyle={styles.scrollContent}
+                style={styles.container}
+                contentContainerStyle={[
+                    styles.scrollContent,
+                    // Reserve room at the bottom so content never renders
+                    // underneath the sticky footer.
+                    { paddingBottom: 32 + insets.bottom },
+                ]}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
             >
-                {renderStep()}
+                <View style={styles.arcTop} />
 
-                {!!submitError && (
-                    <View style={styles.submitErrorBox}>
-                        <Ionicons name="alert-circle" size={16} color={Colors.danger} />
-                        <Text style={styles.submitErrorText}>{submitError}</Text>
-                    </View>
-                )}
-            </ScrollView>
-
-            <View style={styles.footer}>
-                {stepIndex > 0 && (
-                    <TouchableOpacity style={styles.backBtn} onPress={goBack} disabled={submitting}>
-                        <Ionicons name="chevron-back" size={18} color={Colors.charcoalMid} />
-                        <Text style={styles.backBtnText}>Back</Text>
+                {/* Top nav */}
+                <Animated.View style={[styles.topBar, { opacity: fadeAnim }]}>
+                    <TouchableOpacity style={styles.backBtn} onPress={handleBackPress}>
+                        <Ionicons name="arrow-back" size={20} color={Colors.charcoal} />
                     </TouchableOpacity>
-                )}
-                <TouchableOpacity
-                    style={[styles.nextBtn, submitting && styles.nextBtnDisabled]}
-                    onPress={goNext}
-                    disabled={submitting}
-                    activeOpacity={0.85}
+                    <Text style={styles.topBarTitle}>Ambassador Registration</Text>
+                    <View style={{ width: 44 }} />
+                </Animated.View>
+
+                {/* Step indicator */}
+                <Animated.View style={[styles.stepIndicatorWrap, { opacity: fadeAnim }]}>
+                    <StepIndicator steps={STEP_LABELS} currentIndex={stepIndex} />
+                </Animated.View>
+
+                {/* Heading */}
+                <Animated.View style={[styles.heading, { opacity: fadeAnim }]}>
+                    <Text style={styles.stepCounter}>
+                        STEP {stepIndex + 1} OF {STEP_LABELS.length}
+                    </Text>
+                    <Text style={styles.headingTitle}>{STEP_LABELS[stepIndex]}</Text>
+                    <Text style={styles.headingSubtitle}>{STEP_SUBTITLES[stepIndex]}</Text>
+                </Animated.View>
+
+                {/* Form card */}
+                <Animated.View
+                    style={[
+                        styles.card,
+                        {
+                            opacity: fadeAnim,
+                            transform: [{ translateY: slideAnim }, { translateX: shakeAnim }],
+                        },
+                    ]}
                 >
-                    {submitting ? (
-                        <ActivityIndicator size="small" color={Colors.white} />
-                    ) : (
-                        <>
-                            <Text style={styles.nextBtnText}>{isLastStep ? 'Submit' : 'Next'}</Text>
-                            <Ionicons
-                                name={isLastStep ? 'checkmark' : 'chevron-forward'}
-                                size={18}
-                                color={Colors.white}
-                            />
-                        </>
+                    {renderStep()}
+
+                    {!!submitError && (
+                        <View style={styles.submitErrorBox}>
+                            <Ionicons name="alert-circle" size={16} color={Colors.danger} />
+                            <Text style={styles.submitErrorText}>{submitError}</Text>
+                        </View>
                     )}
-                </TouchableOpacity>
-            </View>
+
+                    <View style={styles.footer}>
+                        {stepIndex > 0 && (
+                            <TouchableOpacity
+                                style={styles.backFooterBtn}
+                                onPress={goBack}
+                                disabled={submitting}
+                            >
+                                <Ionicons
+                                    name="chevron-back"
+                                    size={18}
+                                    color={Colors.charcoalMid}
+                                />
+                                <Text style={styles.backFooterBtnText}>Back</Text>
+                            </TouchableOpacity>
+                        )}
+                        <Animated.View
+                            style={[styles.nextBtnWrap, { transform: [{ scale: btnScale }] }]}
+                        >
+                            <TouchableOpacity
+                                style={[styles.nextBtn, submitting && styles.nextBtnDisabled]}
+                                onPress={goNext}
+                                disabled={submitting}
+                                activeOpacity={0.85}
+                            >
+                                {submitting ? (
+                                    <ActivityIndicator size="small" color={Colors.white} />
+                                ) : (
+                                    <>
+                                        <Text style={styles.nextBtnText}>
+                                            {isLastStep ? 'Submit' : 'Next'}
+                                        </Text>
+                                        <Ionicons
+                                            name={isLastStep ? 'checkmark' : 'chevron-forward'}
+                                            size={18}
+                                            color={Colors.white}
+                                        />
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </Animated.View>
+                    </View>
+                </Animated.View>
+            </ScrollView>
         </KeyboardAvoidingView>
     );
 }
 
 const styles = StyleSheet.create({
     flex: { flex: 1, backgroundColor: Colors.background },
-    header: {
-        backgroundColor: Colors.surface,
-        paddingHorizontal: Spacing.xl,
-        paddingTop: Spacing.lg,
-        paddingBottom: Spacing.md,
-        borderBottomWidth: 1,
-        borderBottomColor: Colors.border,
-        ...Shadows.header,
+    container: { flex: 1, backgroundColor: Colors.background },
+    scrollContent: { flexGrow: 1, alignItems: 'center' },
+
+    arcTop: {
+        position: 'absolute',
+        top: -SCREEN_WIDTH * 0.5,
+        left: -SCREEN_WIDTH * 0.3,
+        width: SCREEN_WIDTH * 1.1,
+        height: SCREEN_WIDTH * 1.1,
+        borderRadius: SCREEN_WIDTH * 0.55,
+        backgroundColor: Colors.primaryLight,
+        opacity: 0.5,
     },
-    headerTitle: {
-        fontSize: Typography.xl,
+
+    topBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        width: SCREEN_WIDTH,
+        paddingHorizontal: Spacing.lg,
+        paddingTop: 24,
+        paddingBottom: Spacing.sm,
+    },
+    backBtn: {
+        width: 44,
+        height: 44,
+        borderRadius: Radii.md,
+        backgroundColor: Colors.surface,
+        alignItems: 'center',
+        justifyContent: 'center',
+        ...Shadows.card,
+    },
+    topBarTitle: {
+        fontSize: 16,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal,
+        letterSpacing: -0.2,
+    },
+
+    stepIndicatorWrap: {
+        width: SCREEN_WIDTH - 32,
+        marginTop: Spacing.md,
+        marginBottom: Spacing.sm,
+    },
+
+    heading: { width: SCREEN_WIDTH - 32, marginBottom: Spacing.lg },
+    stepCounter: {
+        fontSize: 11,
+        fontWeight: Typography.bold,
+        color: Colors.primary,
+        letterSpacing: 1.6,
+        marginBottom: 6,
+    },
+    headingTitle: {
+        fontSize: 26,
         fontWeight: Typography.extraBold,
         color: Colors.charcoal,
-        marginBottom: Spacing.md,
-        letterSpacing: Typography.tight,
+        letterSpacing: -0.6,
+        lineHeight: 32,
+        marginBottom: 8,
     },
-    scrollContent: {
+    headingSubtitle: { fontSize: 13, color: Colors.charcoalLight, lineHeight: 20 },
+
+    card: {
+        width: SCREEN_WIDTH - 32,
+        backgroundColor: Colors.surface,
+        borderRadius: Radii.xxl,
         padding: Spacing.xl,
-        paddingBottom: Spacing.xxl,
+        ...Shadows.header,
     },
+
     submitErrorBox: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -229,38 +435,50 @@ const styles = StyleSheet.create({
         padding: Spacing.md,
         marginTop: Spacing.md,
     },
-    submitErrorText: { flex: 1, fontSize: 12.5, color: Colors.danger, fontWeight: Typography.medium },
+    submitErrorText: {
+        flex: 1,
+        fontSize: 12.5,
+        color: Colors.danger,
+        fontWeight: Typography.medium,
+    },
+
     footer: {
         flexDirection: 'row',
         gap: Spacing.md,
         paddingHorizontal: Spacing.xl,
-        paddingVertical: Spacing.md,
+        paddingTop: Spacing.md,
         backgroundColor: Colors.surface,
         borderTopWidth: 1,
         borderTopColor: Colors.border,
     },
-    backBtn: {
+    backFooterBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 4,
-        height: 50,
+        height: 56,
         paddingHorizontal: Spacing.lg,
         borderRadius: Radii.md,
         backgroundColor: Colors.background,
         justifyContent: 'center',
     },
-    backBtnText: { fontSize: 14, fontWeight: Typography.bold, color: Colors.charcoalMid },
+    backFooterBtnText: { fontSize: 14, fontWeight: Typography.bold, color: Colors.charcoalMid },
+    nextBtnWrap: { flex: 1 },
     nextBtn: {
         flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         gap: 6,
-        height: 50,
+        height: 56,
         borderRadius: Radii.md,
-        backgroundColor: Colors.primary,
-        ...Shadows.primary,
+        backgroundColor: Colors.charcoal,
+        ...Shadows.floating,
     },
     nextBtnDisabled: { opacity: 0.7 },
-    nextBtnText: { fontSize: 15, fontWeight: Typography.bold, color: Colors.white },
+    nextBtnText: {
+        fontSize: 16,
+        fontWeight: Typography.extraBold,
+        color: Colors.white,
+        letterSpacing: 0.3,
+    },
 });

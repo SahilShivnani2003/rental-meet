@@ -1,8 +1,14 @@
 import { useMutation } from "@tanstack/react-query"
-import { registerUser } from "../service/authService"
+import { registerAmbassador, registerUser } from "../service/authService"
 
-export const useRegister = () =>{
+export const useRegister = () => {
     return useMutation({
         mutationFn: registerUser,
+    })
+}
+
+export const useAmbassadorApply = () => {
+    return useMutation({
+        mutationFn: registerAmbassador,
     })
 }

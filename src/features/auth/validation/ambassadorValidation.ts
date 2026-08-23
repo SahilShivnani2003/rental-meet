@@ -1,4 +1,4 @@
-import { AmbassadorRegistration } from '@/types/ambassador.types';
+import { AmbassadorRegistration } from '../types/AmbassadarRegister';
 
 export type FieldErrors = Record<string, string>;
 
@@ -76,10 +76,7 @@ export function validateAddressDetails(data: AmbassadorRegistration): FieldError
     return errors;
 }
 
-export function validateProfessionalBackground(_data: AmbassadorRegistration): FieldErrors {
-    // No field in Part C&D carries an asterisk in the source screenshot, and
-    // "I want to join RentalMeet as" always has a selected default value, so
-    // there is nothing that can block progression here.
+export function validateProfessionalBackground(_data: AmbassadorRegistration): FieldErrors {    
     return {};
 }
 

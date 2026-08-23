@@ -1,4 +1,4 @@
-import { AmbassadorRegistration } from '@/types/ambassador.types';
+import { AmbassadorRegistration } from '../types/AmbassadarRegister';
 
 export function createEmptyAmbassadorForm(): AmbassadorRegistration {
     return {
@@ -92,7 +92,7 @@ export function createEmptyAmbassadorForm(): AmbassadorRegistration {
             place: '',
         },
 
-        referredBy: '',
+        referralCode: '',
     };
 }
 

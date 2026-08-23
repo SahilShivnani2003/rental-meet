@@ -87,6 +87,7 @@ export const requestAmbassadorPayouts = async (data: CreateAmbassadorPayout) => 
 export const getAmbassadorProfile = async () => {
     try {
         const response = await privateClient.get(`${Base}/profile`);
+        console.log('founded profile response : ', response.data);
         return response.data;
     } catch (error) {
         console.error('failed to get profile : ', error);
@@ -94,9 +95,9 @@ export const getAmbassadorProfile = async () => {
     }
 }
 
-export const updateAmbassadorProfile = async () => {
+export const updateAmbassadorProfile = async (data:any) => {
     try {
-        const reposne = await privateClient.put(`${Base}/profile`);
+        const reposne = await privateClient.put(`${Base}/profile`, data);
         return reposne.data;
     } catch (error) {
         console.error('failed to update ambassador profile : ', error);

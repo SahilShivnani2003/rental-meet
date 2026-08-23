@@ -9,8 +9,12 @@ import {
     ActivityIndicator,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { useGetAmbassadorDashboard, useGetAmbassadorEarnings, useGetAmbassadorPayouts, useRequestAmbassadorPayouts } from '../hooks/useAmbassador';
-
+import {
+    useGetAmbassadorDashboard,
+    useGetAmbassadorEarnings,
+    useGetAmbassadorPayouts,
+    useRequestAmbassadorPayouts,
+} from '../hooks/useAmbassador';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type LedgerTab = 'ledger' | 'settlements';
@@ -82,6 +86,76 @@ const StatCard = ({
     </View>
 );
 
+const formatDate = (iso?: string) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+const REWARD_TYPE_META: Record<string, { icon: string; color: string; label: string }> = {
+    listing_reward: { icon: 'ribbon-outline', color: Colors.primary, label: 'Listing Reward' },
+    challenge_bonus: { icon: 'flash-outline', color: Colors.info, label: 'Challenge Bonus' },
+    booking_share: { icon: 'trending-up-outline', color: '#7C3AED', label: 'Booking Share' },
+};
+
+const STATUS_META: Record<string, { bg: string; fg: string }> = {
+    credited: { bg: Colors.successLight ?? '#DCFCE7', fg: Colors.success },
+    pending: { bg: Colors.warningLight, fg: Colors.charcoalWarm },
+    failed: { bg: '#FEE2E2', fg: Colors.danger ?? '#D64545' },
+};
+
+const LedgerRow = ({ entry }: { entry: any }) => {
+    const typeMeta = REWARD_TYPE_META[entry?.rewardType] ?? {
+        icon: 'cash-outline',
+        color: Colors.charcoalMid,
+        label: 'Reward',
+    };
+    const statusMeta = STATUS_META[entry?.status] ?? {
+        bg: Colors.background,
+        fg: Colors.charcoalMid,
+    };
+    const venueName = entry?.venue?.businessName;
+
+    return (
+        <View style={styles.ledgerRow}>
+            <View style={[styles.ledgerIconWrap, { backgroundColor: `${typeMeta.color}1F` }]}>
+                <Ionicons name={typeMeta.icon} size={16} color={typeMeta.color} />
+            </View>
+
+            <View style={styles.ledgerRowMain}>
+                <Text style={styles.ledgerRowTitle} numberOfLines={2}>
+                    {entry?.description ?? typeMeta.label}
+                </Text>
+                <View style={styles.ledgerRowMetaRow}>
+                    {!!venueName && (
+                        <Text style={styles.ledgerRowMeta} numberOfLines={1}>
+                            {venueName}
+                        </Text>
+                    )}
+                    {!!entry?.createdAt && (
+                        <Text style={styles.ledgerRowMeta}>
+                            {venueName ? ' · ' : ''}
+                            {formatDate(entry.createdAt)}
+                        </Text>
+                    )}
+                </View>
+            </View>
+
+            <View style={styles.ledgerRowRight}>
+                <Text style={styles.ledgerRowAmount}>+₹{entry?.amount ?? 0}</Text>
+                {!!entry?.status && (
+                    <View style={[styles.ledgerStatusPill, { backgroundColor: statusMeta.bg }]}>
+                        <Text style={[styles.ledgerStatusText, { color: statusMeta.fg }]}>
+                            {entry.status}
+                        </Text>
+                    </View>
+                )}
+            </View>
+        </View>
+    );
+};
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function EarningsWalletScreen() {
@@ -92,18 +166,30 @@ export default function EarningsWalletScreen() {
 
     const [activeTab, setActiveTab] = React.useState<LedgerTab>('ledger');
 
-    const availableBalance = dashboard?.availableBalance ?? 0;
-    const listingRewards = earnings?.listingRewards ?? 0;
-    const streakChallengeEarnings = earnings?.streakChallengeEarnings ?? 0;
-    const bookingShareEarnings = earnings?.bookingShareEarnings ?? 0;
-    const bookingShareLocked = !dashboard?.streak?.isThirtyFiveComplete;
+    const availableBalance = earnings?.walletBalance ?? 0;
+    const listingRewards = earnings?.breakdown?.listingRewards ?? 0;
+    const streakChallengeEarnings = earnings?.breakdown?.challengeBonuses ?? 0;
+    const bookingShareEarnings = earnings?.breakdown?.bookingShare ?? 0;
+    const bookingShareLocked = !earnings?.profitShareStatus?.profitShareUnlocked;
 
-    const todaysVenues = dashboard?.streak?.todaysVenues ?? 0;
-    const streakTotalVenues = dashboard?.streak?.totalVenues ?? 0;
-    const streakDaysComplete = dashboard?.streak?.daysComplete ?? 0;
+    const todaysVenues = earnings?.profitShareStatus?.todayVerifiedCount ?? 0;
+    const streakTotalVenues = earnings?.profitShareStatus?.totalStreakVenues ?? 0;
+    const streakDaysComplete = earnings?.profitShareStatus?.streakDaysCompleted ?? 0;
+    const streakTarget = earnings?.profitShareStatus?.streakTarget ?? 7;
+    const totalVenuesTarget = earnings?.profitShareStatus?.totalVenuesTarget ?? 35;
+    const dailyTarget = earnings?.profitShareStatus?.dailyTarget ?? 5;
 
-    const ledgerEntries = earnings?.transactions ?? [];
-    const settlementEntries = payouts ?? [];
+    const ledgerEntries = Array.isArray(earnings?.recentRewards) ? earnings.recentRewards : [];
+
+    const settlementEntries = Array.isArray(payouts)
+        ? payouts
+        : Array.isArray(payouts?.data)
+        ? payouts.data
+        : Array.isArray(payouts?.payouts)
+        ? payouts.payouts
+        : Array.isArray(payouts?.settlements)
+        ? payouts.settlements
+        : [];
 
     const visibleEntries = activeTab === 'ledger' ? ledgerEntries : settlementEntries;
 
@@ -162,18 +248,23 @@ export default function EarningsWalletScreen() {
 
                     <View style={styles.streakSidePanel}>
                         <View style={styles.streakSideHeaderRow}>
-                            <Text style={styles.streakSideHeader}>7-Day Streak (5 Venues/Day)</Text>
+                            <Text
+                                style={styles.streakSideHeader}
+                            >{`${streakTarget}-Day Streak (${dailyTarget} Venues/Day)`}</Text>
                             <Text style={styles.streakSideHeaderValue}>
-                                {streakDaysComplete} / 7 Days
+                                {streakDaysComplete} / {streakTarget} Days
                             </Text>
                         </View>
-                        <ProgressBar progress={streakDaysComplete / 7} />
+                        <ProgressBar progress={streakDaysComplete / streakTarget} />
 
                         <View style={styles.streakSideMiniRow}>
-                            <MiniStat label="Today's Venues" value={`${todaysVenues} / 5`} />
+                            <MiniStat
+                                label="Today's Venues"
+                                value={`${todaysVenues} / ${dailyTarget}`}
+                            />
                             <MiniStat
                                 label="Streak Total Venues"
-                                value={`${streakTotalVenues} / 35`}
+                                value={`${streakTotalVenues} / ${totalVenuesTarget}`}
                             />
                         </View>
                     </View>
@@ -219,7 +310,7 @@ export default function EarningsWalletScreen() {
                     icon="trending-up-outline"
                     iconColor="#7C3AED"
                     value={`₹${bookingShareEarnings}`}
-                    caption={`Complete 7-Day Streak to unlock 1-Year 25% Share (${streakDaysComplete}/7 Days)`}
+                    caption={`Complete ${streakTarget}-Day Streak to unlock 1-Year 25% Share (${streakDaysComplete}/${streakTarget} Days)`}
                     locked={bookingShareLocked}
                 />
             </View>
@@ -276,14 +367,11 @@ export default function EarningsWalletScreen() {
                         </Text>
                     </View>
                 ) : (
-                    visibleEntries.map((entry: any, idx: number) => (
-                        <View key={entry.id ?? idx} style={styles.ledgerRow}>
-                            <Text style={styles.ledgerRowTitle}>
-                                {entry.title ?? entry.description ?? 'Transaction'}
-                            </Text>
-                            <Text style={styles.ledgerRowAmount}>₹{entry.amount ?? 0}</Text>
-                        </View>
-                    ))
+                    <View style={{ gap: Spacing.xs }}>
+                        {visibleEntries.map((entry: any, idx: number) => (
+                            <LedgerRow key={entry?._id ?? idx} entry={entry} />
+                        ))}
+                    </View>
                 )}
             </View>
         </ScrollView>
@@ -585,18 +673,56 @@ const styles = StyleSheet.create({
     },
     ledgerRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        gap: Spacing.sm,
         paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.xs,
         borderBottomWidth: 1,
         borderBottomColor: Colors.divider,
     },
+    ledgerIconWrap: {
+        width: 34,
+        height: 34,
+        borderRadius: Radii.sm,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 2,
+    },
+    ledgerRowMain: {
+        flex: 1,
+    },
     ledgerRowTitle: {
-        fontSize: Typography.base,
+        fontSize: Typography.sm,
+        fontWeight: Typography.semiBold,
         color: Colors.charcoal,
+        lineHeight: 18,
+    },
+    ledgerRowMetaRow: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginTop: 2,
+    },
+    ledgerRowMeta: {
+        fontSize: Typography.xs,
+        color: Colors.charcoalLight,
+    },
+    ledgerRowRight: {
+        alignItems: 'flex-end',
+        gap: 4,
     },
     ledgerRowAmount: {
         fontSize: Typography.base,
         fontWeight: Typography.bold,
         color: Colors.success,
+    },
+    ledgerStatusPill: {
+        paddingHorizontal: Spacing.xs,
+        paddingVertical: 2,
+        borderRadius: Radii.full,
+    },
+    ledgerStatusText: {
+        fontSize: 9,
+        fontWeight: Typography.semiBold,
+        textTransform: 'capitalize',
     },
 });

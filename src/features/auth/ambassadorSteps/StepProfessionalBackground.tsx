@@ -3,9 +3,9 @@ import SelectField from '../components/SelectField';
 import Checkbox from '../components/Checkbox';
 import { Colors, Spacing, Typography } from '@/theme/theme';
 import Field from '@/components/UI/InputField';
-import { PROFILE_TYPE_OPTIONS } from '@/utils/defaults';
-import { FieldErrors } from '@/utils/validation';
 import { AmbassadorRegistration } from '../types/AmbassadarRegister';
+import { FieldErrors } from '../validation/ambassadorValidation';
+import { PROFILE_TYPE_OPTIONS } from '../validation/createAmbassadorForm';
 
 interface StepProfessionalBackgroundProps {
     data: AmbassadorRegistration;
@@ -116,9 +116,10 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: Typography.extraBold,
         color: Colors.charcoal,
-        marginBottom: Spacing.lg,
+        marginBottom: Spacing.xxl,
+        paddingBottom: Spacing.lg
     },
-    pairRow: { flexDirection: 'row', gap: Spacing.md },
+    pairRow: { flexDirection: 'column', gap: Spacing.md },
     pairItem: { flex: 1 },
     checkboxGroup: { gap: Spacing.md, marginTop: Spacing.xs },
 });

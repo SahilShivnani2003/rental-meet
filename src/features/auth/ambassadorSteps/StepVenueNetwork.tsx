@@ -3,9 +3,9 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import SelectableCard from '../components/SelectableCard';
 import SelectField from '../components/SelectField';
 import { Colors, Spacing, Typography } from '@/theme/theme';
-import { VENUES_PER_DAY_OPTIONS, VENUES_PER_MONTH_OPTIONS } from '@/utils/defaults';
-import { FieldErrors } from '@/utils/validation';
 import { AmbassadorRegistration, VenueNetwork } from '../types/AmbassadarRegister';
+import { FieldErrors } from '../validation/ambassadorValidation';
+import { VENUES_PER_DAY_OPTIONS, VENUES_PER_MONTH_OPTIONS } from '../validation/createAmbassadorForm';
 
 interface StepVenueNetworkProps {
     data: AmbassadorRegistration;
@@ -117,6 +117,6 @@ const styles = StyleSheet.create({
     errorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: Spacing.sm },
     errorText: { fontSize: 11, color: Colors.danger, fontWeight: Typography.semiBold },
     spacer: { height: Spacing.lg },
-    pairRow: { flexDirection: 'row', gap: Spacing.md },
+    pairRow: { flexDirection: 'column', gap: Spacing.md },
     pairItem: { flex: 1 },
 });

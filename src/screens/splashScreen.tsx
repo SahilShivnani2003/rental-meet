@@ -57,10 +57,13 @@ const SplashScreen = ({ navigation }: splashProps) => {
     const handleNavigation = async () => {
         await loadUser();
         const { user, isAuthenticated } = useAuthStore.getState();
+        console.log('founded user role : ', user?.role);
+        debugger
         if (isAuthenticated) {
             if (user?.role === 'owner') navigation.replace('owner');
             else if (user?.role === 'vendor') navigation.replace('vendor');
             else if (user?.role === 'customer') navigation.replace('client');
+            else if (user?.role === 'ambassador') navigation.replace('ambassador');
             else navigation.replace('onBoarding');
         } else {
             navigation.replace('onBoarding');

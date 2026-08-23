@@ -1,5 +1,6 @@
 import { publicClient } from "@/service/apiClient";
 import { RegisterClient, RegisterOwner, RegisterVendor } from "../types/Register";
+import { AmbassadorRegistration } from "../types/AmbassadarRegister";
 
 export const registerUser = async (data: RegisterClient | RegisterVendor | RegisterOwner) => {
     try {
@@ -101,6 +102,19 @@ export const resetPassword = async (data: { email: string, otp: string, newPassw
         return response.data;
     } catch (error) {
         console.error('Error while resetting password : ', error);
+        throw error;
+    }
+}
+
+export const registerAmbassador = async (data: AmbassadorRegistration) => {
+    try {
+        console.log('Applying for ambassador : ', data);
+        const response = await publicClient.post('/ambassador/apply', data);
+
+        console.info('Ambassador application submitted : ', response.data);
+        return response.data;
+    } catch (error) {
+        console.error('failed to apply for ambassador : ', error);
         throw error;
     }
 }

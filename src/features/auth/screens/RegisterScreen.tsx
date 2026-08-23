@@ -299,8 +299,6 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
         return results.map(r => ({ name: r.name, placeId: r.placeId }));
     };
 
-    // City results depend on the currently selected state; guarded by
-    // `disabled` on the dropdown too, but double-checked here.
     const fetchCityOptions = async (query: string): Promise<DropdownOption[]> => {
         if (!state.trim()) return [];
         const results: City[] = await getCitiesByState(query, state);

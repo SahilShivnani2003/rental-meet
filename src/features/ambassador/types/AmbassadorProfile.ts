@@ -1,178 +1,164 @@
+// ── Ambassador profile API types ──────────────────────────────────────────────
+// Mirrors the exact shape returned by GET /ambassador/profile.
+
+export interface PersonalInfo {
+    fullName: string;
+    parentName: string;
+    dateOfBirth: string;
+    gender: string;
+    mobileNumber: string;
+    whatsAppNumber: string;
+    email: string;
+    aadhaarNumber: string;
+    panNumber: string;
+}
+
+export interface AddressDetails {
+    currentAddress: string;
+    city: string;
+    district: string;
+    state: string;
+    pincode: string;
+    areaCoverage: string;
+}
+
+export interface ProfessionalDetails {
+    currentOccupation: string;
+    companyName: string;
+    educationQualification: string;
+    workExperience: string;
+    salesMarketingExperience: boolean;
+    digitalMarketingExperience: boolean;
+}
+
+export interface PreferredWorkingArea {
+    cityCoverage: string;
+    districtCoverage: string;
+    stateCoverage: string;
+}
+
+export interface VenueNetwork {
+    hotels: boolean;
+    meetingRooms: boolean;
+    conferenceHalls: boolean;
+    trainingCentres: boolean;
+    coachingInstitutes: boolean;
+    banquetHalls: boolean;
+    marriageGardens: boolean;
+    farmHouses: boolean;
+    coworkingSpaces: boolean;
+    schoolsColleges: boolean;
+}
+
+export interface ExpectedPerformance {
+    venuesPerDay: string;
+    venuesPerMonth: string;
+    preferredWorkingTime: string;
+    preferredAreaCoverage: string;
+}
+
+export interface BankDetails {
+    accountHolderName: string;
+    bankName: string;
+    accountNumber: string;
+    ifscCode: string;
+    upiId: string;
+}
+
+export interface ReferralInfo {
+    referredByAmbassadorId: string;
+    referralCode: string;
+}
+
+export interface AmbassadorDocuments {
+    passportPhoto: string;
+    aadhaarFront: string;
+    aadhaarBack: string;
+    panCard: string;
+    identityProof: string;
+    identityProofBack: string;
+    identityProofType: string;
+    bankProof: string;
+    addressProof: string;
+}
+
+export interface Declaration {
+    agreed: boolean;
+    applicantSignatureName: string;
+    place: string;
+    date: string;
+}
+
+export interface StreakInfo {
+    approvedCount: number;
+    bonusAwarded: boolean;
+}
+
+export type ApplicationStatus = 'pending' | 'approved' | 'rejected' | (string & {});
+
 export interface AmbassadorProfile {
-    _id?: string;
-
-    // User reference
+    _id: string;
     user: string;
+    ambassadorId: string;
+    assignedLevel: string;
+    badge: string;
+    profileType: string;
+    applicationStatus: ApplicationStatus;
 
-    // Office ID assigned upon approval
-    ambassadorId?: string;
+    walletBalance: number;
+    totalEarnings: number;
+    totalVenuesSubmitted: number;
+    totalVenuesApproved: number;
+    totalVenuesRejected: number;
+    profitShareUnlocked: boolean;
 
-    // Level & Badge
-    assignedLevel?: 'LV.1' | 'LV.2' | 'LV.3' | 'LV.4';
+    personalInfo: PersonalInfo;
+    addressDetails: AddressDetails;
+    professionalDetails: ProfessionalDetails;
+    preferredWorkingArea: PreferredWorkingArea;
+    venueNetwork: VenueNetwork;
+    expectedPerformance: ExpectedPerformance;
+    bankDetails: BankDetails;
+    referralInfo: ReferralInfo;
+    documents: AmbassadorDocuments;
+    declaration: Declaration;
 
-    badge?:
-    | 'Bronze Explorer'
-    | 'Silver Champion'
-    | 'Gold Master'
-    | 'City Legend';
+    dailyStreak: StreakInfo;
+    weeklyStreak: StreakInfo;
+    monthlyStreak: StreakInfo;
 
-    // PART A: Personal Information
-    personalInfo: {
-        fullName: string;
-        parentName?: string;
-        dateOfBirth?: string;
-        gender?: 'Male' | 'Female' | 'Other';
-        mobileNumber: string;
-        whatsAppNumber?: string;
-        email: string;
-        aadhaarNumber?: string;
-        panNumber?: string;
-    };
-
-    // PART B: Address Details
-    addressDetails: {
-        currentAddress: string;
-        city: string;
-        district?: string;
-        state: string;
-        pincode?: string;
-        areaCoverage: string;
-    };
-
-    // PART C: Professional Details
-    professionalDetails?: {
-        currentOccupation?: string;
-        companyName?: string;
-        educationQualification?: string;
-        workExperience?: string;
-        salesMarketingExperience?: boolean;
-        digitalMarketingExperience?: boolean;
-    };
-
-    // PART D: Ambassador Profile
-    profileType?:
-    | 'Venue Explorer (Part-Time)'
-    | 'Venue Champion'
-    | 'City Venue Partner'
-    | 'Full-Time Venue Acquisition Partner';
-
-    preferredWorkingArea?: {
-        cityCoverage?: string;
-        districtCoverage?: string;
-        stateCoverage?: string;
-    };
-
-    // PART E: Venue Network Information
-    venueNetwork?: {
-        hotels?: boolean;
-        meetingRooms?: boolean;
-        conferenceHalls?: boolean;
-        trainingCentres?: boolean;
-        coachingInstitutes?: boolean;
-        banquetHalls?: boolean;
-        marriageGardens?: boolean;
-        farmHouses?: boolean;
-        coworkingSpaces?: boolean;
-        schoolsColleges?: boolean;
-    };
-
-    // PART F: Expected Performance
-    expectedPerformance?: {
-        venuesPerDay?: string;
-        venuesPerMonth?: string;
-        preferredWorkingTime?: string;
-        preferredAreaCoverage?: string;
-    };
-
-    // PART G: Bank Details
-    bankDetails?: {
-        accountHolderName?: string;
-        bankName?: string;
-        accountNumber?: string;
-        ifscCode?: string;
-        upiId?: string;
-    };
-
-    // PART H: Referral Information
-    referralInfo?: {
-        referredByAmbassadorId?: string;
-        referralCode?: string;
-    };
-
-    // PART I: Document Upload
-    documents?: {
-        passportPhoto?: string;
-        aadhaarFront?: string;
-        aadhaarBack?: string;
-        panCard?: string;
-        identityProof?: string;
-        identityProofBack?: string;
-        identityProofType?:
-        | 'Aadhaar'
-        | 'PAN'
-        | 'Voter ID'
-        | 'Driving License'
-        | 'Passport';
-        bankProof?: string;
-        addressProof?: string;
-    };
-
-    // PART J: Declaration
-    declaration?: {
-        agreed?: boolean;
-        applicantSignatureName?: string;
-        date?: Date;
-        place?: string;
-    };
-
-    // Office & Admin Status
-    applicationStatus?: 'pending' | 'approved' | 'rejected';
-
-    cityPartnerCode?: string;
-
+    createdAt: string;
+    updatedAt: string;
+    verifiedAt?: string;
     verifiedBy?: string;
+    __v?: number;
+}
 
-    verifiedAt?: Date;
+export interface AmbassadorUser {
+    _id: string;
+    name: string;
+    email: string;
+    phone: string;
+    referralCode: string;
+}
 
-    rejectionReason?: string;
+// Shape returned by the profile-fetch endpoint / hook.
+export interface GetAmbassadorProfileResponse {
+    success: boolean;
+    profile: AmbassadorProfile;
+    user: AmbassadorUser;
+}
 
-    // Earning & Performance Metrics
-    walletBalance?: number;
-
-    totalEarnings?: number;
-
-    totalVenuesSubmitted?: number;
-
-    totalVenuesApproved?: number;
-
-    totalVenuesRejected?: number;
-
-    // 25% 1-Year Recurring Profit Share
-    profitShareUnlocked?: boolean;
-
-    profitShareUnlockedAt?: Date;
-
-    profitShareExpiresAt?: Date;
-
-    // Challenge Streaks
-    dailyStreak?: {
-        date?: string;
-        approvedCount?: number;
-        bonusAwarded?: boolean;
-    };
-
-    weeklyStreak?: {
-        weekStart?: string;
-        approvedCount?: number;
-        bonusAwarded?: boolean;
-    };
-
-    monthlyStreak?: {
-        month?: string;
-        approvedCount?: number;
-        bonusAwarded?: boolean;
-    };
-
-    createdAt?: Date;
-    updatedAt?: Date;
+// Nested partial payload sent back on save — mirrors the editable
+// sub-objects on AmbassadorProfile so the update endpoint can merge them.
+export interface UpdateAmbassadorProfilePayload {
+    personalInfo?: Partial<
+        Pick<PersonalInfo, 'fullName' | 'dateOfBirth' | 'gender' | 'whatsAppNumber' | 'email' | 'aadhaarNumber'>
+    >;
+    profileType?: string;
+    addressDetails?: Partial<
+        Pick<AddressDetails, 'currentAddress' | 'areaCoverage' | 'city' | 'state' | 'pincode'>
+    >;
+    professionalDetails?: Partial<Pick<ProfessionalDetails, 'currentOccupation' | 'companyName'>>;
+    bankDetails?: Partial<BankDetails>;
 }

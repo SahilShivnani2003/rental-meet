@@ -98,4 +98,5 @@ export interface AmbassadorRegistration {
   bankDetails: BankDetails;
   documents: Documents;
   declaration: Declaration;
+  referralCode: string;
 }

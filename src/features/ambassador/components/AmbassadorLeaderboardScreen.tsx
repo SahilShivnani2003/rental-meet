@@ -5,17 +5,8 @@ import LinearGradient from 'react-native-linear-gradient';
 import { Colors, Typography, Spacing, Radii, Shadows } from '@theme/theme';
 import { useGetLeaderboard } from '../hooks/useAmbassador';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-type AwardTier = {
-    emoji: string;
-    label: string;
-    title: string;
-    value: string;
-    valueColor: string;
-};
-
 type LeaderboardRow = {
-    id?: string;
+    id: string;
     rank: number;
     name: string;
     location: string;
@@ -23,86 +14,118 @@ type LeaderboardRow = {
     verifiedVenues: number;
 };
 
-const AWARD_TIERS: AwardTier[] = [
+type AwardTier = {
+    icon: string;
+    label: string;
+    value: string;
+    valueColor: string;
+};
+
+const FALLBACK_AWARD_TIERS: AwardTier[] = [
+    { icon: '🏆', label: '1ST PRIZE', value: '₹25,000 Cash', valueColor: Colors.primaryDark },
+    { icon: '🥈', label: '2ND PRIZE', value: '₹15,000 Cash', valueColor: Colors.info },
+    { icon: '🥉', label: '3RD PRIZE', value: '₹10,000 Cash', valueColor: '#B45309' },
     {
-        emoji: '👑',
-        label: '1ST PRIZE',
-        title: 'Star Performer of the Month',
-        value: '₹25,000 Cash',
-        valueColor: Colors.primaryDark,
-    },
-    {
-        emoji: '🥈',
-        label: '2ND PRIZE',
-        title: 'Silver Performer Award',
-        value: '₹15,000 Cash',
-        valueColor: Colors.info,
-    },
-    {
-        emoji: '🥉',
-        label: '3RD PRIZE',
-        title: 'Bronze Performer Award',
-        value: '₹10,000 Cash',
-        valueColor: '#B45309',
-    },
-    {
-        emoji: '⭐',
+        icon: '⭐',
         label: 'CITY LEGEND',
-        title: 'Top City Partner Honor',
         value: 'Special Certificate',
         valueColor: Colors.primaryDark,
     },
 ];
-
 // ── Building blocks ───────────────────────────────────────────────────────────
 
-const AwardCard = ({ tier }: { tier: AwardTier }) => (
+const AwardCard = ({ award }: { award: { icon: string; position: string; reward: string } }) => (
     <View style={styles.awardCard}>
-        <Text style={styles.awardEmoji}>{tier.emoji}</Text>
-        <Text style={styles.awardLabel}>{tier.label}</Text>
-        <Text style={styles.awardTitle}>{tier.title}</Text>
-        <Text style={[styles.awardValue, { color: tier.valueColor }]}>{tier.value}</Text>
+        <Text style={styles.awardEmoji}>{award.icon}</Text>
+        <Text style={styles.awardTitle}>{award.position}</Text>
+        <Text style={[styles.awardValue, { color: Colors.primaryDark }]}>{award.reward}</Text>
     </View>
 );
 
-const rankEmoji = (rank: number) => {
-    if (rank === 1) return '🏆';
-    if (rank === 2) return '🥈';
-    if (rank === 3) return '🥉';
-    return '🏅';
+const RANK_STYLES: Record<number, { bg: string; fg: string; icon: string }> = {
+    1: { bg: '#FEF3C7', fg: '#92400E', icon: '🏆' },
+    2: { bg: '#E5E7EB', fg: '#374151', icon: '🥈' },
+    3: { bg: '#FDE7D3', fg: '#9A3412', icon: '🥉' },
 };
 
-const TableRow = ({ row }: { row: LeaderboardRow }) => (
-    <View style={styles.tableRow}>
-        <View style={styles.colRank}>
-            <Text style={styles.tableCellRank}>
-                {rankEmoji(row.rank)} #{row.rank}
-            </Text>
-        </View>
-        <View style={styles.colName}>
-            <Text style={styles.tableCellName}>{row.name}</Text>
-        </View>
-        <View style={styles.colLocation}>
-            <Text style={styles.tableCellLocation}>{row.location}</Text>
-        </View>
-        <View style={styles.colBadge}>
-            <View style={styles.badgePill}>
-                <Text style={styles.badgePillText}>🥉 {row.badge}</Text>
+const BADGE_ICONS: Record<string, string> = {
+    'Bronze Explorer': '🥉',
+    'Silver Explorer': '🥈',
+    'Gold Explorer': '🥇',
+};
+
+const initials = (name: string) =>
+    name
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map(p => p[0]?.toUpperCase())
+        .join('');
+
+const TableRow = ({ row }: { row: LeaderboardRow }) => {
+    const rankStyle = RANK_STYLES[row.rank];
+    const badgeIcon = BADGE_ICONS[row.badge] ?? '🥉';
+
+    return (
+        <View style={styles.row}>
+            <View
+                style={[
+                    styles.rankBadge,
+                    rankStyle ? { backgroundColor: rankStyle.bg } : styles.rankBadgeDefault,
+                ]}
+            >
+                {rankStyle ? (
+                    <Text style={styles.rankBadgeIcon}>{rankStyle.icon}</Text>
+                ) : (
+                    <Text style={styles.rankBadgeNumber}>{row.rank}</Text>
+                )}
+            </View>
+
+            <View style={styles.avatarCircle}>
+                <Text style={styles.avatarInitials}>{initials(row.name)}</Text>
+            </View>
+
+            <View style={styles.rowMain}>
+                <Text style={styles.rowName} numberOfLines={1}>
+                    {row.name}
+                </Text>
+                <View style={styles.rowMetaRow}>
+                    {!!row.location && (
+                        <Text style={styles.rowLocation} numberOfLines={1}>
+                            📍 {row.location}
+                        </Text>
+                    )}
+                    <View style={styles.badgePill}>
+                        <Text style={styles.badgePillText}>
+                            {badgeIcon} {row.badge}
+                        </Text>
+                    </View>
+                </View>
+            </View>
+
+            <View style={styles.venuesChip}>
+                <Text style={styles.venuesChipValue}>{row.verifiedVenues}</Text>
+                <Text style={styles.venuesChipLabel}>Venues</Text>
             </View>
         </View>
-        <View style={styles.colVenues}>
-            <Text style={styles.tableCellVenues}>{row.verifiedVenues} Venues</Text>
-        </View>
-    </View>
-);
+    );
+};
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
 export default function AmbassadorLeaderboardScreen() {
     const { data, isLoading } = useGetLeaderboard();
 
-    const rows: LeaderboardRow[] = data?.rankings ?? [];
+    const rows: LeaderboardRow[] = (data?.leaderboard ?? []).map((item: any, idx: number) => ({
+        id: item._id,
+        rank: idx + 1,
+        name: item?.user?.name ?? 'Ambassador',
+        location: [item?.user?.city, item?.user?.state].filter(Boolean).join(', '),
+        badge: item?.badge ?? 'Bronze Explorer',
+        verifiedVenues: item?.totalVenuesApproved ?? 0,
+    }));
 
+    const awards = data?.monthlyAwards ?? [];
     return (
         <ScrollView
             style={styles.screen}
@@ -136,27 +159,25 @@ export default function AmbassadorLeaderboardScreen() {
                 </View>
 
                 <View style={styles.awardsGrid}>
-                    {AWARD_TIERS.map(tier => (
-                        <AwardCard key={tier.label} tier={tier} />
-                    ))}
+                    {awards.length > 0
+                        ? awards.map((award: any, idx: number) => (
+                              <AwardCard key={award.position ?? idx} award={award} />
+                          ))
+                        : FALLBACK_AWARD_TIERS.map(tier => (
+                              <View key={tier.label} style={styles.awardCard}>
+                                  <Text style={styles.awardEmoji}>{tier.icon}</Text>
+                                  <Text style={styles.awardLabel}>{tier.label}</Text>
+                                  <Text style={[styles.awardValue, { color: tier.valueColor }]}>
+                                      {tier.value}
+                                  </Text>
+                              </View>
+                          ))}
                 </View>
             </View>
 
             {/* Rankings table */}
             <View style={styles.tableCard}>
                 <Text style={styles.tableTitle}>Pan-India Rankings</Text>
-
-                <View style={styles.tableHeaderRow}>
-                    <Text style={[styles.tableHeaderCell, styles.colRank]}>Rank</Text>
-                    <Text style={[styles.tableHeaderCell, styles.colName]}>Ambassador</Text>
-                    <Text style={[styles.tableHeaderCell, styles.colLocation]}>Location</Text>
-                    <Text style={[styles.tableHeaderCell, styles.colBadge]}>Level / Badge</Text>
-                    <Text
-                        style={[styles.tableHeaderCell, styles.colVenues, { textAlign: 'right' }]}
-                    >
-                        Verified Venues
-                    </Text>
-                </View>
 
                 {isLoading ? (
                     <ActivityIndicator
@@ -170,7 +191,11 @@ export default function AmbassadorLeaderboardScreen() {
                         </Text>
                     </View>
                 ) : (
-                    rows.map((row, idx) => <TableRow key={row.id ?? idx} row={row} />)
+                    <View style={{ gap: Spacing.xs }}>
+                        {rows.map(row => (
+                            <TableRow key={row.id} row={row} />
+                        ))}
+                    </View>
                 )}
             </View>
         </ScrollView>
@@ -329,20 +354,6 @@ const styles = StyleSheet.create({
         fontSize: Typography.sm,
         color: Colors.primary,
     },
-    badgePill: {
-        alignSelf: 'flex-start',
-        backgroundColor: Colors.primaryLight,
-        borderWidth: 1,
-        borderColor: Colors.primaryBorder,
-        borderRadius: Radii.full,
-        paddingHorizontal: Spacing.xs,
-        paddingVertical: 2,
-    },
-    badgePillText: {
-        fontSize: Typography.xs,
-        fontWeight: Typography.semiBold,
-        color: Colors.primaryDark,
-    },
     tableCellVenues: {
         fontSize: Typography.sm,
         fontWeight: Typography.bold,
@@ -358,5 +369,99 @@ const styles = StyleSheet.create({
         fontSize: Typography.sm,
         color: Colors.charcoalLight,
         textAlign: 'center',
+    },
+    row: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.xs,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.divider,
+    },
+    rankBadge: {
+        width: 32,
+        height: 32,
+        borderRadius: Radii.full,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    rankBadgeDefault: {
+        backgroundColor: Colors.background,
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
+    rankBadgeIcon: {
+        fontSize: 16,
+    },
+    rankBadgeNumber: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalMid,
+    },
+    avatarCircle: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: Colors.primaryLight,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    avatarInitials: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.extraBold,
+        color: Colors.primaryDark,
+    },
+    rowMain: {
+        flex: 1,
+        minWidth: 0,
+    },
+    rowName: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.charcoal,
+    },
+    rowMetaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: Spacing.xs,
+        marginTop: 3,
+    },
+    rowLocation: {
+        fontSize: Typography.xs,
+        color: Colors.charcoalLight,
+    },
+    badgePill: {
+        backgroundColor: Colors.primaryLight,
+        borderWidth: 1,
+        borderColor: Colors.primaryBorder,
+        borderRadius: Radii.full,
+        paddingHorizontal: Spacing.xs,
+        paddingVertical: 1,
+    },
+    badgePillText: {
+        fontSize: 10,
+        fontWeight: Typography.semiBold,
+        color: Colors.primaryDark,
+    },
+    venuesChip: {
+        alignItems: 'center',
+        backgroundColor: Colors.background,
+        borderRadius: Radii.md,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        paddingVertical: 4,
+        paddingHorizontal: Spacing.sm,
+        minWidth: 56,
+    },
+    venuesChipValue: {
+        fontSize: Typography.base,
+        fontWeight: Typography.extraBold,
+        color: Colors.primary,
+    },
+    venuesChipLabel: {
+        fontSize: 9,
+        color: Colors.charcoalLight,
     },
 });
