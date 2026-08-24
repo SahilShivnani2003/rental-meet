@@ -1,173 +1,126 @@
-import { Typography, Colors, Spacing, Radii } from "@/theme/theme";
-import { useState, useEffect } from "react";
-import { ScrollView, TouchableOpacity, Text, View, StyleSheet } from "react-native";
-import Ionicons from "react-native-vector-icons/Ionicons";
+import { Typography, Colors, Spacing, Radii, Shadows } from '@/theme/theme';
+import { Modal, TouchableOpacity, Text, View, StyleSheet, FlatList } from 'react-native';
+import Ionicons from 'react-native-vector-icons/Ionicons';
 
-export default function TimePicker({
-    value,
-    onChange,
-    color,
-}: {
-    value: string;
-    onChange: (t: string) => void;
-    color: string;
-}) {
-    const hours = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'));
-    const minutes = ['00', '15', '30', '45'];
-    const periods = ['AM', 'PM'];
+interface TimePickerModalProps {
+    visible: boolean;
+    timeSlots: string[];
+    selectedTime: string;
+    onSelect: (time: string) => void;
+    onClose: () => void;
+}
 
-    const [selH, setSelH] = useState('10');
-    const [selM, setSelM] = useState('00');
-    const [selP, setSelP] = useState('AM');
-
-    useEffect(() => {
-        onChange(`${selH}:${selM} ${selP}`);
-    }, [selH, selM, selP]);
-
-    const Drum = ({
-        items,
-        selected,
-        onSelect,
-    }: {
-        items: string[];
-        selected: string;
-        onSelect: (v: string) => void;
-    }) => (
-        <ScrollView
-            style={tp.drum}
-            showsVerticalScrollIndicator={false}
-            snapToInterval={36}
-            decelerationRate="fast"
-            contentContainerStyle={{ paddingVertical: 36 }}
-        >
-            {items.map(item => (
-                <TouchableOpacity
-                    key={item}
-                    style={[tp.drumItem, selected === item && { backgroundColor: color + '18' }]}
-                    onPress={() => onSelect(item)}
-                    activeOpacity={0.7}
-                >
-                    <Text
-                        style={[
-                            tp.drumText,
-                            selected === item && { color, fontWeight: Typography.extraBold, fontSize: 17 },
-                        ]}
-                    >
-                        {item}
-                    </Text>
-                </TouchableOpacity>
-            ))}
-        </ScrollView>
-    );
+export default function TimePickerModal({
+    visible,
+    timeSlots,
+    selectedTime,
+    onSelect,
+    onClose,
+}: TimePickerModalProps) {
+    const handlePick = (slot: string) => {
+        onSelect(slot);
+        onClose();
+    };
 
     return (
-        <View style={tp.root}>
-            <View style={[tp.highlight, { borderColor: color + '40', backgroundColor: color + '08' }]} />
-            <View style={tp.drums}>
-                <Drum items={hours} selected={selH} onSelect={setSelH} />
-                <Text style={tp.sep}>:</Text>
-                <Drum items={minutes} selected={selM} onSelect={setSelM} />
-                <View style={tp.periodDrum}>
-                    {periods.map(p => (
-                        <TouchableOpacity
-                            key={p}
-                            style={[tp.periodBtn, selP === p && { backgroundColor: color, borderColor: color }]}
-                            onPress={() => setSelP(p)}
-                        >
-                            <Text style={[tp.periodText, selP === p && { color: Colors.white }]}>{p}</Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
+        <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+            <TouchableOpacity style={tp.backdrop} activeOpacity={1} onPress={onClose} />
+            <View style={tp.sheet}>
+                <View style={tp.handle} />
+                <Text style={tp.title}>Select Start Time</Text>
+
+                {timeSlots.length === 0 ? (
+                    <Text style={tp.emptyText}>No time slots available for this venue.</Text>
+                ) : (
+                    <FlatList
+                        data={timeSlots}
+                        keyExtractor={item => item}
+                        numColumns={3}
+                        showsVerticalScrollIndicator={false}
+                        style={{ maxHeight: 340 }}
+                        columnWrapperStyle={{ gap: Spacing.sm }}
+                        contentContainerStyle={{ gap: Spacing.sm }}
+                        renderItem={({ item }) => {
+                            const active = item === selectedTime;
+                            return (
+                                <TouchableOpacity
+                                    style={[tp.slot, active && tp.slotActive]}
+                                    onPress={() => handlePick(item)}
+                                    activeOpacity={0.8}
+                                >
+                                    <Text style={[tp.slotText, active && tp.slotTextActive]}>
+                                        {item}
+                                    </Text>
+                                    {active && (
+                                        <Ionicons
+                                            name="checkmark-circle"
+                                            size={14}
+                                            color={Colors.primary}
+                                        />
+                                    )}
+                                </TouchableOpacity>
+                            );
+                        }}
+                    />
+                )}
             </View>
-            <View style={[tp.selectedBadge, { borderColor: color + '30', backgroundColor: color + '10' }]}>
-                <Ionicons name="time-outline" size={13} color={color} />
-                <Text style={[tp.selectedText, { color }]}>{selH}:{selM} {selP}</Text>
-            </View>
-        </View>
+        </Modal>
     );
 }
 
 const tp = StyleSheet.create({
-    root: {
-        marginTop: Spacing.sm,
-        borderRadius: Radii.lg,
-        overflow: 'hidden',
-        backgroundColor: Colors.background,
-        borderWidth: 1.5,
-        borderColor: Colors.border,
-        padding: Spacing.sm,
+    backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+    sheet: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: Colors.surface,
+        borderTopLeftRadius: Radii.xxl,
+        borderTopRightRadius: Radii.xxl,
+        paddingHorizontal: Spacing.xl,
+        paddingTop: 8,
+        paddingBottom: 32,
+        ...Shadows.floating,
     },
-    drums: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: 108,
-        gap: 4,
+    handle: {
+        width: 40,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: Colors.border,
+        alignSelf: 'center',
+        marginBottom: 12,
     },
-    drum: {
-        width: 56,
-        height: 108,
-    },
-    drumItem: {
-        height: 36,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: Radii.sm,
-    },
-    drumText: {
-        fontSize: 15,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.medium,
-    },
-    sep: {
-        fontSize: 22,
+    title: {
+        fontSize: Typography.lg,
         fontWeight: Typography.extraBold,
         color: Colors.charcoal,
-        marginBottom: 4,
-        width: 14,
+        letterSpacing: -0.3,
+        marginBottom: Spacing.md,
+    },
+    emptyText: {
+        fontSize: Typography.base,
+        color: Colors.charcoalLight,
+        paddingVertical: Spacing.lg,
         textAlign: 'center',
     },
-    highlight: {
-        position: 'absolute',
-        top: '50%' as any,
-        left: Spacing.sm,
-        right: Spacing.sm,
-        height: 36,
-        marginTop: -2,
-        borderRadius: Radii.sm,
-        borderWidth: 1,
-        zIndex: 0,
-    },
-    periodDrum: {
-        gap: 6,
-        marginLeft: 8,
-    },
-    periodBtn: {
-        paddingHorizontal: 10,
-        paddingVertical: 7,
-        borderRadius: Radii.sm,
+    slot: {
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        paddingVertical: 12,
+        borderRadius: Radii.md,
         borderWidth: 1.5,
         borderColor: Colors.border,
         backgroundColor: Colors.background,
     },
-    periodText: {
-        fontSize: 12,
-        fontWeight: Typography.bold,
+    slotActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryLight },
+    slotText: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.semiBold,
         color: Colors.charcoalMid,
     },
-    selectedBadge: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 5,
-        alignSelf: 'center',
-        marginTop: 6,
-        paddingHorizontal: 12,
-        paddingVertical: 5,
-        borderRadius: Radii.full,
-        borderWidth: 1,
-    },
-    selectedText: {
-        fontSize: 13,
-        fontWeight: Typography.extraBold,
-    },
+    slotTextActive: { color: Colors.primary, fontWeight: Typography.bold },
 });

@@ -31,6 +31,8 @@ import ServiceQuotationModal, {
     ServiceBookingLite,
     ServicePricing,
 } from '@/features/quotation/screens/ServiceQuotationModal';
+import CalendarModal from '@/components/UI/calenderModal';
+import TimePickerModal from '../components/TimePicker';
 
 const { width: W } = Dimensions.get('window');
 
@@ -82,6 +84,26 @@ const AVAILABLE_COUPONS = [
     { code: 'FIRST10', discount: '10% off', description: 'First booking discount' },
 ];
 
+function generateTimeSlots(openingTime: string, closingTime: string): string[] {
+    const slots: string[] = [];
+    const [openH, openM] = openingTime.split(':').map(Number);
+    const [closeH, closeM] = closingTime.split(':').map(Number);
+    let h = openH,
+        m = openM;
+    while (h < closeH || (h === closeH && m <= closeM)) {
+        const suffix = h < 12 ? 'AM' : 'PM';
+        const displayH = h % 12 === 0 ? 12 : h % 12;
+        const displayM = m === 0 ? '00' : '30';
+        slots.push(`${displayH}:${displayM} ${suffix}`);
+        m += 30;
+        if (m >= 60) {
+            m = 0;
+            h++;
+        }
+    }
+    return slots;
+}
+
 type Props = NativeStackScreenProps<RootStackParamList, 'serviceBooking'>;
 
 export default function ServiceBookingScreen({ navigation, route }: Props) {
@@ -103,7 +125,10 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
     const { data: platformSettingData, isLoading: settingsLoading } = useServicePlatformSetting();
     const { mutate: createPaymentOrder } = useCreatePaymentOrder();
     const { mutate: verifyPaymentMutate } = useVerifyPayment();
+    const [calendarVisible, setCalendarVisible] = useState(false);
+    const [timePickerVisible, setTimePickerVisible] = useState(false);
 
+    const timeSlots = useMemo(() => generateTimeSlots('08:00', '22:00'), []);
     const packages = service.packages ?? [];
 
     // Pre-fill serviceQuantities from selectedPackages passed by VendorDetailScreen
@@ -739,189 +764,110 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                         </View>
 
                         {/* ── STEP 1: Date & Time with open/close toggle ── */}
-                        <TouchableOpacity
-                            style={s.sectionHeaderRow}
-                            onPress={toggleCalendar}
-                            activeOpacity={0.8}
-                        >
-                            <View style={[s.stepBadge, { backgroundColor: catColor }]}>
-                                <Text style={s.stepNum}>{steps.dateTime}</Text>
+                        {/* ── STEP 1: Date & Time ── */}
+                        <SectionHeader
+                            step={steps.dateTime}
+                            title="Select Date & Time"
+                            color={catColor}
+                            icon="calendar-outline"
+                        />
+                        {!!errors.date && <ErrorMsg msg={errors.date} />}
+
+                        <View style={s.card}>
+                            <View style={s.dateTimeRow}>
+                                <View style={[s.dateTimeCol, { flex: 1.3 }]}>
+                                    <Text style={s.fieldLabel}>Booking Date *</Text>
+                                    <TouchableOpacity
+                                        style={[s.inputWrap, !!errors.date && s.inputError]}
+                                        onPress={() => setCalendarVisible(true)}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Ionicons
+                                            name="calendar-outline"
+                                            size={16}
+                                            color={catColor}
+                                        />
+                                        <Text
+                                            style={[
+                                                s.input,
+                                                s.inputText,
+                                                !selectedDate && { color: Colors.charcoalLight },
+                                            ]}
+                                            numberOfLines={1}
+                                        >
+                                            {selectedDate ? fmtDate(selectedDate) : 'Select date'}
+                                        </Text>
+                                        <Ionicons
+                                            name="chevron-down"
+                                            size={14}
+                                            color={Colors.charcoalLight}
+                                        />
+                                    </TouchableOpacity>
+                                </View>
+
+                                <View style={s.dateTimeCol}>
+                                    <Text style={s.fieldLabel}>Start Time</Text>
+                                    <TouchableOpacity
+                                        style={[s.inputWrap, !selectedDate && s.inputDisabled]}
+                                        onPress={() => selectedDate && setTimePickerVisible(true)}
+                                        activeOpacity={0.8}
+                                        disabled={!selectedDate}
+                                    >
+                                        <Ionicons
+                                            name="time-outline"
+                                            size={16}
+                                            color={selectedDate ? catColor : Colors.charcoalLight}
+                                        />
+                                        <Text
+                                            style={[
+                                                s.input,
+                                                s.inputText,
+                                                !startTime && { color: Colors.charcoalLight },
+                                            ]}
+                                            numberOfLines={1}
+                                        >
+                                            {startTime || 'Select time'}
+                                        </Text>
+                                        <Ionicons
+                                            name="chevron-down"
+                                            size={14}
+                                            color={Colors.charcoalLight}
+                                        />
+                                    </TouchableOpacity>
+                                </View>
                             </View>
-                            <Ionicons name="calendar-outline" size={16} color={catColor} />
-                            <Text style={s.sectionHeaderTitle}>Select Date & Time</Text>
-                            <View style={{ flex: 1 }} />
-                            {selectedDate && !calendarOpen && (
-                                <Text
+
+                            {selectedDate && (
+                                <View
                                     style={[
-                                        s.selectedDateChip,
+                                        s.selectedDateStrip,
                                         {
-                                            color: catColor,
-                                            borderColor: catColor + '40',
-                                            backgroundColor: catColor + '12',
+                                            backgroundColor: catColor + '14',
+                                            borderColor: catColor + '30',
                                         },
                                     ]}
                                 >
-                                    {fmtDate(selectedDate)}
-                                </Text>
-                            )}
-                            <Ionicons
-                                name={calendarOpen ? 'chevron-up' : 'chevron-down'}
-                                size={18}
-                                color={Colors.charcoalLight}
-                            />
-                        </TouchableOpacity>
-
-                        {!!errors.date && <ErrorMsg msg={errors.date} />}
-
-                        {calendarOpen && (
-                            <View style={s.card}>
-                                {/* Month navigation */}
-                                <View style={s.calNav}>
-                                    <TouchableOpacity style={s.calNavBtn} onPress={prevMonth}>
-                                        <Ionicons
-                                            name="chevron-back"
-                                            size={18}
-                                            color={Colors.charcoal}
-                                        />
-                                    </TouchableOpacity>
-                                    <Text style={s.calMonthLabel}>{monthName}</Text>
-                                    <TouchableOpacity style={s.calNavBtn} onPress={nextMonth}>
-                                        <Ionicons
-                                            name="chevron-forward"
-                                            size={18}
-                                            color={Colors.charcoal}
-                                        />
-                                    </TouchableOpacity>
-                                </View>
-
-                                {/* Day labels */}
-                                <View style={s.calDayRow}>
-                                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(
-                                        (d, i) => (
-                                            <Text
-                                                key={i}
-                                                style={[
-                                                    s.calDayLabel,
-                                                    (i === 0 || i === 6) && { color: catColor },
-                                                ]}
-                                            >
-                                                {d.slice(0, 1)}
-                                            </Text>
-                                        ),
-                                    )}
-                                </View>
-
-                                {/* Date grid */}
-                                <View style={s.calGrid}>
-                                    {calCells.map((day, idx) => {
-                                        if (!day) return <View key={idx} style={s.calCell} />;
-                                        const past = isPastDate(new Date(calYear, calMonth, day));
-                                        const sel = isSelected(day);
-                                        const tod = isToday(calYear, calMonth, day);
-                                        const weekend = idx % 7 === 0 || idx % 7 === 6;
-                                        return (
-                                            <TouchableOpacity
-                                                key={idx}
-                                                style={[
-                                                    s.calCell,
-                                                    sel && { backgroundColor: catColor },
-                                                    !sel &&
-                                                        tod && {
-                                                            borderWidth: 1.5,
-                                                            borderColor: catColor,
-                                                        },
-                                                    !sel &&
-                                                        !past &&
-                                                        weekend && {
-                                                            backgroundColor: catColor + '12',
-                                                        },
-                                                    past && s.calCellDisabled,
-                                                ]}
-                                                onPress={() => {
-                                                    if (!past) {
-                                                        setSelectedDate(
-                                                            new Date(calYear, calMonth, day),
-                                                        );
-                                                        setErrors(p => ({ ...p, date: '' }));
-                                                        // Auto-close calendar after selection
-                                                        setTimeout(() => {
-                                                            setCalendarOpen(false);
-                                                        }, 300);
-                                                    }
-                                                }}
-                                                disabled={past}
-                                                activeOpacity={0.75}
-                                            >
-                                                <Text
-                                                    style={[
-                                                        s.calDayNum,
-                                                        sel && {
-                                                            color: Colors.white,
-                                                            fontWeight: Typography.extraBold,
-                                                        },
-                                                        past && { color: Colors.border },
-                                                        !sel &&
-                                                            tod && {
-                                                                color: catColor,
-                                                                fontWeight: Typography.bold,
-                                                            },
-                                                    ]}
-                                                >
-                                                    {day}
-                                                </Text>
-                                            </TouchableOpacity>
-                                        );
-                                    })}
-                                </View>
-
-                                {selectedDate && (
-                                    <View
-                                        style={[
-                                            s.selectedDateStrip,
-                                            {
-                                                backgroundColor: catColor + '14',
-                                                borderColor: catColor + '30',
-                                            },
-                                        ]}
+                                    <Ionicons name="checkmark-circle" size={15} color={catColor} />
+                                    <Text style={[s.selectedDateText, { color: catColor }]}>
+                                        {fmtDate(selectedDate)}
+                                        {startTime ? ` · ${startTime}` : ''}
+                                    </Text>
+                                    <TouchableOpacity
+                                        onPress={() => {
+                                            setSelectedDate(null);
+                                            setStartTime('');
+                                        }}
+                                        style={{ marginLeft: 'auto' }}
                                     >
                                         <Ionicons
-                                            name="checkmark-circle"
-                                            size={15}
+                                            name="close-circle-outline"
+                                            size={16}
                                             color={catColor}
                                         />
-                                        <Text style={[s.selectedDateText, { color: catColor }]}>
-                                            Selected: {fmtDate(selectedDate)}
-                                        </Text>
-                                        <TouchableOpacity
-                                            onPress={() => setSelectedDate(null)}
-                                            style={{ marginLeft: 'auto' }}
-                                        >
-                                            <Ionicons
-                                                name="close-circle-outline"
-                                                size={16}
-                                                color={catColor}
-                                            />
-                                        </TouchableOpacity>
-                                    </View>
-                                )}
-
-                                {/* Start Time */}
-                                <Text style={[s.fieldLabel, { marginTop: Spacing.md }]}>
-                                    Start Time
-                                </Text>
-                                {/* FIX 8: pointerEvents as a prop (deprecated string style approach) */}
-                                <View
-                                    pointerEvents={!selectedDate ? 'none' : 'auto'}
-                                    style={!selectedDate ? { opacity: 0.45 } : undefined}
-                                >
-                                    <TimePicker
-                                        value={startTime}
-                                        onChange={setStartTime}
-                                        color={catColor}
-                                    />
+                                    </TouchableOpacity>
                                 </View>
-                            </View>
-                        )}
+                            )}
+                        </View>
 
                         {/* ── STEP 2: Services & Rate List ── */}
                         {hasPackages && (
@@ -1450,6 +1396,23 @@ export default function ServiceBookingScreen({ navigation, route }: Props) {
                 </ScrollView>
             </View>
 
+            <CalendarModal
+                visible={calendarVisible}
+                selectedDate={selectedDate ? toISODate(selectedDate) : ''}
+                onSelect={dateStr => {
+                    setSelectedDate(new Date(dateStr + 'T00:00:00'));
+                    setErrors(p => ({ ...p, date: '' }));
+                }}
+                onClose={() => setCalendarVisible(false)}
+            />
+            <TimePickerModal
+                visible={timePickerVisible}
+                timeSlots={timeSlots}
+                selectedTime={startTime}
+                onSelect={setStartTime}
+                onClose={() => setTimePickerVisible(false)}
+            />
+
             {quotationBooking && (
                 <ServiceQuotationModal
                     visible={quotationOpen}
@@ -1928,4 +1891,10 @@ const s = StyleSheet.create({
         borderColor: Colors.border,
     },
     shareBtnText: { fontSize: 14, fontWeight: Typography.bold },
+    // add:
+    dateTimeRow: { flexDirection: 'row', gap: Spacing.sm },
+    dateTimeCol: { flex: 1 },
+    inputError: { borderColor: Colors.danger },
+    inputDisabled: { backgroundColor: Colors.background },
+    inputText: { paddingVertical: 0, lineHeight: 20 },
 });

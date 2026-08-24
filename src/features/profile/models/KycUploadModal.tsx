@@ -139,7 +139,7 @@ export default function KycUploadModal({ visible, onClose, mutate, existingKyc }
     const pickImage = (slot: DocSlot) => {
         const setter = getSetterForSlot(slot);
         launchImageLibrary(
-            { mediaType: 'photo', quality: 0.6, includeBase64: false },
+            { mediaType: 'photo', quality: 0.4, includeBase64: false },
             (response: ImagePickerResponse) => {
                 if (response.didCancel || response.errorCode) return;
                 const asset: Asset | undefined = response.assets?.[0];
@@ -157,7 +157,7 @@ export default function KycUploadModal({ visible, onClose, mutate, existingKyc }
     const openCamera = (slot: DocSlot) => {
         const setter = getSetterForSlot(slot);
         launchCamera(
-            { mediaType: 'photo', quality: 0.6, saveToPhotos: false },
+            { mediaType: 'photo', quality: 0.4, saveToPhotos: false },
             (response: ImagePickerResponse) => {
                 if (response.didCancel || response.errorCode) return;
                 const asset: Asset | undefined = response.assets?.[0];

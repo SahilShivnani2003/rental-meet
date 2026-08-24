@@ -28,6 +28,8 @@ import { useTermsCondition } from '../hooks/useTermsCondition';
 import { SelectedAmenityItem } from '@/features/venue/models/BookingSheet';
 import QuotationModal, { QuotationData } from '@/features/quotation/screens/QuotationModal';
 import { config } from '@/config/env';
+import CalendarModal from '@components/UI/calenderModal';
+import TimePickerModal from '../components/TimePicker';
 
 const { width: W } = Dimensions.get('window');
 
@@ -211,405 +213,14 @@ function parseMaxCapacity(capacityVal: string | number | undefined): number | nu
     return isNaN(num) ? null : num;
 }
 
-// ─── Default platform settings ────────────────────────────────────────────────
-// Used as fallback while the API loads
-const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
-    venueCGST: 9,
-    venueSGST: 9,
-    platformFeeType: 'percentage',
-    platformFeePercentage: 5,
-    platformCGST: 9,
-    platformSGST: 9,
-    serviceCategoryRates: [],
-};
-
-// ─── CalendarModal ────────────────────────────────────────────────────────────
-
-interface CalendarModalProps {
-    visible: boolean;
-    selectedDate: string;
-    onSelect: (date: string) => void;
-    onClose: () => void;
+/** Short human-friendly quotation number, e.g. RM-QT-20260824-4821 */
+function generateQuotationNumber(now: Date): string {
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const rand = Math.floor(1000 + Math.random() * 9000);
+    return `RM-QT-${y}${m}${d}-${rand}`;
 }
-
-const MONTH_NAMES = [
-    'January',
-    'February',
-    'March',
-    'April',
-    'May',
-    'June',
-    'July',
-    'August',
-    'September',
-    'October',
-    'November',
-    'December',
-];
-const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
-function buildMonthGrid(year: number, month: number): (Date | null)[] {
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const grid: (Date | null)[] = Array(firstDay).fill(null);
-    for (let d = 1; d <= daysInMonth; d++) grid.push(new Date(year, month, d));
-    while (grid.length % 7 !== 0) grid.push(null);
-    return grid;
-}
-
-function CalendarModal({ visible, selectedDate, onSelect, onClose }: CalendarModalProps) {
-    const todayDate = new Date();
-    todayDate.setHours(0, 0, 0, 0);
-    const minDate = new Date(todayDate);
-    minDate.setDate(minDate.getDate() + 1);
-    const parsedSelected = selectedDate ? new Date(selectedDate + 'T00:00:00') : null;
-    const initialViewDate = parsedSelected && parsedSelected >= minDate ? parsedSelected : minDate;
-
-    const [viewYear, setViewYear] = useState(initialViewDate.getFullYear());
-    const [viewMonth, setViewMonth] = useState(initialViewDate.getMonth());
-
-    useEffect(() => {
-        if (visible) {
-            const d = parsedSelected && parsedSelected >= minDate ? parsedSelected : minDate;
-            setViewYear(d.getFullYear());
-            setViewMonth(d.getMonth());
-        }
-    }, [visible]);
-
-    const grid = useMemo(() => buildMonthGrid(viewYear, viewMonth), [viewYear, viewMonth]);
-
-    const prevMonth = () => {
-        if (viewMonth === 0) {
-            setViewYear(y => y - 1);
-            setViewMonth(11);
-        } else setViewMonth(m => m - 1);
-    };
-    const nextMonth = () => {
-        if (viewMonth === 11) {
-            setViewYear(y => y + 1);
-            setViewMonth(0);
-        } else setViewMonth(m => m + 1);
-    };
-
-    const canGoPrev =
-        viewYear > minDate.getFullYear() ||
-        (viewYear === minDate.getFullYear() && viewMonth > minDate.getMonth());
-
-    return (
-        <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-            <TouchableOpacity style={cal.backdrop} activeOpacity={1} onPress={onClose} />
-            <View style={cal.sheet}>
-                <View style={cal.handle} />
-                <View style={cal.monthNav}>
-                    <TouchableOpacity
-                        style={[cal.navBtn, !canGoPrev && cal.navBtnDisabled]}
-                        onPress={canGoPrev ? prevMonth : undefined}
-                        activeOpacity={0.7}
-                    >
-                        <Ionicons
-                            name="chevron-back"
-                            size={18}
-                            color={canGoPrev ? Colors.charcoal : Colors.border}
-                        />
-                    </TouchableOpacity>
-                    <Text style={cal.monthLabel}>
-                        {MONTH_NAMES[viewMonth]} {viewYear}
-                    </Text>
-                    <TouchableOpacity style={cal.navBtn} onPress={nextMonth} activeOpacity={0.7}>
-                        <Ionicons name="chevron-forward" size={18} color={Colors.charcoal} />
-                    </TouchableOpacity>
-                </View>
-                <View style={cal.dayHeader}>
-                    {DAY_NAMES.map(d => (
-                        <Text
-                            key={d}
-                            style={[
-                                cal.dayName,
-                                (d === 'Sun' || d === 'Sat') && cal.dayNameWeekend,
-                            ]}
-                        >
-                            {d}
-                        </Text>
-                    ))}
-                </View>
-                <View style={cal.grid}>
-                    {grid.map((date, idx) => {
-                        if (!date) return <View key={`empty-${idx}`} style={cal.cell} />;
-                        const dateStr = toDateStr(date);
-                        const isPast = date < minDate;
-                        const isSelected = dateStr === selectedDate;
-                        const isToday = toDateStr(date) === toDateStr(todayDate);
-                        const isWknd = date.getDay() === 0 || date.getDay() === 6;
-                        return (
-                            <TouchableOpacity
-                                key={dateStr}
-                                style={[
-                                    cal.cell,
-                                    isSelected && cal.cellSelected,
-                                    !isPast && !isSelected && isWknd && cal.cellWeekend,
-                                    isPast && cal.cellDisabled,
-                                ]}
-                                onPress={() => {
-                                    if (!isPast) {
-                                        onSelect(dateStr);
-                                        onClose();
-                                    }
-                                }}
-                                activeOpacity={isPast ? 1 : 0.75}
-                                disabled={isPast}
-                            >
-                                <Text
-                                    style={[
-                                        cal.cellText,
-                                        isSelected && cal.cellTextSelected,
-                                        isPast && cal.cellTextDisabled,
-                                        !isPast && !isSelected && isWknd && cal.cellTextWeekend,
-                                    ]}
-                                >
-                                    {date.getDate()}
-                                </Text>
-                                {isToday && !isSelected && <View style={cal.todayDot} />}
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
-                <View style={cal.legend}>
-                    {[
-                        { color: Colors.primary, label: 'Selected' },
-                        { color: Colors.primaryLight, label: 'Weekend', bordered: true },
-                        { color: Colors.background, label: 'Unavailable' },
-                    ].map(item => (
-                        <View key={item.label} style={cal.legendItem}>
-                            <View
-                                style={[
-                                    cal.legendDot,
-                                    { backgroundColor: item.color },
-                                    item.bordered
-                                        ? { borderWidth: 1, borderColor: Colors.primaryBorder }
-                                        : null,
-                                ]}
-                            />
-                            <Text style={cal.legendText}>{item.label}</Text>
-                        </View>
-                    ))}
-                </View>
-            </View>
-        </Modal>
-    );
-}
-
-const CELL_SIZE = Math.floor((W - Spacing.xl * 2 - 28) / 7);
-
-const cal = StyleSheet.create({
-    backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)' },
-    sheet: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: Colors.surface,
-        borderTopLeftRadius: Radii.xxl,
-        borderTopRightRadius: Radii.xxl,
-        paddingHorizontal: 14,
-        paddingBottom: Platform.OS === 'ios' ? 36 : 24,
-        ...Shadows.floating,
-    },
-    handle: {
-        width: 40,
-        height: 4,
-        borderRadius: 2,
-        backgroundColor: Colors.border,
-        alignSelf: 'center',
-        marginTop: 12,
-        marginBottom: 16,
-    },
-    monthNav: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 4,
-        marginBottom: 16,
-    },
-    navBtn: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
-        backgroundColor: Colors.background,
-        borderWidth: 1,
-        borderColor: Colors.border,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    navBtnDisabled: { opacity: 0.35 },
-    monthLabel: {
-        fontSize: Typography.lg,
-        fontWeight: Typography.extraBold,
-        color: Colors.charcoal,
-        letterSpacing: -0.3,
-    },
-    dayHeader: { flexDirection: 'row', marginBottom: 6 },
-    dayName: {
-        width: CELL_SIZE,
-        textAlign: 'center',
-        fontSize: Typography.xs,
-        fontWeight: Typography.bold,
-        color: Colors.charcoalLight,
-        letterSpacing: 0.4,
-        textTransform: 'uppercase',
-    },
-    dayNameWeekend: { color: Colors.primary },
-    grid: { flexDirection: 'row', flexWrap: 'wrap' },
-    cell: {
-        width: CELL_SIZE,
-        height: CELL_SIZE,
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: CELL_SIZE / 2,
-        marginVertical: 2,
-        position: 'relative',
-    },
-    cellSelected: { backgroundColor: Colors.primary, ...Shadows.primary },
-    cellWeekend: { backgroundColor: Colors.primaryLight },
-    cellDisabled: { opacity: 0.3 },
-    cellText: {
-        fontSize: Typography.base,
-        fontWeight: Typography.semiBold,
-        color: Colors.charcoal,
-    },
-    cellTextSelected: { color: Colors.white, fontWeight: Typography.extraBold },
-    cellTextDisabled: { color: Colors.charcoalLight, fontWeight: Typography.regular },
-    cellTextWeekend: { color: Colors.primaryDark, fontWeight: Typography.bold },
-    todayDot: {
-        position: 'absolute',
-        bottom: 4,
-        width: 4,
-        height: 4,
-        borderRadius: 2,
-        backgroundColor: Colors.primary,
-    },
-    legend: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        gap: 20,
-        marginTop: 14,
-        paddingTop: 12,
-        borderTopWidth: 1,
-        borderTopColor: Colors.divider,
-    },
-    legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    legendDot: { width: 10, height: 10, borderRadius: 5 },
-    legendText: {
-        fontSize: Typography.xs,
-        color: Colors.charcoalLight,
-        fontWeight: Typography.medium,
-    },
-});
-
-const dummyQuotation: QuotationData = {
-    // Booking details
-    bookingDate: '2026-06-15',
-    startTime: '10:00 AM',
-    endTime: '02:00 PM',
-    bookingType: 'halfday',
-    durationLabel: 'Half Day',
-    isWeekend: false,
-
-    // Customer
-    customerName: 'Rahul Sharma',
-    customerEmail: 'rahul.sharma@example.com',
-    customerPhone: '+91 9876543210',
-    eventType: 'Wedding',
-    guestCount: 150,
-    specialRequirements: 'Stage decoration, DJ and veg catering',
-
-    // Pricing
-    basePrice: 50000,
-    amenitiesTotal: 22000,
-    subtotal: 72000,
-
-    venueCGST: 6480,
-    venueCGSTRate: 9,
-    venueSGST: 6480,
-    venueSGSTRate: 9,
-    venueGSTTotal: 12960,
-
-    platformFee: 2000,
-    platformFeeLabel: 'Platform Convenience Fee',
-
-    platformCGST: 180,
-    platformCGSTRate: 9,
-    platformSGST: 180,
-    platformSGSTRate: 9,
-    platformFeeTotal: 2360,
-
-    grandTotal: 87320,
-
-    // Amenities
-    paidAmenities: [
-        {
-            name: 'DJ Setup',
-            category: 'additional',
-            qty: 1,
-            unitPrice: 8000,
-            total: 8000,
-            rateType: 'fixed',
-        },
-        {
-            name: 'Veg Catering',
-            category: 'thali',
-            qty: 150,
-            unitPrice: 200,
-            total: 30000,
-            rateType: 'per_plate',
-            thaliCategory: 'Veg',
-            numberOfItems: 10,
-            itemNames: 'Paneer, Dal, Rice, Roti, Salad, Sweet',
-        },
-    ],
-
-    allAmenities: [
-        {
-            name: 'Parking',
-            category: 'basic_included',
-            qty: 1,
-            unitPrice: 0,
-            total: 0,
-            rateType: 'included',
-        },
-        {
-            name: 'Air Conditioning',
-            category: 'basic_included',
-            qty: 1,
-            unitPrice: 0,
-            total: 0,
-            rateType: 'included',
-        },
-        {
-            name: 'DJ Setup',
-            category: 'additional',
-            qty: 1,
-            unitPrice: 8000,
-            total: 8000,
-            rateType: 'fixed',
-        },
-        {
-            name: 'Veg Catering',
-            category: 'thali',
-            qty: 150,
-            unitPrice: 200,
-            total: 30000,
-            rateType: 'per_plate',
-            thaliCategory: 'Veg',
-            numberOfItems: 10,
-            itemNames: 'Paneer, Dal, Rice, Roti, Salad, Sweet',
-        },
-    ],
-
-    // Meta
-    quotationNumber: 'QT-2026-0002',
-    generatedAt: new Date('2026-06-01T10:00:00'),
-    validUntil: new Date('2026-06-07T23:59:59'),
-};
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -632,7 +243,7 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
 
     // FIX 3: extract platformSettings from query data with typed fallback
     const platformSettings: PlatformSettings =
-        platformSettingData?.settings ?? platformSettingData?.data ?? DEFAULT_PLATFORM_SETTINGS;
+        platformSettingData?.settings ?? platformSettingData?.data;
 
     // FIX 4: derive termsList directly from query data — was dead local state
     const termsList: string[] = useMemo(
@@ -640,6 +251,13 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
         [termsConditionData],
     );
 
+    if (isPlatformLoading || !platformSettings) {
+        return (
+            <View style={s.centered}>
+                <ActivityIndicator size="large" color={Colors.primary} />
+            </View>
+        );
+    }
     const venue = params?.venue;
     const allAmenities: SelectedAmenityItem[] = params?.selectedAmenities ?? [];
     const incomingAmenitiesTotal: number = params?.amenitiesTotal ?? 0;
@@ -692,6 +310,15 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
     const [specialRequirements, setSpecialRequirements] = useState('');
     const [agreedToTerms, setAgreedToTerms] = useState(false);
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+    // Metadata (number / generated / valid-until) for the quotation currently being
+    // viewed. Set once, when the user taps "Quotation" — not on every render —
+    // so the quotation number and dates stay stable while the modal is open.
+    const [quotationMeta, setQuotationMeta] = useState<{
+        number: string;
+        generatedAt: Date;
+        validUntil: Date;
+    } | null>(null);
 
     const clearError = (field: string) =>
         setFieldErrors(prev => {
@@ -866,6 +493,85 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
     const guestNum = Number(guestCount);
     const guestOverCapacity = !!maxCapacity && !isNaN(guestNum) && guestNum > maxCapacity;
 
+    // ── Quotation payload ─────────────────────────────────────────────────────
+    // Built entirely from the live pricing/form state above so it always mirrors
+    // what's on screen — no more hand-rolled/dummy data.
+    const quotationData: QuotationData | null = useMemo(() => {
+        if (!quotationMeta || !selectedDuration) return null;
+        return {
+            bookingDate,
+            startTime,
+            endTime,
+            bookingType: toBookingType(selectedDuration.type),
+            durationLabel: selectedDuration.label,
+            isWeekend: selectedDateIsWeekend,
+
+            customerName: fullName.trim(),
+            customerEmail: email.trim(),
+            customerPhone: phone.trim(),
+            eventType,
+            guestCount: guestNum,
+            specialRequirements: specialRequirements.trim() || undefined,
+
+            basePrice,
+            amenitiesTotal: incomingAmenitiesTotal,
+            subtotal,
+            venueCGST: venueCGSTAmount,
+            venueCGSTRate: platformSettings.venueCGST ?? 0,
+            venueSGST: venueSGSTAmount,
+            venueSGSTRate: platformSettings.venueSGST ?? 0,
+            venueGSTTotal,
+            platformFee,
+            platformFeeLabel: platformFeeLabelText,
+            platformFeePercentage: effectivePlatformFeePercentage,
+            platformCGST: platformCGSTAmount,
+            platformCGSTRate: platformCGSTLabelPct,
+            platformSGST: platformSGSTAmount,
+            platformSGSTRate: platformSGSTLabelPct,
+            platformFeeTotal,
+            grandTotal: total,
+
+            paidAmenities,
+            allAmenities,
+
+            quotationNumber: quotationMeta.number,
+            generatedAt: quotationMeta.generatedAt,
+            validUntil: quotationMeta.validUntil,
+        };
+    }, [
+        quotationMeta,
+        selectedDuration,
+        bookingDate,
+        startTime,
+        endTime,
+        selectedDateIsWeekend,
+        fullName,
+        email,
+        phone,
+        eventType,
+        guestNum,
+        specialRequirements,
+        basePrice,
+        incomingAmenitiesTotal,
+        subtotal,
+        venueCGSTAmount,
+        venueSGSTAmount,
+        venueGSTTotal,
+        platformFee,
+        platformFeeLabelText,
+        effectivePlatformFeePercentage,
+        platformCGSTAmount,
+        platformCGSTLabelPct,
+        platformSGSTAmount,
+        platformSGSTLabelPct,
+        platformFeeTotal,
+        total,
+        paidAmenities,
+        allAmenities,
+        platformSettings.venueCGST,
+        platformSettings.venueSGST,
+    ]);
+
     // ── Validation ────────────────────────────────────────────────────────────
     const validate = useCallback((): string | null => {
         const errors: Record<string, string> = {};
@@ -909,160 +615,168 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
         razorpay_payment_id: string;
         razorpay_signature: string;
         paidAt: number;
-    }) => {
+    }): Promise<void> =>
+        new Promise((resolve, reject) => {
+            if (!venue?._id) {
+                reject(new Error('Venue not selected'));
+                return;
+            }
+            const bookingPayload = {
+                venue: venue._id,
+                bookingDate: new Date(bookingDate),
+                startTime: to24Hr(startTime),
+                endTime: to24Hr(endTime),
+                bookingType: toBookingType(selectedDuration!.type),
+                amount: total,
+                amenitiesTotal: incomingAmenitiesTotal,
+                selectedAmenities: buildSelectedAmenitiesPayload(allAmenities),
+                priceBreakdown: {
+                    basePrice,
+                    amenitiesTotal: incomingAmenitiesTotal,
+                    subtotal,
+                    venueCGST: venueCGSTAmount,
+                    venueCGSTRate: platformSettings.venueCGST,
+                    venueSGST: venueSGSTAmount,
+                    venueSGSTRate: platformSettings.venueSGST,
+                    gst: venueGSTTotal,
+                    platformFee,
+                    platformFeeRate: effectivePlatformFeePercentage,
+                    platformFeeCGST: platformCGSTAmount,
+                    platformFeeCGSTRate: platformCGSTLabelPct,
+                    platformFeeSGST: platformSGSTAmount,
+                    platformFeeSGSTRate: platformSGSTLabelPct,
+                    platformFeeTotal,
+                    total,
+                },
+                customerDetails: {
+                    name: fullName.trim(),
+                    email: email.trim().toLowerCase(),
+                    phone: phone.trim().replace(/\s/g, ''),
+                    eventType,
+                    guestCount: guestNum,
+                    specialRequirements: specialRequirements.trim(),
+                },
+                paymentDetails: paymentDetails,
+            };
+            createBooking(bookingPayload, {
+                onSuccess: (response: any) => {
+                    if (response?.success) {
+                        alert.success(
+                            'Booking Successful',
+                            response?.message || 'Booking created successfully',
+                        );
+                        resolve();
+                    } else {
+                        const msg = response?.message ?? 'Something went wrong.';
+                        alert.error('Booking Failed', msg);
+                        reject(new Error(msg));
+                    }
+                },
+                onError: (error: any) => {
+                    console.error('CREATE BOOKING ERROR:', error);
+                    const msg =
+                        error?.response?.data?.message ??
+                        error?.message ??
+                        'Network error. Please try again.';
+                    alert.error('Error', msg);
+                    reject(new Error(msg));
+                },
+            });
+        });
+
+    const handlePayment = useCallback(
+        (): Promise<void> =>
+            new Promise((resolve, reject) => {
+                createPaymentOrder(
+                    {
+                        amount: total,
+                        bookingType: toBookingType(selectedDuration!.type),
+                    },
+                    {
+                        onSuccess: async (orderData: any) => {
+                            if (!orderData?.success) {
+                                reject(new Error('Failed to create payment order'));
+                                return;
+                            }
+
+                            try {
+                                const options = {
+                                    key: config.RAZORPAY_KEY,
+                                    amount: orderData.order.amount,
+                                    currency: orderData.order.currency ?? 'INR',
+                                    name: 'RentalMeet',
+                                    description: `Booking Payment - ${venue.businessName}`,
+                                    order_id: orderData.order.id,
+                                    prefill: {
+                                        name: fullName,
+                                        email,
+                                        contact: phone,
+                                    },
+                                    theme: { color: '#F59F0A' },
+                                };
+
+                                const razorpayResponse = await RazorpayCheckout.open(options);
+
+                                if (!razorpayResponse?.razorpay_payment_id) {
+                                    reject(new Error('Payment not completed'));
+                                    return;
+                                }
+
+                                const paymentDetails = {
+                                    razorpay_order_id: razorpayResponse.razorpay_order_id,
+                                    razorpay_payment_id: razorpayResponse.razorpay_payment_id,
+                                    razorpay_signature: razorpayResponse.razorpay_signature,
+                                    paidAt: Date.now(),
+                                };
+
+                                await handleConfirmBooking(paymentDetails);
+                                resolve();
+                            } catch (err) {
+                                reject(err);
+                            }
+                        },
+                        onError: (err: any) => reject(err),
+                    },
+                );
+            }),
+        [
+            createPaymentOrder,
+            total,
+            selectedDuration,
+            venue,
+            fullName,
+            email,
+            phone,
+            handleConfirmBooking,
+        ],
+    );
+
+    const handlePayNow = async () => {
         const err = validate();
         if (err) {
             alert.error('Validation Error', err);
             return;
         }
-
+        if (submitting) return;
         setSubmitting(true);
-        if (!venue?._id) {
-            alert.error('Error', 'Venue not selected');
-            return;
-        }
-        const bookingPayload = {
-            venue: venue._id,
-            bookingDate: new Date(bookingDate),
-            startTime: to24Hr(startTime),
-            endTime: to24Hr(endTime),
-            bookingType: toBookingType(selectedDuration!.type),
-            amount: total,
-            amenitiesTotal: incomingAmenitiesTotal,
-            selectedAmenities: buildSelectedAmenitiesPayload(allAmenities),
-            priceBreakdown: {
-                basePrice,
-                amenitiesTotal: incomingAmenitiesTotal,
-                subtotal,
-                venueCGST: venueCGSTAmount,
-                venueCGSTRate: platformSettings.venueCGST,
-                venueSGST: venueSGSTAmount,
-                venueSGSTRate: platformSettings.venueSGST,
-                gst: venueGSTTotal,
-                platformFee,
-                platformFeeRate: effectivePlatformFeePercentage,
-                platformFeeCGST: platformCGSTAmount,
-                platformFeeCGSTRate: platformCGSTLabelPct,
-                platformFeeSGST: platformSGSTAmount,
-                platformFeeSGSTRate: platformSGSTLabelPct,
-                platformFeeTotal,
-                total,
-            },
-            customerDetails: {
-                name: fullName.trim(),
-                email: email.trim().toLowerCase(),
-                phone: phone.trim().replace(/\s/g, ''),
-                eventType,
-                guestCount: guestNum,
-                specialRequirements: specialRequirements.trim(),
-            },
-            paymentDetails: paymentDetails,
-        };
-        debugger;
-        createBooking(bookingPayload, {
-            // FIX 8: response is received here in onSuccess, not as a return value
-            onSuccess: async (response: any) => {
-                if (response?.success) {
-                    try {
-                        alert.success('Booking Successfull', response?.message || 'Booking created successfull')
-                    } catch (payErr: any) {
-                        console.error('PAYMENT ERROR:', payErr);
-                        alert.error(
-                            'Payment Failed',
-                            payErr?.message ?? 'Payment could not be processed.',
-                        );
-                    }
-                } else {
-                    alert.error('Booking Failed', response?.message ?? 'Something went wrong.');
-                }
-                setSubmitting(false);
-            },
-            onError: (error: any) => {
-                console.error('CREATE BOOKING ERROR:', error);
-                const msg =
-                    error?.response?.data?.message ??
-                    error?.message ??
-                    'Network error. Please try again.';
-                alert.error('Error', msg);
-                setSubmitting(false);
-            },
-        });
-    };
-
-    const handlePayment = useCallback(
-    (): Promise<void> =>
-        new Promise((resolve, reject) => {
-            createPaymentOrder(
-                {
-                    amount: total,
-                    bookingType: toBookingType(selectedDuration!.type),
-                },
-                {
-                    onSuccess: async (orderData: any) => {
-                        if (!orderData?.success) {
-                            reject(new Error('Failed to create payment order'));
-                            return;
-                        }
-
-                        try {
-                            const options = {
-                                key: config.RAZORPAY_KEY,
-                                amount: orderData.order.amount,
-                                currency: orderData.order.currency ?? 'INR',
-                                name: 'RentalMeet',
-                                description: `Booking Payment - ${venue.businessName}`,
-                                order_id: orderData.order.id,
-                                prefill: {
-                                    name: fullName,
-                                    email,
-                                    contact: phone,
-                                },
-                                theme: { color: '#F59F0A' },
-                            };
-
-                            const razorpayResponse =
-                                await RazorpayCheckout.open(options);
-
-                            if (!razorpayResponse?.razorpay_payment_id) {
-                                reject(new Error('Payment not completed'));
-                                return;
-                            }
-
-                            const paymentDetails = {
-                                razorpay_order_id:
-                                    razorpayResponse.razorpay_order_id,
-                                razorpay_payment_id:
-                                    razorpayResponse.razorpay_payment_id,
-                                razorpay_signature:
-                                    razorpayResponse.razorpay_signature,
-                                paidAt: Date.now(),
-                            };
-
-                            await handleConfirmBooking(paymentDetails);
-                            resolve();
-                        } catch (err) {
-                            reject(err);
-                        }
-                    },
-                    onError: (err: any) => reject(err),
-                },
+        try {
+            await handlePayment(); // resolves only after handleConfirmBooking resolves
+            setVeiwQuotation(false);
+        } catch (payErr: any) {
+            console.error('PAYMENT FLOW ERROR:', payErr);
+            alert.error(
+                payErr?.message === 'Payment not completed'
+                    ? 'Payment Cancelled'
+                    : 'Payment Failed',
+                payErr?.message ?? 'Something went wrong while processing your payment.',
             );
-        }),
-    [
-        createPaymentOrder,
-        total,
-        selectedDuration,
-        venue,
-        fullName,
-        email,
-        phone,
-        handleConfirmBooking,
-    ],
-);
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
     // ── Submit ────────────────────────────────────────────────────────────────
     // FIX 8: createBooking mutate result is now received via onSuccess callback, not a return value
-    
 
     const handleGenerateQuote = async () => {
         const err = validate();
@@ -1070,7 +784,13 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
             alert.error('Validation Error', err);
             return;
         }
-        //alert.info('Coming Soon', 'Quotation generation will be available soon.');
+        const now = new Date();
+        const validUntil = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        setQuotationMeta({
+            number: generateQuotationNumber(now),
+            generatedAt: now,
+            validUntil,
+        });
         setVeiwQuotation(true);
     };
 
@@ -1103,7 +823,6 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
                 </TouchableOpacity>
             </View>
             <View style={s.headerDivider} />
-
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={s.scroll}
@@ -1637,7 +1356,6 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
 
                 <View style={{ height: 120 }} />
             </ScrollView>
-
             {/* ── Footer ── */}
             <View style={s.footer}>
                 <TouchableOpacity
@@ -1660,7 +1378,7 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
                     style={[s.footerConfirm, footerDisabled && s.footerConfirmDisabled]}
                     activeOpacity={0.88}
                     disabled={footerDisabled}
-                    onPress={handlePayment}
+                    onPress={handlePayNow}
                 >
                     {submitting ? (
                         <ActivityIndicator size="small" color={Colors.white} />
@@ -1676,7 +1394,6 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
                     )}
                 </TouchableOpacity>
             </View>
-
             {/* ── Calendar modal ── */}
             <CalendarModal
                 visible={calendarVisible}
@@ -1687,59 +1404,14 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
                 }}
                 onClose={() => setCalendarVisible(false)}
             />
-
-            {/* ── Time picker modal ── */}
-            <Modal
+            {/* ── Time picker modal (now its own component) ── */}
+            <TimePickerModal
                 visible={timePickerVisible}
-                transparent
-                animationType="slide"
-                onRequestClose={() => setTimePickerVisible(false)}
-            >
-                <TouchableOpacity
-                    style={s.modalBackdrop}
-                    activeOpacity={1}
-                    onPress={() => setTimePickerVisible(false)}
-                />
-                <View style={s.pickerSheet}>
-                    <View style={s.pickerHandle} />
-                    <Text style={s.pickerTitle}>Select Start Time</Text>
-                    <FlatList
-                        data={timeSlots}
-                        keyExtractor={item => item}
-                        showsVerticalScrollIndicator={false}
-                        style={{ maxHeight: 300 }}
-                        renderItem={({ item }) => {
-                            const active = item === startTime;
-                            return (
-                                <TouchableOpacity
-                                    style={[s.pickerOption, active && s.pickerOptionActive]}
-                                    onPress={() => {
-                                        setStartTime(item);
-                                        setTimePickerVisible(false);
-                                    }}
-                                >
-                                    <Text
-                                        style={[
-                                            s.pickerOptionText,
-                                            active && s.pickerOptionTextActive,
-                                        ]}
-                                    >
-                                        {item}
-                                    </Text>
-                                    {active && (
-                                        <Ionicons
-                                            name="checkmark"
-                                            size={16}
-                                            color={Colors.primary}
-                                        />
-                                    )}
-                                </TouchableOpacity>
-                            );
-                        }}
-                    />
-                </View>
-            </Modal>
-
+                timeSlots={timeSlots}
+                selectedTime={startTime}
+                onSelect={setStartTime}
+                onClose={() => setTimePickerVisible(false)}
+            />
             {/* ── Event type picker modal ── */}
             <Modal
                 visible={eventPickerVisible}
@@ -1792,15 +1464,19 @@ export default function VenueBookingScreen({ navigation, route }: BookingScreenP
                     />
                 </View>
             </Modal>
-
-            <QuotationModal
-                visible={viewQuotation}
-                onClose={() => setVeiwQuotation(false)}
-                venue={venue}
-                onConfirmBooking={() => setVeiwQuotation(false)}
-                platformSettings={platformSettings}
-                quotationData={dummyQuotation}
-            />
+            {/* ── Quotation modal — only mounted once we actually have a payload ── */}
+            // Quotation modal
+            {quotationData && (
+                <QuotationModal
+                    visible={viewQuotation}
+                    onClose={() => setVeiwQuotation(false)}
+                    venue={venue}
+                    onConfirmBooking={handlePayNow} // was: () => setVeiwQuotation(false)
+                    confirmLoading={submitting} // was: not passed at all
+                    platformSettings={platformSettings}
+                    quotationData={quotationData}
+                />
+            )}
         </View>
     );
 }

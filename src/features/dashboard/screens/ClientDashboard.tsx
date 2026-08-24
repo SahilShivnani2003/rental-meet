@@ -29,6 +29,7 @@ import { useGetAllVenue } from '@/features/venue/hooks/useGetAllVenue';
 import { Venue } from '@/features/venue/types/Venue';
 import { useGetVenueLoc } from '@/features/venue/hooks/useGetVenueLoc';
 import { useGetVenueType } from '@/features/venueType/hooks/useGetVenueType';
+import LinearGradient from 'react-native-linear-gradient';
 
 const { width: W, height: H } = Dimensions.get('window');
 
@@ -137,10 +138,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
         fetchNextPage: fetchMoreVenues,
         isRefetching: venuesRefetching,
         refetch: refetchVenues,
-    } = useGetAllVenue(
-        {  }, 
-        { enabled: true },
-    );
+    } = useGetAllVenue({}, { enabled: true });
 
     const { data: citiesData, isLoading: citiesLoading, refetch: refetchCities } = useGetVenueLoc();
 
@@ -431,6 +429,7 @@ export default function ClientDashboard({ navigation }: landingProps) {
         return null;
     };
 
+    const goToAmbassadorRegister = () =>navigation.getParent<NativeStackNavigationProp<RootStackParamList>>()?.navigate('ambassadorRegister');
     // ── Render ────────────────────────────────────────────────────────────────
     return (
         <View style={s.root}>
@@ -757,6 +756,53 @@ export default function ClientDashboard({ navigation }: landingProps) {
                         <Text style={s.viewAllBtnText}>View All Venues</Text>
                         <Ionicons name="arrow-forward" size={14} color={Colors.white} />
                     </TouchableOpacity>
+                </View>
+
+                {/* ── BECOME AN AMBASSADOR ── */}
+                <View style={s.section}>
+                    <LinearGradient
+                        colors={['#1E1B4B', '#0F1230']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={s.ambassadorCard}
+                    >
+                        <View style={s.ambassadorBadge}>
+                            <Ionicons name="megaphone-outline" size={12} color="#F5A623" />
+                            <Text style={s.ambassadorBadgeText}>AMBASSADOR PROGRAM</Text>
+                        </View>
+
+                        <Text style={s.ambassadorTitle}>Earn by Listing Venues Near You</Text>
+                        <Text style={s.ambassadorSubtitle}>
+                            Know hotels, banquets, or meeting spaces in your city? List them on
+                            RentalMeet and earn instantly — no investment required.
+                        </Text>
+
+                        <View style={s.ambassadorPerksRow}>
+                            <View style={s.ambassadorPerk}>
+                                <Ionicons name="cash-outline" size={16} color="#F5A623" />
+                                <Text style={s.ambassadorPerkText}>₹100 per verified venue</Text>
+                            </View>
+                            <View style={s.ambassadorPerk}>
+                                <Ionicons name="trending-up-outline" size={16} color="#0EA5A5" />
+                                <Text style={s.ambassadorPerkText}>
+                                    25% recurring booking share
+                                </Text>
+                            </View>
+                            <View style={s.ambassadorPerk}>
+                                <Ionicons name="flash-outline" size={16} color="#6D5BD0" />
+                                <Text style={s.ambassadorPerkText}>Daily & streak bonuses</Text>
+                            </View>
+                        </View>
+
+                        <TouchableOpacity
+                            style={s.ambassadorCta}
+                            onPress={goToAmbassadorRegister}
+                            activeOpacity={0.9}
+                        >
+                            <Text style={s.ambassadorCtaText}>Become an Ambassador</Text>
+                            <Ionicons name="arrow-forward" size={15} color={Colors.charcoal} />
+                        </TouchableOpacity>
+                    </LinearGradient>
                 </View>
             </ScrollView>
 
@@ -1155,6 +1201,76 @@ const s = StyleSheet.create({
     },
     emptyStateBtnText: {
         fontSize: 13,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+    },
+    ambassadorCard: {
+        borderRadius: Radii.xxl,
+        padding: Spacing.xl,
+        overflow: 'hidden',
+        ...Shadows.header,
+    },
+    ambassadorBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        gap: 5,
+        backgroundColor: 'rgba(245,166,35,0.15)',
+        paddingVertical: 4,
+        paddingHorizontal: Spacing.sm,
+        borderRadius: Radii.full,
+        marginBottom: Spacing.md,
+    },
+    ambassadorBadgeText: {
+        fontSize: 10,
+        fontWeight: Typography.extraBold,
+        color: '#F5A623',
+        letterSpacing: 1,
+    },
+    ambassadorTitle: {
+        fontSize: 20,
+        fontWeight: Typography.extraBold,
+        color: Colors.white,
+        marginBottom: Spacing.xs,
+        letterSpacing: -0.3,
+    },
+    ambassadorSubtitle: {
+        fontSize: 13,
+        color: 'rgba(255,255,255,0.75)',
+        lineHeight: 19,
+        marginBottom: Spacing.lg,
+    },
+    ambassadorPerksRow: {
+        gap: Spacing.sm,
+        marginBottom: Spacing.lg,
+    },
+    ambassadorPerk: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+        backgroundColor: 'rgba(255,255,255,0.06)',
+        borderRadius: Radii.md,
+        paddingVertical: Spacing.sm,
+        paddingHorizontal: Spacing.md,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)',
+    },
+    ambassadorPerkText: {
+        fontSize: 13,
+        fontWeight: Typography.semiBold,
+        color: Colors.white,
+    },
+    ambassadorCta: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        backgroundColor: '#F5A623',
+        borderRadius: Radii.full,
+        paddingVertical: 14,
+    },
+    ambassadorCtaText: {
+        fontSize: 14.5,
         fontWeight: Typography.extraBold,
         color: Colors.charcoal,
     },

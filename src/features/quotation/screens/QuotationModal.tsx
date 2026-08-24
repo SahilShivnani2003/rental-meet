@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 // @ts-ignore
-import  { generatePDF } from 'react-native-html-to-pdf';
+import { generatePDF } from 'react-native-html-to-pdf';
 import Share from 'react-native-share';
 import { Colors, Typography, Spacing, Radii, Shadows } from '@/theme/theme';
 import { Venue } from '@/features/venue/types/Venue';
@@ -68,14 +68,13 @@ interface QuotationModalProps {
     visible: boolean;
     venue: Venue;
     quotationData: QuotationData;
-    platformSettings: PlatformSettings & {
-        gstInvoiceSignature?: string;
-        platformInvoiceSignature?: string;
+    platformSettings: Omit<PlatformSettings, 'gstInvoiceSignature' | 'platformInvoiceSignature'> & {
+        gstInvoiceSignature?: string | null;
+        platformInvoiceSignature?: string | null;
     };
     onClose: () => void;
     onConfirmBooking: () => void;
     confirmLoading?: boolean;
-    /** Optional — call your backend the same way the web app's recordToBackend does */
     onRecordAction?: (action: 'download' | 'print') => void;
 }
 
@@ -124,7 +123,7 @@ function buildQuotationHTML(
         )
         .join('');
 
-    const sigVenue = platformSettings?.gstInvoiceSignature;
+    const sigVenue = platformSettings?.gstInvoiceSignature; // string | null | undefined
     const sigPlatform = platformSettings?.platformInvoiceSignature;
 
     const css = `
