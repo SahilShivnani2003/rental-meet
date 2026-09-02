@@ -1,104 +1,20 @@
 import { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import Geolocation from '@react-native-community/geolocation';
-import { PermissionsAndroid, Platform } from 'react-native';
-import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 import Checkbox from '../components/Checkbox';
 import { Colors, Spacing, Typography } from '@/theme/theme';
 import Field from '@/components/UI/InputField';
 import SearchableDropdown from '@/components/UI/SearchableDropDown';
 import { getCitiesByState, getDistrictByState, getStates } from '@/utils/location';
+import { getCurrentCoordinates, LocationPermissionDeniedError } from '@/utils/deviceLocation';
+import { coordinatesToAddress } from '@/utils/geocoding';
 import { AmbassadorRegistration } from '../types/AmbassadarRegister';
 import { FieldErrors } from '../validation/ambassadorValidation';
-import { config } from '@/config/env';
-
-const GOOGLE_API_KEY = config.GOOGLEAPI;
 
 interface StepAddressDetailsProps {
     data: AmbassadorRegistration;
     onChange: (updater: (prev: AmbassadorRegistration) => AmbassadorRegistration) => void;
     errors: FieldErrors;
-}
-
-// ─── Geocoding helper ─────────────────────────────────────────────────────────
-
-interface GeocodeResult {
-    address: string;
-    city: string;
-    area: string;
-    state: string;
-    pincode: string;
-    googleMapLink: string;
-}
-
-async function reverseGeocode(lat: number, lng: number): Promise<GeocodeResult> {
-    const url =
-        `https://maps.googleapis.com/maps/api/geocode/json` +
-        `?latlng=${lat},${lng}` +
-        `&key=${GOOGLE_API_KEY}`;
-
-    const res = await fetch(url);
-    const json = await res.json();
-
-    if (json.status !== 'OK' || !json.results?.length) {
-        throw new Error('Geocoding failed: ' + json.status);
-    }
-
-    const result = json.results[0];
-    const components: { long_name: string; types: string[] }[] = result.address_components;
-
-    const get = (type: string) => components.find(c => c.types.includes(type))?.long_name ?? '';
-
-    const premise = get('premise');
-    const subPremise = get('subpremise');
-    const streetNumber = get('street_number');
-    const route = get('route');
-    const sublocality2 = get('sublocality_level_2');
-    const sublocality1 = get('sublocality_level_1');
-
-    const addressParts = [
-        subPremise,
-        premise,
-        streetNumber,
-        route,
-        sublocality2,
-        sublocality1,
-    ].filter(Boolean);
-    const address = addressParts.length ? addressParts.join(', ') : result.formatted_address;
-
-    return {
-        address,
-        city: get('locality') || get('administrative_area_level_2'),
-        area: get('sublocality_level_1') || get('sublocality_level_2') || get('neighborhood'),
-        state: get('administrative_area_level_1'),
-        pincode: get('postal_code'),
-        googleMapLink: `https://maps.google.com/?q=${lat},${lng}`,
-    };
-}
-
-async function ensureLocationPermission(): Promise<boolean> {
-    if (Platform.OS === 'android') {
-        const granted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-            {
-                title: 'Location Permission',
-                message: 'We need your location to auto-fill your address.',
-                buttonPositive: 'Allow',
-                buttonNegative: 'Deny',
-            },
-        );
-        return granted === PermissionsAndroid.RESULTS.GRANTED;
-    }
-
-    const permission = PERMISSIONS.IOS.LOCATION_WHEN_IN_USE;
-    const status = await check(permission);
-    if (status === RESULTS.GRANTED) return true;
-    if (status === RESULTS.DENIED) {
-        const result = await request(permission);
-        return result === RESULTS.GRANTED;
-    }
-    return false;
 }
 
 export default function StepAddressDetails({ data, onChange, errors }: StepAddressDetailsProps) {
@@ -129,47 +45,39 @@ export default function StepAddressDetails({ data, onChange, errors }: StepAddre
         setLocationError(null);
         setLocating(true);
 
-        const hasPermission = await ensureLocationPermission();
-        if (!hasPermission) {
-            setLocationError('Location permission denied. Enable it in Settings to use this.');
-            setLocating(false);
-            return;
-        }
+        try {
+            const coordinates = await getCurrentCoordinates();
+            const geo = await coordinatesToAddress(coordinates);
 
-        Geolocation.getCurrentPosition(
-            async position => {
-                const { latitude, longitude } = position.coords;
-                try {
-                    const geo = await reverseGeocode(latitude, longitude);
-                    onChange(prev => ({
-                        ...prev,
-                        addressDetails: {
-                            ...prev.addressDetails,
-                            currentAddress: geo.address,
-                            city: geo.city,
-                            areaCoverage: geo.area || prev.addressDetails.areaCoverage,
-                            state: geo.state,
-                            pincode: geo.pincode,
-                        },
-                    }));
-                } catch (e) {
-                    console.error('Reverse geocode error:', e);
-                    setLocationError("Couldn't detect your address. Please enter it manually.");
-                } finally {
-                    setLocating(false);
-                }
-            },
-            error => {
-                console.error('Geolocation error:', error);
+            if (!geo) {
+                setLocationError("Couldn't detect your address. Please enter it manually.");
+                return;
+            }
+
+            onChange(prev => ({
+                ...prev,
+                addressDetails: {
+                    ...prev.addressDetails,
+                    currentAddress: geo.addressLine || geo.formattedAddress,
+                    city: geo.city,
+                    state: geo.state,
+                    pincode: geo.pincode,
+                },
+            }));
+        } catch (error: any) {
+            if (error instanceof LocationPermissionDeniedError) {
+                setLocationError('Location permission denied. Enable it in Settings to use this.');
+            } else if (error?.code === 3) {
+                setLocationError('Location request timed out. Please try again.');
+            } else if (error?.code === 2) {
+                setLocationError('Could not determine your position. Try again outdoors or with GPS on.');
+            } else {
+                console.error('Location error:', error);
                 setLocationError(error?.message || 'Could not access your location.');
-                setLocating(false);
-            },
-            {
-                enableHighAccuracy: true,
-                timeout: 15000,
-                maximumAge: 10000,
-            },
-        );
+            }
+        } finally {
+            setLocating(false);
+        }
     };
 
     const toggleSameAsAddress = () => {
@@ -189,7 +97,7 @@ export default function StepAddressDetails({ data, onChange, errors }: StepAddre
 
     return (
         <View>
-            <Text style={styles.heading}>Part B: Address Details & Preferred Working Area</Text>
+            <Text style={styles.heading}>Part B: Address & Coverage Area Details</Text>
 
             <TouchableOpacity
                 style={styles.locationBtn}
@@ -274,14 +182,14 @@ export default function StepAddressDetails({ data, onChange, errors }: StepAddre
             />
 
             <Field
-                label="Area Coverage"
-                placeholder="e.g. 5km radius, specific localities"
+                label="Area / Locality You Will Cover *"
+                placeholder="e.g. MP Nagar, Arera Colony, Bhopal"
                 icon="locate-outline"
                 value={addressDetails.areaCoverage}
                 onChangeText={t => setAddress('areaCoverage', t)}
                 autoCapitalize="sentences"
             />
-
+{/* 
             <Text style={styles.subHeading}>Preferred Working Area</Text>
 
             <Checkbox
@@ -333,7 +241,7 @@ export default function StepAddressDetails({ data, onChange, errors }: StepAddre
                 onSelect={opt => setPreferred('cityCoverage', opt.name)}
                 disabled={sameAsAddress || !preferredWorkingArea.districtCoverage}
                 disabledHint="Select a district first"
-            />
+            /> */}
         </View>
     );
 }

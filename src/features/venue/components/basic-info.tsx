@@ -51,26 +51,23 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
     const filteredTypes = venueTypes.filter(t =>
         t.name.toLowerCase().includes(typeSearch.toLowerCase()),
     );
-    // const toggleType = (id: string) => {
-    //     const next = data.venueTypes.includes(id)
-    //         ? data.venueTypes.filter(x => x !== id)
-    //         : [...data.venueTypes, id];
-    //     set({ venueTypes: next });
-    //     setErrors(p => ({ ...p, venueType: '' }));
-    // };
 
+    // NOTE: data.venueTypes stores the venue type NAME (single-select), not the _id.
     const toggleType = (name: string) => {
-        debugger
         const next = data.venueTypes.includes(name) ? [] : [name];
         set({ venueTypes: next });
         setErrors(p => ({ ...p, venueType: '' }));
         setTypeDropdownOpen(false); // auto-close since only one pick is needed
     };
 
-    const removeType = (id: string) => set({ venueTypes: data.venueTypes.filter(x => x !== id) });
+    const removeType = (name: string) =>
+        set({ venueTypes: data.venueTypes.filter(x => x !== name) });
 
-    const getTypeName = (id: string) => venueTypes.find(t => t._id === id)?.name ?? id;
-    const getTypeIcon = (id: string) => venueTypes.find(t => t._id === id)?.icon ?? '';
+    // Lookups are by name now (matches what toggleType stores), not _id.
+    const getTypeIcon = (name: string) => venueTypes.find(t => t.name === name)?.icon ?? '';
+
+    const selectedTypeName = data.venueTypes[0];
+    const selectedTypeIcon = selectedTypeName ? getTypeIcon(selectedTypeName) : '';
 
     const validate = () => {
         const e: Record<string, string> = {};
@@ -120,15 +117,30 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
                         }}
                         activeOpacity={0.8}
                     >
-                        <Text style={[s.pickerText, data.venueTypes.length === 0 && s.placeholder]}>
-                            {loadingTypes
-                                ? 'Loading types...'
-                                : data.venueTypes.length > 0
-                                ? `${data.venueTypes.length} type${
-                                      data.venueTypes.length > 1 ? 's' : ''
-                                  } selected`
-                                : 'Select venue type(s)'}
-                        </Text>
+                        <View style={s.pickerLeft}>
+                            {selectedTypeIcon ? (
+                                <Text style={[s.pickerIcon, s.pickerEmojiIcon]}>
+                                    {selectedTypeIcon}
+                                </Text>
+                            ) : (
+                                <Ionicons
+                                    name="layers-outline"
+                                    size={18}
+                                    color={Colors.charcoalLight}
+                                    style={s.pickerIcon}
+                                />
+                            )}
+                            <Text
+                                style={[s.pickerText, !selectedTypeName && s.placeholder]}
+                                numberOfLines={1}
+                            >
+                                {loadingTypes
+                                    ? 'Loading types...'
+                                    : selectedTypeName
+                                    ? selectedTypeName
+                                    : 'Select venue type'}
+                            </Text>
+                        </View>
                         {loadingTypes ? (
                             <ActivityIndicator size="small" color={Colors.charcoalLight} />
                         ) : (
@@ -178,12 +190,11 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
                                     <Text style={s.noResults}>No matching types found</Text>
                                 ) : (
                                     filteredTypes.map(type => {
-                                        const selected = data.venueTypes.includes(type._id);
+                                        const selected = data.venueTypes.includes(type.name);
                                         return (
                                             <TouchableOpacity
                                                 key={type._id}
                                                 style={[s.item, selected && s.itemActive]}
-                                                // FIX: was toggleType(type.name) — must use _id
                                                 onPress={() => toggleType(type.name)}
                                                 activeOpacity={0.7}
                                             >
@@ -219,14 +230,14 @@ export default function Step1BasicInfo({ data, onChange, onNext }: Props) {
                         </View>
                     )}
 
-                    {/* Selected tags */}
+                    {/* Selected tag (kept for parity, though the name now also shows in the field box above) */}
                     {data.venueTypes.length > 0 && (
                         <View style={s.tagRow}>
-                            {data.venueTypes.map(id => (
-                                <View key={id} style={s.tag}>
-                                    <Text style={s.tagIcon}>{getTypeIcon(id)}</Text>
-                                    <Text style={s.tagText}>{getTypeName(id)}</Text>
-                                    <TouchableOpacity onPress={() => removeType(id)} hitSlop={6}>
+                            {data.venueTypes.map(name => (
+                                <View key={name} style={s.tag}>
+                                    <Text style={s.tagIcon}>{getTypeIcon(name)}</Text>
+                                    <Text style={s.tagText}>{name}</Text>
+                                    <TouchableOpacity onPress={() => removeType(name)} hitSlop={6}>
                                         <Ionicons name="close" size={12} color={Colors.primary} />
                                     </TouchableOpacity>
                                 </View>
@@ -352,8 +363,21 @@ const s = StyleSheet.create({
         backgroundColor: Colors.surface,
         height: 54,
     },
+    pickerLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        flex: 1,
+    },
+    pickerIcon: {
+        marginRight: Spacing.sm,
+    },
+    pickerEmojiIcon: {
+        fontSize: 16,
+        width: 18,
+        textAlign: 'center',
+    },
     pickerError: { borderColor: Colors.danger },
-    pickerText: { fontSize: Typography.md, color: Colors.charcoal },
+    pickerText: { fontSize: Typography.md, color: Colors.charcoal, flexShrink: 1 },
     placeholder: { color: Colors.charcoalLight },
     list: {
         borderWidth: 1,

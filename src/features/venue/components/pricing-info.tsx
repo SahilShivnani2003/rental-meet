@@ -234,21 +234,41 @@ function TimePickerModal({ visible, label, value, onDone, onClose }: TimePickerM
     );
 }
 
+// ─── Error row (matches the pattern used in the other steps) ─────────────────
+function ErrorRow({ msg }: { msg: string }) {
+    return (
+        <View style={errS.row}>
+            <Ionicons name="alert-circle" size={12} color={Colors.danger} />
+            <Text style={errS.text}>{msg}</Text>
+        </View>
+    );
+}
+const errS = StyleSheet.create({
+    row: { flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginTop: 5 },
+    text: { flex: 1, fontSize: 11, color: Colors.danger, fontWeight: Typography.semiBold },
+});
+
 // ─── Time Field (trigger button) ──────────────────────────────────────────────
 function TimeField({
     label,
     value,
     onPress,
+    error,
 }: {
     label: string;
     value: string;
     onPress: () => void;
+    error?: string;
 }) {
     const hasValue = value && value !== '';
     return (
         <View style={tf.wrap}>
             <Text style={tf.label}>{label}</Text>
-            <TouchableOpacity style={tf.btn} onPress={onPress} activeOpacity={0.8}>
+            <TouchableOpacity
+                style={[tf.btn, !!error && tf.btnError]}
+                onPress={onPress}
+                activeOpacity={0.8}
+            >
                 <Ionicons
                     name="time-outline"
                     size={18}
@@ -259,6 +279,7 @@ function TimeField({
                 </Text>
                 <Ionicons name="chevron-down" size={15} color={Colors.charcoalLight} />
             </TouchableOpacity>
+            {!!error && <ErrorRow msg={error} />}
         </View>
     );
 }
@@ -277,24 +298,75 @@ export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) 
     const [advOpen, setAdvOpen] = useState(false);
     const [openPickerOpen, setOpenPickerOpen] = useState(false);
     const [closePickerOpen, setClosePickerOpen] = useState(false);
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
-    const updatePrice = (key: string, type: 'weekday' | 'weekend', value: string) =>
+    const clearErr = (key: string) => setErrors(p => ({ ...p, [key]: '' }));
+
+    const updatePrice = (key: string, type: 'weekday' | 'weekend', value: string) => {
         set({ prices: { ...data.prices, [key]: { ...data.prices[key], [type]: value } } });
+        clearErr(key === EXTRA_HOUR_ROW.key ? 'extraHour' : 'pricingStructure');
+    };
 
-    const togglePeriod = (key: 'perHour' | 'halfDay' | 'fullDay') =>
+    const togglePeriod = (key: 'perHour' | 'halfDay' | 'fullDay') => {
         set({
             enabledOptions: {
                 ...data.enabledOptions,
                 [key]: !data.enabledOptions?.[key],
             },
         });
+        clearErr('pricingStructure');
+    };
 
-    const toggleDay = (day: string) =>
+    const toggleDay = (day: string) => {
         set({
             availDays: data.availDays.includes(day)
                 ? data.availDays.filter(d => d !== day)
                 : [...data.availDays, day],
         });
+        clearErr('availDays');
+    };
+
+    // ── Validation ──────────────────────────────────────────────────────────
+    const validate = () => {
+        const e: Record<string, string> = {};
+
+        const enabledRows = TOGGLE_PRICE_ROWS.filter(row => !!data.enabledOptions?.[row.key]);
+        if (enabledRows.length === 0) {
+            e.pricingStructure =
+                'Enable at least one pricing period (Per Hour, Half Day, or Full Day)';
+        } else {
+            const missingRate = enabledRows.find(row => {
+                const weekday = data.prices[row.key]?.weekday?.trim();
+                const weekend = data.prices[row.key]?.weekend?.trim();
+                return !weekday || !weekend;
+            });
+            if (missingRate) {
+                e.pricingStructure = `Enter both weekday & weekend rate for ${missingRate.label}`;
+            }
+        }
+
+        const extraWeekday = data.prices[EXTRA_HOUR_ROW.key]?.weekday?.trim();
+        const extraWeekend = data.prices[EXTRA_HOUR_ROW.key]?.weekend?.trim();
+        if (!extraWeekday || !extraWeekend) {
+            e.extraHour = 'Extra hour rate is required for both weekday & weekend';
+        }
+
+        if (!data.openTime) e.openTime = 'Opening time is required';
+        if (!data.closeTime) e.closeTime = 'Closing time is required';
+
+        if (data.availDays.length === 0) e.availDays = 'Select at least one available day';
+
+        if (!data.advanceBooking || data.advanceBooking === ADVANCE_OPTIONS[0]) {
+            e.advanceBooking = 'Select a minimum advance booking option';
+        }
+
+        if (!data.confirmationHours) {
+            e.confirmationHours = 'Select a booking confirmation time';
+        }
+
+        setErrors(e);
+        return Object.keys(e).length === 0;
+    };
 
     return (
         <ScrollView
@@ -358,11 +430,12 @@ export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) 
                         </View>
                     );
                 })}
+                {!!errors.pricingStructure && <ErrorRow msg={errors.pricingStructure} />}
 
                 {/* Extra Hour Rate — always active, no checkbox */}
                 <View style={s.priceRow}>
                     <Text style={[s.priceLabel, { flex: 1.3, marginLeft: 30 }]}>
-                        {EXTRA_HOUR_ROW.label}
+                        {EXTRA_HOUR_ROW.label} <Text style={s.req}>*</Text>
                     </Text>
                     <View style={{ flex: 1 }}>
                         <Field
@@ -385,6 +458,7 @@ export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) 
                         />
                     </View>
                 </View>
+                {!!errors.extraHour && <ErrorRow msg={errors.extraHour} />}
             </SectionCard>
 
             {/* ── Availability Schedule ── */}
@@ -403,6 +477,7 @@ export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) 
                             label="Opening Time"
                             value={data.openTime}
                             onPress={() => setOpenPickerOpen(true)}
+                            error={errors.openTime}
                         />
                     </View>
                     <View style={{ flex: 1 }}>
@@ -410,6 +485,7 @@ export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) 
                             label="Closing Time"
                             value={data.closeTime}
                             onPress={() => setClosePickerOpen(true)}
+                            error={errors.closeTime}
                         />
                     </View>
                 </View>
@@ -435,6 +511,7 @@ export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) 
                         );
                     })}
                 </View>
+                {!!errors.availDays && <ErrorRow msg={errors.availDays} />}
 
                 {/* Advance Booking */}
                 <View style={{ marginTop: Spacing.md }}>
@@ -449,8 +526,10 @@ export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) 
                         onSelect={v => {
                             set({ advanceBooking: v });
                             setAdvOpen(false);
+                            clearErr('advanceBooking');
                         }}
                     />
+                    {!!errors.advanceBooking && <ErrorRow msg={errors.advanceBooking} />}
                 </View>
             </SectionCard>
 
@@ -460,7 +539,9 @@ export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) 
                         <Ionicons name="timer-outline" size={18} color={Colors.info} />
                     </View>
                     <View style={{ flex: 1 }}>
-                        <Text style={s.confirmTitle}>Booking Confirmation Time</Text>
+                        <Text style={s.confirmTitle}>
+                            Booking Confirmation Time <Text style={s.req}>*</Text>
+                        </Text>
                         <Text style={s.confirmSub}>
                             How long will you take to confirm a booking request?
                         </Text>
@@ -474,7 +555,10 @@ export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) 
                             <TouchableOpacity
                                 key={hr}
                                 style={[s.hourChip, active && s.hourChipActive]}
-                                onPress={() => set({ confirmationHours: hr })}
+                                onPress={() => {
+                                    set({ confirmationHours: hr });
+                                    clearErr('confirmationHours');
+                                }}
                                 activeOpacity={0.75}
                             >
                                 <View style={[s.hourCircle, active && s.hourCircleActive]}>
@@ -495,22 +579,25 @@ export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) 
                         );
                     })}
                 </View>
+                {!!errors.confirmationHours && <ErrorRow msg={errors.confirmationHours} />}
 
-                <View style={s.confirmNote}>
-                    <Ionicons
-                        name="information-circle-outline"
-                        size={13}
-                        color={Colors.charcoalLight}
-                    />
-                    <Text style={s.confirmNoteText}>
-                        You must confirm or decline booking requests within{' '}
-                        <Text style={s.confirmNoteHighlight}>
-                            {data.confirmationHours}{' '}
-                            {data.confirmationHours === 1 ? 'hour' : 'hours'}
-                        </Text>{' '}
-                        of receiving them.
-                    </Text>
-                </View>
+                {!!data.confirmationHours && (
+                    <View style={s.confirmNote}>
+                        <Ionicons
+                            name="information-circle-outline"
+                            size={13}
+                            color={Colors.charcoalLight}
+                        />
+                        <Text style={s.confirmNoteText}>
+                            You must confirm or decline booking requests within{' '}
+                            <Text style={s.confirmNoteHighlight}>
+                                {data.confirmationHours}{' '}
+                                {data.confirmationHours === 1 ? 'hour' : 'hours'}
+                            </Text>{' '}
+                            of receiving them.
+                        </Text>
+                    </View>
+                )}
             </View>
 
             {/* ── Blackout Dates ── */}
@@ -534,21 +621,32 @@ export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) 
                 </Text>
             </SectionCard>
 
-            <NavButtons onPrev={onPrev} onNext={onNext} />
+            <NavButtons
+                onPrev={onPrev}
+                onNext={() => {
+                    if (validate()) onNext();
+                }}
+            />
 
             {/* ── Time Picker Modals ── */}
             <TimePickerModal
                 visible={openPickerOpen}
                 label="Opening Time"
                 value={data.openTime || '09:00 AM'}
-                onDone={v => set({ openTime: v })}
+                onDone={v => {
+                    set({ openTime: v });
+                    clearErr('openTime');
+                }}
                 onClose={() => setOpenPickerOpen(false)}
             />
             <TimePickerModal
                 visible={closePickerOpen}
                 label="Closing Time"
                 value={data.closeTime || '09:00 PM'}
-                onDone={v => set({ closeTime: v })}
+                onDone={v => {
+                    set({ closeTime: v });
+                    clearErr('closeTime');
+                }}
                 onClose={() => setClosePickerOpen(false)}
             />
         </ScrollView>
@@ -742,6 +840,7 @@ const tf = StyleSheet.create({
         paddingVertical: 13,
         backgroundColor: Colors.surface,
     },
+    btnError: { borderColor: Colors.danger },
     value: {
         flex: 1,
         fontSize: Typography.base,

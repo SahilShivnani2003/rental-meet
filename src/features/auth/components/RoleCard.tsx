@@ -86,7 +86,7 @@ export function RoleCard({
                     <Text style={styles.cardDescription}>{role.description}</Text>
 
                     {/* Perks — 2 × 2 grid */}
-                    <View style={styles.perksGrid}>
+                    {/* <View style={styles.perksGrid}>
                         {role.perks.map(perk => (
                             <View key={perk} style={styles.perkItem}>
                                 <View style={[styles.perkDot, { backgroundColor: role.color }]} />
@@ -95,7 +95,7 @@ export function RoleCard({
                                 </Text>
                             </View>
                         ))}
-                    </View>
+                    </View> */}
                 </View>
             </TouchableOpacity>
         </Animated.View>

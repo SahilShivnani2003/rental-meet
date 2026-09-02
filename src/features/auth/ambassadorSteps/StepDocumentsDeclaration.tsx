@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import DocumentUploadCard from '../components/DocumentUploadCard';
 import Checkbox from '../components/Checkbox';
@@ -42,12 +42,20 @@ export default function StepDocumentsDeclaration({
     onChange,
     errors,
 }: StepDocumentsDeclarationProps) {
-    const { documents, declaration } = data;
+    const { documents, declaration, name, addressDetails } = data;
     const alert = useAlert();
 
     const { mutate: uploadDocument } = useUploadDocument();
     const { mutate: uploadImage } = useUploadImage();
 
+    useEffect(() => {
+        if (name) {
+            setDeclaration('applicantSignatureName', name);
+        }
+        if (addressDetails.city) {
+            setDeclaration('place', addressDetails.city);
+        }
+    }, [name, addressDetails.city]);
     // The card has no "loading" prop and only ever reports a local uri, so we
     // show that local uri as an optimistic preview while the upload is in
     // flight, then swap it out for the server URL (or revert) once it settles.
@@ -95,7 +103,7 @@ export default function StepDocumentsDeclaration({
                 return;
             }
             setDocument(field, url);
-            setLocalPreviews(prev => ({ ...prev, [field]: undefined }));
+            setLocalPreviews(prev => ({ ...prev, [field]: url }));
             onDone();
         };
 
@@ -136,7 +144,7 @@ export default function StepDocumentsDeclaration({
                         title="Aadhaar Card (Front Side)"
                         required
                         uri={displayUri('aadhaarFront')}
-                        onChange={uri => handleDocumentPick('aadhaarFront', uri, 'document')}
+                        onChange={uri => handleDocumentPick('aadhaarFront', uri, 'image')}
                         error={errors.aadhaarFront || uploadErrors.aadhaarFront}
                     />
                     {uploadingFields.aadhaarFront && (
@@ -146,8 +154,9 @@ export default function StepDocumentsDeclaration({
                 <View style={styles.docCell}>
                     <DocumentUploadCard
                         title="Aadhaar Card (Back Side)"
+                        required
                         uri={displayUri('aadhaarBack')}
-                        onChange={uri => handleDocumentPick('aadhaarBack', uri, 'document')}
+                        onChange={uri => handleDocumentPick('aadhaarBack', uri, 'image')}
                         error={uploadErrors.aadhaarBack}
                     />
                     {uploadingFields.aadhaarBack && (
@@ -162,7 +171,7 @@ export default function StepDocumentsDeclaration({
                         title="PAN Card"
                         optionalLabel
                         uri={displayUri('panCard')}
-                        onChange={uri => handleDocumentPick('panCard', uri, 'document')}
+                        onChange={uri => handleDocumentPick('panCard', uri, 'image')}
                         error={uploadErrors.panCard}
                     />
                     {uploadingFields.panCard && (
@@ -172,6 +181,7 @@ export default function StepDocumentsDeclaration({
                 <View style={styles.docCell}>
                     <DocumentUploadCard
                         title="Passport Size Photo"
+                        required
                         uri={displayUri('passportPhoto')}
                         onChange={uri => handleDocumentPick('passportPhoto', uri, 'image')}
                         error={uploadErrors.passportPhoto}
@@ -206,8 +216,8 @@ export default function StepDocumentsDeclaration({
                         label="Applicant Signature / Full Name"
                         placeholder="Enter your full name"
                         icon="create-outline"
-                        value={declaration.applicantSignatureName}
-                        onChangeText={t => setDeclaration('applicantSignatureName', t)}
+                        value={name || declaration.applicantSignatureName}
+                        onChangeText={t => setDeclaration('applicantSignatureName', t )}
                         autoCapitalize="words"
                         error={errors.applicantSignatureName}
                     />
@@ -217,8 +227,8 @@ export default function StepDocumentsDeclaration({
                         label="Place"
                         placeholder="City / Town"
                         icon="location-outline"
-                        value={declaration.place}
-                        onChangeText={t => setDeclaration('place', t)}
+                        value={addressDetails.city || declaration.place}
+                        onChangeText={t => setDeclaration('place', t )}
                         autoCapitalize="words"
                         error={errors.place}
                     />
@@ -272,3 +282,7 @@ const styles = StyleSheet.create({
     pairRow: { flexDirection: 'column', gap: Spacing.md },
     pairItem: { flex: 1 },
 });
+function useeffect(arg0: () => void, arg1: string[]) {
+    throw new Error('Function not implemented.');
+}
+

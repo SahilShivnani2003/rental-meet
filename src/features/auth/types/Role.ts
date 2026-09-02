@@ -20,6 +20,24 @@ export const ROLES = [
         featured: true,
     },
     {
+        id: 'ambassador',
+        title: 'Become an Ambassador',
+        subtitle: 'Ambassador',
+        description:
+            'Promote our platform, connect with businesses, and earn rewards by bringing new users and partners to the platform.',
+        icon: 'megaphone',
+        color: Colors.warning,
+        bg: Colors.warningLight,
+        cardBg: Colors.primaryHighLight,
+        featured: true,
+        perks: [
+            'Refer new users & businesses',
+            'Earn referral rewards',
+            'Track your referrals',
+            'Grow your network',
+        ],
+    },
+    {
         id: 'owner',
         title: 'List Your Venue',
         subtitle: 'Venue Owner',
@@ -52,22 +70,5 @@ export const ROLES = [
             'Manage service requests',
             'Grow your brand',
         ],
-    },
-    {
-        id: 'ambassador',
-        title: 'Become an Ambassador',
-        subtitle: 'Ambassador',
-        description:
-            'Promote our platform, connect with businesses, and earn rewards by bringing new users and partners to the platform.',
-        icon: 'megaphone',
-        color: Colors.warning,
-        bg: Colors.warningLight,
-        cardBg: Colors.primaryHighLight,
-        perks: [
-            'Refer new users & businesses',
-            'Earn referral rewards',
-            'Track your referrals',
-            'Grow your network',
-        ],
-    },
+    }
 ];

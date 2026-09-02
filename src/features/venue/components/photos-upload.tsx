@@ -23,6 +23,7 @@ import { Colors, Typography, Spacing, Radii } from '../../../theme/theme';
 import { StepHeader, SectionCard, NavButtons } from '../../../components/UI/shared-components';
 import { VenueFormData, UploadedImage } from '../types/VenueFormData';
 import { useUploadImage } from '../hooks/useUpload';
+import { useAlert } from '@/context/AlertContext';
 
 const PHOTO_SECTIONS = [
     { key: 'featured', label: 'Featured Photo', required: true },
@@ -39,6 +40,9 @@ const REQUIREMENTS = [
     'Clear, well-lit photos showing venue features',
 ];
 
+const MIN_TOTAL_PHOTOS = 5;
+const MAX_TOTAL_PHOTOS = 20;
+
 interface Props {
     data: VenueFormData['photos'];
     onChange: (data: VenueFormData['photos']) => void;
@@ -47,17 +51,28 @@ interface Props {
 }
 
 export default function Step5Photos({ data, onChange, onPrev, onNext }: Props) {
+    const alert = useAlert();
     const { mutateAsync: uploadImageAsync } = useUploadImage();
     const [pickerTarget, setPickerTarget] = useState<string | null>(null);
     const pickerTargetRef = useRef<string | null>(null);
     const [uploading, setUploading] = useState<Record<string, boolean>>({});
     const [removing, setRemoving] = useState<Record<string, boolean>>({});
+    // Tracks whether the user has attempted to continue, so we only show
+    // inline "required" errors after a submit attempt (not on first render).
+    const [attemptedNext, setAttemptedNext] = useState(false);
 
     // Derived count per section from shared data
     const counts = PHOTO_SECTIONS.reduce<Record<string, number>>((acc, sec) => {
         acc[sec.key] = data.uploadedImages.filter(i => i.sectionKey === sec.key).length;
         return acc;
     }, {});
+
+    const totalCount = data.uploadedImages.length;
+
+    // Sections that are required but currently have zero photos.
+    const missingRequiredSections = PHOTO_SECTIONS.filter(
+        sec => sec.required && (counts[sec.key] || 0) === 0,
+    );
 
     const imagesFor = (key: string) => data.uploadedImages.filter(i => i.sectionKey === key);
 
@@ -90,6 +105,11 @@ export default function Step5Photos({ data, onChange, onPrev, onNext }: Props) {
                     ];
             } catch (e: any) {
                 console.error('IMAGE UPLOAD ERROR:', e);
+                if(e?.status === 413) {
+                    alert.error('Upload failed',' Image too large. Please select a smaller image (max 5MB).');
+                } else {
+                    alert.error('Upload failed', e?.message || 'Error uploading image. Please try again.');
+                }
             }
         }
 
@@ -99,29 +119,34 @@ export default function Step5Photos({ data, onChange, onPrev, onNext }: Props) {
 
     const handleTakePhoto = () =>
         launchCamera(
-            { mediaType: 'photo', saveToPhotos: true, quality: 0.8, includeBase64: true },
+            { mediaType: 'photo', saveToPhotos: true, quality: 0.4, includeBase64: true },
             onPickerResult,
         );
     const handleChooseGallery = () =>
         launchImageLibrary(
-            { mediaType: 'photo', selectionLimit: 10, quality: 0.8, includeBase64: true },
+            { mediaType: 'photo', selectionLimit: 10, quality: 0.4, includeBase64: true },
             onPickerResult,
         );
 
     // ── Remove an uploaded photo ─────────────────────────────────────────────
     const confirmRemove = (image: UploadedImage) => {
-        Alert.alert('Remove Photo', 'Are you sure you want to remove this photo?', [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Remove', style: 'destructive', onPress: () => removeImage(image) },
-        ]);
+        alert.show({
+            title: 'Remove Photo',
+            message: 'Are you sure you want to remove this photo?',
+            buttons: [
+                {label: 'Cancel', style: 'ghost', onPress: () => {alert.dismiss()}},
+                {label: 'Remove', style: 'danger', onPress: () => {
+                    removeImage(image);
+                    alert.dismiss();
+                }},
+            ]
+        })
+
     };
 
     const removeImage = async (image: UploadedImage) => {
         setRemoving(p => ({ ...p, [image.publicId]: true }));
         try {
-            // If you have a delete-from-storage mutation (e.g. useDeleteImage),
-            // call it here before removing from local state:
-            // await deleteImageAsync({ publicId: image.publicId });
             onChange({
                 uploadedImages: data.uploadedImages.filter(i => i.publicId !== image.publicId),
             });
@@ -130,6 +155,32 @@ export default function Step5Photos({ data, onChange, onPrev, onNext }: Props) {
         } finally {
             setRemoving(p => ({ ...p, [image.publicId]: false }));
         }
+    };
+
+    // ── Validation ────────────────────────────────────────────────────────
+    // Returns a user-facing error message, or null if everything is valid.
+    const validate = (): string | null => {
+        if (missingRequiredSections.length > 0) {
+            const labels = missingRequiredSections.map(s => s.label).join(', ');
+            return `Please add at least one photo for: ${labels}.`;
+        }
+        if (totalCount < MIN_TOTAL_PHOTOS) {
+            return `Please upload at least ${MIN_TOTAL_PHOTOS} photos in total (you have ${totalCount}).`;
+        }
+        if (totalCount > MAX_TOTAL_PHOTOS) {
+            return `You can upload a maximum of ${MAX_TOTAL_PHOTOS} photos in total (you have ${totalCount}).`;
+        }
+        return null;
+    };
+
+    const handleNext = () => {
+        setAttemptedNext(true);
+        const error = validate();
+        if (error) {
+            alert.error('Missing required photos', error);
+            return;
+        }
+        onNext();
     };
 
     return (
@@ -158,6 +209,7 @@ export default function Step5Photos({ data, onChange, onPrev, onNext }: Props) {
                         const isDone = count > 0;
                         const isUploading = uploading[sec.key] ?? false;
                         const sectionImages = imagesFor(sec.key);
+                        const showError = attemptedNext && sec.required && !isDone;
                         return (
                             <View
                                 key={sec.key}
@@ -169,7 +221,11 @@ export default function Step5Photos({ data, onChange, onPrev, onNext }: Props) {
                                 <View style={s.photoTopRow}>
                                     <View style={s.photoLeft}>
                                         <View
-                                            style={[s.photoIconWrap, isDone && s.photoIconWrapDone]}
+                                            style={[
+                                                s.photoIconWrap,
+                                                isDone && s.photoIconWrapDone,
+                                                showError && s.photoIconWrapError,
+                                            ]}
                                         >
                                             {isUploading ? (
                                                 <ActivityIndicator
@@ -178,11 +234,19 @@ export default function Step5Photos({ data, onChange, onPrev, onNext }: Props) {
                                                 />
                                             ) : (
                                                 <Ionicons
-                                                    name={isDone ? 'checkmark' : 'image-outline'}
+                                                    name={
+                                                        isDone
+                                                            ? 'checkmark'
+                                                            : showError
+                                                            ? 'alert-circle-outline'
+                                                            : 'image-outline'
+                                                    }
                                                     size={16}
                                                     color={
                                                         isDone
                                                             ? Colors.success
+                                                            : showError
+                                                            ? Colors.danger
                                                             : Colors.charcoalLight
                                                     }
                                                 />
@@ -194,10 +258,16 @@ export default function Step5Photos({ data, onChange, onPrev, onNext }: Props) {
                                                 {sec.required && <Text style={s.req}> *</Text>}
                                             </Text>
                                             <Text
-                                                style={[s.photoCount, isDone && s.photoCountDone]}
+                                                style={[
+                                                    s.photoCount,
+                                                    isDone && s.photoCountDone,
+                                                    showError && s.photoCountError,
+                                                ]}
                                             >
                                                 {isUploading
                                                     ? 'Uploading…'
+                                                    : showError
+                                                    ? 'Required — add at least 1 photo'
                                                     : `${count} photo${
                                                           count !== 1 ? 's' : ''
                                                       } uploaded`}
@@ -209,6 +279,7 @@ export default function Step5Photos({ data, onChange, onPrev, onNext }: Props) {
                                             s.uploadBtn,
                                             isDone && s.uploadBtnDone,
                                             isUploading && s.uploadBtnDisabled,
+                                            showError && s.uploadBtnError,
                                         ]}
                                         onPress={() => !isUploading && handleUpload(sec.key)}
                                         activeOpacity={0.8}
@@ -222,6 +293,8 @@ export default function Step5Photos({ data, onChange, onPrev, onNext }: Props) {
                                                     ? Colors.charcoalLight
                                                     : isDone
                                                     ? Colors.success
+                                                    : showError
+                                                    ? Colors.danger
                                                     : Colors.primary
                                             }
                                         />
@@ -230,6 +303,7 @@ export default function Step5Photos({ data, onChange, onPrev, onNext }: Props) {
                                                 s.uploadText,
                                                 isDone && s.uploadTextDone,
                                                 isUploading && s.uploadTextDisabled,
+                                                showError && s.uploadTextError,
                                             ]}
                                         >
                                             {isUploading
@@ -311,7 +385,21 @@ export default function Step5Photos({ data, onChange, onPrev, onNext }: Props) {
                     ))}
                 </View>
 
-                <NavButtons onPrev={onPrev} onNext={onNext} nextLabel="Skip & Continue" />
+                {/* Overall total-count error, shown separately from per-section errors */}
+                {attemptedNext &&
+                    missingRequiredSections.length === 0 &&
+                    (totalCount < MIN_TOTAL_PHOTOS || totalCount > MAX_TOTAL_PHOTOS) && (
+                        <View style={s.totalErrorBox}>
+                            <Ionicons name="alert-circle-outline" size={15} color={Colors.danger} />
+                            <Text style={s.totalErrorText}>
+                                {totalCount < MIN_TOTAL_PHOTOS
+                                    ? `Upload at least ${MIN_TOTAL_PHOTOS} photos in total (you have ${totalCount}).`
+                                    : `Maximum of ${MAX_TOTAL_PHOTOS} photos allowed (you have ${totalCount}).`}
+                            </Text>
+                        </View>
+                    )}
+
+                <NavButtons onPrev={onPrev} onNext={handleNext} nextLabel="Continue" />
             </ScrollView>
 
             <Modal
@@ -419,6 +507,7 @@ const s = StyleSheet.create({
         borderColor: Colors.border,
     },
     photoIconWrapDone: { backgroundColor: Colors.successLight, borderColor: Colors.success },
+    photoIconWrapError: { backgroundColor: Colors.dangerLight ?? '#FEE2E2', borderColor: Colors.danger },
     photoLabel: {
         fontSize: Typography.md,
         fontWeight: Typography.semiBold,
@@ -427,6 +516,7 @@ const s = StyleSheet.create({
     req: { color: Colors.danger },
     photoCount: { fontSize: Typography.sm, color: Colors.charcoalLight, marginTop: 2 },
     photoCountDone: { color: Colors.success },
+    photoCountError: { color: Colors.danger, fontWeight: Typography.semiBold },
     uploadBtn: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -439,9 +529,11 @@ const s = StyleSheet.create({
     },
     uploadBtnDone: { borderColor: Colors.success },
     uploadBtnDisabled: { borderColor: Colors.border },
+    uploadBtnError: { borderColor: Colors.danger },
     uploadText: { fontSize: Typography.base, fontWeight: Typography.bold, color: Colors.primary },
     uploadTextDone: { color: Colors.success },
     uploadTextDisabled: { color: Colors.charcoalLight },
+    uploadTextError: { color: Colors.danger },
 
     // ── Thumbnails ──
     thumbRow: { marginTop: Spacing.md },
@@ -496,6 +588,21 @@ const s = StyleSheet.create({
     reqRow: { flexDirection: 'row', gap: Spacing.xs, marginBottom: 4 },
     bullet: { fontSize: Typography.base, color: Colors.charcoalLight },
     reqText: { flex: 1, fontSize: Typography.sm, color: Colors.charcoalLight, lineHeight: 18 },
+
+    totalErrorBox: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.xs,
+        marginHorizontal: Spacing.lg,
+        marginTop: Spacing.md,
+        padding: Spacing.md,
+        backgroundColor: Colors.dangerLight ?? '#FEE2E2',
+        borderRadius: Radii.md,
+        borderWidth: 1,
+        borderColor: Colors.danger,
+    },
+    totalErrorText: { flex: 1, fontSize: Typography.sm, color: Colors.danger },
+
     backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
     sheet: {
         backgroundColor: Colors.surface ?? '#fff',

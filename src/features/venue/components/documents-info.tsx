@@ -9,6 +9,7 @@ import {
     Pressable,
     Platform,
     ActivityIndicator,
+    TextInput,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import {
@@ -24,7 +25,7 @@ import {
     DocumentPickerResponse,
     errorCodes,
 } from '@react-native-documents/picker';
-import { Colors, Typography, Spacing, Radii } from '../../../theme/theme';
+import { Colors, Typography, Spacing, Radii, Shadows } from '../../../theme/theme';
 import Field from '../../../components/UI/InputField';
 import {
     StepHeader,
@@ -37,7 +38,15 @@ import {
 import { useAuthStore } from '../../../store/useAuthStore';
 import { VenueFormData } from '../types/VenueFormData';
 import { useUploadDocument, useUploadImage } from '../hooks/useUpload';
+import { useAlert } from '@/context/AlertContext';
 import RNFS from 'react-native-fs';
+import {
+    useSendEmailOtp,
+    useSendPhoneOtp,
+    useVerifyEmailOtp,
+    useVerifyPhoneOtp,
+} from '@/features/auth/hooks/useVerfication';
+import LoadingDots from '@/components/UI/loading-dots';
 
 const ROLES = ['Select role', 'Owner', 'Manager', 'Partner', 'Director'];
 const BUSINESS_PROOF_TYPES = [
@@ -81,6 +90,17 @@ const ALL_FILE_TYPES = [...IMAGE_TYPES, ...DOC_TYPES] as string[];
 function truncateName(name: string | null | undefined): string {
     if (!name) return 'File selected';
     return name.length > 28 ? name.slice(0, 25) + '…' : name;
+}
+
+// ─── Small inline error message shown under an invalid required field ──────────
+function FieldError({ show, message }: { show: boolean; message: string }) {
+    if (!show) return null;
+    return (
+        <View style={s.fieldErrorRow}>
+            <Ionicons name="alert-circle-outline" size={13} color={Colors.danger} />
+            <Text style={s.fieldErrorText}>{message}</Text>
+        </View>
+    );
 }
 
 // ─── UploadBtn — module-level component (never define inside parent) ───────────
@@ -133,11 +153,39 @@ interface Props {
     onNext: () => void;
 }
 
+// ── OTP step type ─────────────────────────────────────────────────────────────
+type OtpStep = 'none' | 'email' | 'phone';
+
 export default function Step6Documents({ data, onChange, onPrev, onNext }: Props) {
+    const alert = useAlert();
     const { mutateAsync: uploadImageAsync } = useUploadImage();
     const { mutateAsync: uploadDocumentAsync } = useUploadDocument();
+    // ── OTP modal state ───────────────────────────────────────────────────────
+    const [otpStep, setOtpStep] = useState<OtpStep>('none');
+    const [otpValue, setOtpValue] = useState('');
+    const [otpError, setOtpError] = useState('');
+
+    // ── Verification state ────────────────────────────────────────────────────
+    const [emailVerified, setEmailVerified] = useState(false);
+    const [phoneVerified, setPhoneVerified] = useState(false);
+    const [profilePicUrl, setProfilePicUrl] = useState<string | null>(null);
+    const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+    const { mutate: sendEmailOtp, isPending: sendingEmailOtp } = useSendEmailOtp();
+    const { mutate: sendPhoneOtp, isPending: sendingPhoneOtp } = useSendPhoneOtp();
+    const { mutate: verifyEmailOtp, isPending: verifyingEmailOtp } = useVerifyEmailOtp();
+    const { mutate: verifyPhoneOtp, isPending: verifyingPhoneOtp } = useVerifyPhoneOtp();
 
     const { user } = useAuthStore();
+    const isAmbassador = user?.role === 'ambassador';
+    const [errors, setErrors] = useState<Record<string, string>>({});
+    const clearError = (key: string) =>
+        setErrors(prev => {
+            if (!(key in prev)) return prev;
+            const next = { ...prev };
+            delete next[key];
+            return next;
+        });
     const set = (patch: Partial<VenueFormData['documents']>) => onChange({ ...data, ...patch });
 
     // Prefill from logged-in user on first mount only
@@ -154,6 +202,9 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
     const [uploading, setUploading] = useState<Record<string, boolean>>({});
     const [sheetTarget, setSheetTarget] = useState<SheetTarget | null>(null);
     const sheetTargetRef = useRef<SheetTarget | null>(null);
+    // Tracks whether the user has attempted to continue, so inline "required"
+    // errors only appear after a submit attempt (not on first render).
+    const [attemptedNext, setAttemptedNext] = useState(false);
 
     // Always-current refs so async callbacks never close over stale values
     const dataRef = useRef(data);
@@ -168,6 +219,103 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
     const setLatest = useCallback((patch: Partial<VenueFormData['documents']>) => {
         onChangeRef.current({ ...dataRef.current, ...patch });
     }, []);
+
+    // ── OTP: Send email ───────────────────────────────────────────────────────
+    const handleSendEmailOtp = () => {
+        if (!data.email?.trim() || !/\S+@\S+\.\S+/.test(data.email)) {
+            setErrors(prev => ({ ...prev, email: 'Enter a valid email first' }));
+            return;
+        }
+        setOtpValue('');
+        setOtpError('');
+        sendEmailOtp(
+            { email: data.email, name: data.fullName, purpose: 'owner_verification' },
+            {
+                onSuccess: () => {
+                    setOtpStep('email');
+                },
+                onError: (error: any) => {
+                    alert.error('OTP Error', error?.message || 'Failed to send OTP');
+                },
+            },
+        );
+    };
+
+    const handleVerifyEmailOtp = () => {
+        if (otpValue.length < 4) {
+            setOtpError('Enter the complete OTP');
+            return;
+        }
+        verifyEmailOtp(
+            { email: data.email, otp: otpValue },
+            {
+                onSuccess: () => {
+                    setEmailVerified(true);
+                    setOtpStep('none');
+                    clearError('email');
+                    alert.success('OTP Verified', 'Email verified successfully');
+                },
+                onError: (error: any) => {
+                    setOtpError(error?.message || 'Invalid OTP. Please try again.');
+                },
+            },
+        );
+    };
+
+    const handleSendPhoneOtp = () => {
+        if (data.mobile?.replace(/\D/g, '').length !== 10) {
+            setErrors(prev => ({ ...prev, phone: 'Enter a valid 10-digit number first' }));
+            return;
+        }
+        setOtpValue('');
+        setOtpError('');
+        sendPhoneOtp(
+            { phone: data.mobile, name: data.fullName, purpose: 'owner_verification' },
+            {
+                onSuccess: () => {
+                    setOtpStep('phone');
+                },
+                onError: (error: any) => {
+                    alert.error('OTP Error', error?.message || 'Failed to send OTP');
+                },
+            },
+        );
+    };
+
+    const handleVerifyPhoneOtp = () => {
+        if (otpValue.length < 4) {
+            setOtpError('Enter the complete OTP');
+            return;
+        }
+        verifyPhoneOtp(
+            { phone: data.mobile, otp: otpValue },
+            {
+                onSuccess: () => {
+                    setPhoneVerified(true);
+                    setOtpStep('none');
+                    clearError('phone');
+                    alert.success('OTP Verified', 'Phone number verified successfully');
+                },
+                onError: (error: any) => {
+                    setOtpError(error?.message || 'Invalid OTP. Please try again.');
+                },
+            },
+        );
+    };
+
+    // ── OTP Modal ─────────────────────────────────────────────────────────────
+    const isOtpModalVisible = otpStep !== 'none';
+    const otpIsPending = otpStep === 'email' ? verifyingEmailOtp : verifyingPhoneOtp;
+
+    const handleOtpConfirm = () => {
+        if (otpStep === 'email') handleVerifyEmailOtp();
+        else if (otpStep === 'phone') handleVerifyPhoneOtp();
+    };
+
+    const handleResendOtp = () => {
+        if (otpStep === 'email') handleSendEmailOtp();
+        else if (otpStep === 'phone') handleSendPhoneOtp();
+    };
 
     const openSheet = (key: string, mode: TargetMode, label: string) => {
         const target = { key, mode, label };
@@ -209,7 +357,17 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                 }
             } catch (e: any) {
                 console.error('DOCUMENT UPLOAD ERROR:', e);
-                // Roll back optimistic filename on any error
+                if (e?.status === 413) {
+                    alert.error(
+                        'Upload failed',
+                        ' Image too large. Please select a smaller image (max 5MB).',
+                    );
+                } else {
+                    alert.error(
+                        'Upload failed',
+                        e?.message || 'Error uploading image. Please try again.',
+                    );
+                }
                 setLatest({ uploads: { ...dataRef.current.uploads, [key]: '' } });
             } finally {
                 setUploading(p => ({ ...p, [key]: false }));
@@ -241,7 +399,7 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
     const handleCamera = useCallback(
         () =>
             launchCamera(
-                { mediaType: 'photo', saveToPhotos: false, quality: 0.8, includeBase64: true },
+                { mediaType: 'photo', saveToPhotos: false, quality: 0.4, includeBase64: true },
                 onImagePickerResult,
             ),
         [onImagePickerResult],
@@ -250,7 +408,7 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
     const handleGalleryImage = useCallback(
         () =>
             launchImageLibrary(
-                { mediaType: 'photo', selectionLimit: 1, quality: 0.8, includeBase64: true },
+                { mediaType: 'photo', selectionLimit: 1, quality: 0.4, includeBase64: true },
                 onImagePickerResult,
             ),
         [onImagePickerResult],
@@ -266,6 +424,7 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                     type: imageOnly ? IMAGE_TYPES : ALL_FILE_TYPES,
                     allowMultiSelection: false,
                     presentationStyle: 'pageSheet',
+                    quality: 0.4,
                 });
                 if (!res) return;
                 const [copyResult] = await keepLocalCopy({
@@ -310,7 +469,7 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
             onPress: () => void;
         }[] = [];
 
-        if (mode === 'photo' || mode === 'selfie') {
+        if (mode === 'photo' || mode === 'selfie' || mode === 'document') {
             options.push({
                 icon: 'camera-outline',
                 iconBg: Colors.primaryLight,
@@ -325,16 +484,6 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                 iconColor: '#7C3AED',
                 title: 'Choose from Gallery',
                 sub: 'Pick an existing image from device',
-                onPress: handleGalleryImage,
-            });
-        }
-        if (mode === 'document') {
-            options.push({
-                icon: 'images-outline',
-                iconBg: '#EDE9FE',
-                iconColor: '#7C3AED',
-                title: 'Choose Image',
-                sub: 'JPG or PNG from your gallery',
                 onPress: handleGalleryImage,
             });
         }
@@ -367,11 +516,135 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
         });
     };
 
+    // ── Validation ────────────────────────────────────────────────────────────
+    // Each check mirrors a red "*" required marker already present in the UI.
+    const isRoleValid = !!data.role && data.role !== 'Select role';
+    const isGstNumberValid = !data.hasGST || !!data.gstNumber?.trim();
+    const isGstDocValid = !data.hasGST || !!data.uploads?.gst_doc;
+    const isIdFrontValid = !!data.uploads?.id_front;
+    const isIdBackValid = data.idType !== 'aadhaar' || !!data.uploads?.id_back;
+    const isBizProofTypeValid = !!data.bizProofType && data.bizProofType !== 'Select type';
+    const isBizProofOtherValid = data.bizProofType !== 'Other' || !!data.bizProofOther?.trim();
+    const isBizDocValid = !!data.uploads?.biz_doc;
+    const isAccountTypeValid = !!data.accountType && data.accountType !== 'Select type';
+    const isBankProofValid = !!data.uploads?.bank_proof;
+    const isEmailVerifiedValid = !isAmbassador || emailVerified;
+    const isPhoneVerifiedValid = !isAmbassador || phoneVerified;
+
+    const getValidationErrors = (): string[] => {
+        const errors: string[] = [];
+        if (!isRoleValid) errors.push('Select your role.');
+        if (isAmbassador && !isEmailVerifiedValid) errors.push('Please verify your email.');
+        if (isAmbassador && !isPhoneVerifiedValid) errors.push('Please verify your phone number.');
+        if (data.hasGST && !isGstNumberValid) errors.push('Enter your GST number.');
+        if (data.hasGST && !isGstDocValid) errors.push('Upload your GST certificate.');
+        if (!isIdFrontValid) errors.push('Upload the front of your ID.');
+        if (data.idType === 'aadhaar' && !isIdBackValid) {
+            errors.push('Upload the back of your Aadhaar card.');
+        }
+        if (!isBizProofTypeValid) errors.push('Select a business proof type.');
+        if (data.bizProofType === 'Other' && !isBizProofOtherValid) {
+            errors.push('Specify your business proof type.');
+        }
+        if (!isBizDocValid) errors.push('Upload your business document.');
+        if (!isAccountTypeValid) errors.push('Select an account type.');
+        if (!isBankProofValid) errors.push('Upload your bank proof document.');
+        return errors;
+    };
+
+    const handleNext = () => {
+        setAttemptedNext(true);
+        const errors = getValidationErrors();
+        if (errors.length > 0) {
+            alert.error('Missing required information', errors.join('\n'));
+            return;
+        }
+        onNext();
+    };
+
     // Shared props passed to every UploadBtn
     const uploadBtnShared = { uploads: data.uploads, uploading, onOpen: openSheet };
 
     return (
         <>
+            {/* OTP Verification Modal */}
+            <Modal
+                visible={isOtpModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setOtpStep('none')}
+            >
+                <View style={s.modalOverlay}>
+                    <View style={s.modalCard}>
+                        <View style={s.modalHeader}>
+                            <Ionicons
+                                name={
+                                    otpStep === 'email' ? 'mail-outline' : 'phone-portrait-outline'
+                                }
+                                size={28}
+                                color={Colors.primary}
+                            />
+                            <Text style={s.modalTitle}>
+                                Verify {otpStep === 'email' ? 'Email' : 'Phone'}
+                            </Text>
+                            <Text style={s.modalSubtitle}>
+                                Enter the OTP sent to{' '}
+                                <Text
+                                    style={{ fontWeight: Typography.bold, color: Colors.charcoal }}
+                                >
+                                    {otpStep === 'email' ? data.email : data.mobile}
+                                </Text>
+                            </Text>
+                        </View>
+
+                        <TextInput
+                            style={[s.otpInput, !!otpError && s.otpInputError]}
+                            value={otpValue}
+                            onChangeText={t => {
+                                setOtpValue(t.replace(/\D/g, ''));
+                                setOtpError('');
+                            }}
+                            keyboardType="number-pad"
+                            maxLength={6}
+                            placeholder="------"
+                            placeholderTextColor={Colors.charcoalLight}
+                            textAlign="center"
+                        />
+                        {!!otpError && (
+                            <View style={[s.errorRow, { marginBottom: Spacing.sm }]}>
+                                <Ionicons name="alert-circle" size={12} color={Colors.danger} />
+                                <Text style={s.errorText}>{otpError}</Text>
+                            </View>
+                        )}
+
+                        <TouchableOpacity
+                            style={[s.registerBtn, otpIsPending && { opacity: 0.7 }]}
+                            onPress={handleOtpConfirm}
+                            disabled={otpIsPending}
+                            activeOpacity={0.9}
+                        >
+                            {otpIsPending ? (
+                                <LoadingDots />
+                            ) : (
+                                <Text style={s.registerBtnText}>Verify OTP</Text>
+                            )}
+                        </TouchableOpacity>
+
+                        <View style={s.modalFooterRow}>
+                            <TouchableOpacity
+                                onPress={handleResendOtp}
+                                disabled={sendingEmailOtp || sendingPhoneOtp}
+                            >
+                                <Text style={s.resendText}>Resend OTP</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setOtpStep('none')}>
+                                <Text style={[s.resendText, { color: Colors.danger }]}>Cancel</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 20 }}
@@ -397,22 +670,96 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                                 placeholder="john@example.com"
                                 icon="mail-outline"
                                 value={data.email}
-                                onChangeText={v => set({ email: v })}
+                                onChangeText={v => {
+                                    set({ email: v });
+                                    if (emailVerified) setEmailVerified(false);
+                                    clearError('email');
+                                }}
                                 keyboardType="email-address"
                                 autoCapitalize="none"
                             />
+                            {isAmbassador &&
+                                (emailVerified ? (
+                                    <View style={s.verifiedBadge}>
+                                        <Ionicons
+                                            name="checkmark-circle"
+                                            size={14}
+                                            color={Colors.success}
+                                        />
+                                        <Text style={s.verifiedBadgeText}>Verified</Text>
+                                    </View>
+                                ) : (
+                                    <TouchableOpacity
+                                        style={s.verifyBtn}
+                                        onPress={handleSendEmailOtp}
+                                        disabled={sendingEmailOtp}
+                                        activeOpacity={0.8}
+                                    >
+                                        <Ionicons
+                                            name="shield-checkmark-outline"
+                                            size={14}
+                                            color={Colors.primary}
+                                        />
+                                        <Text style={s.verifyBtnText}>
+                                            {sendingEmailOtp ? 'Sending…' : 'Verify Email'}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            <FieldError
+                                show={attemptedNext && isAmbassador && !isEmailVerifiedValid}
+                                message="Please verify your email."
+                            />
+                            {!!errors.email && <FieldError show message={errors.email} />}
                         </View>
                     </View>
                     <View style={s.row}>
                         <View style={{ flex: 1 }}>
-                            <Field
-                                label="Mobile Number"
-                                placeholder="9876543210"
-                                icon="call-outline"
-                                value={data.mobile}
-                                onChangeText={v => set({ mobile: v })}
-                                keyboardType="phone-pad"
-                            />
+                            <View style={{ flex: 1 }}>
+                                <Field
+                                    label="Mobile Number"
+                                    placeholder="9876543210"
+                                    icon="call-outline"
+                                    value={data.mobile}
+                                    onChangeText={v => {
+                                        set({ mobile: v });
+                                        if (phoneVerified) setPhoneVerified(false);
+                                        clearError('phone');
+                                    }}
+                                    keyboardType="phone-pad"
+                                />
+                                {isAmbassador &&
+                                    (phoneVerified ? (
+                                        <View style={s.verifiedBadge}>
+                                            <Ionicons
+                                                name="checkmark-circle"
+                                                size={14}
+                                                color={Colors.success}
+                                            />
+                                            <Text style={s.verifiedBadgeText}>Verified</Text>
+                                        </View>
+                                    ) : (
+                                        <TouchableOpacity
+                                            style={s.verifyBtn}
+                                            onPress={handleSendPhoneOtp}
+                                            disabled={sendingPhoneOtp}
+                                            activeOpacity={0.8}
+                                        >
+                                            <Ionicons
+                                                name="shield-checkmark-outline"
+                                                size={14}
+                                                color={Colors.primary}
+                                            />
+                                            <Text style={s.verifyBtnText}>
+                                                {sendingPhoneOtp ? 'Sending…' : 'Verify Phone'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ))}
+                                <FieldError
+                                    show={attemptedNext && isAmbassador && !isPhoneVerifiedValid}
+                                    message="Please verify your phone number."
+                                />
+                                {!!errors.phone && <FieldError show message={errors.phone} />}
+                            </View>
                         </View>
                         <View style={{ flex: 1 }}>
                             <Field
@@ -428,15 +775,21 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                     <Text style={s.pickerLabel}>
                         YOUR ROLE <Text style={s.req}>*</Text>
                     </Text>
-                    <PickerRow
-                        value={data.role}
-                        options={ROLES}
-                        open={roleOpen}
-                        onToggle={() => setRoleOpen(!roleOpen)}
-                        onSelect={v => {
-                            set({ role: v });
-                            setRoleOpen(false);
-                        }}
+                    <View style={[s.fieldWrap, attemptedNext && !isRoleValid && s.fieldWrapError]}>
+                        <PickerRow
+                            value={data.role}
+                            options={ROLES}
+                            open={roleOpen}
+                            onToggle={() => setRoleOpen(!roleOpen)}
+                            onSelect={v => {
+                                set({ role: v });
+                                setRoleOpen(false);
+                            }}
+                        />
+                    </View>
+                    <FieldError
+                        show={attemptedNext && !isRoleValid}
+                        message="Please select your role."
                     />
 
                     <View style={s.gstDivider} />
@@ -473,15 +826,30 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                                 autoCapitalize="characters"
                                 maxLength={15}
                             />
+                            <FieldError
+                                show={attemptedNext && !isGstNumberValid}
+                                message="Please enter your GST number."
+                            />
                             <Text style={s.uploadLabel}>
                                 UPLOAD GST CERTIFICATE <Text style={s.req}>*</Text>
                             </Text>
-                            <UploadBtn
-                                uploadKey="gst_doc"
-                                mode="document"
-                                label="GST Certificate"
-                                btnLabel="Upload GST Certificate"
-                                {...uploadBtnShared}
+                            <View
+                                style={[
+                                    s.fieldWrap,
+                                    attemptedNext && !isGstDocValid && s.fieldWrapError,
+                                ]}
+                            >
+                                <UploadBtn
+                                    uploadKey="gst_doc"
+                                    mode="document"
+                                    label="GST Certificate"
+                                    btnLabel="Upload GST Certificate"
+                                    {...uploadBtnShared}
+                                />
+                            </View>
+                            <FieldError
+                                show={attemptedNext && !isGstDocValid}
+                                message="Please upload your GST certificate."
                             />
                             <View style={s.gstNote}>
                                 <Ionicons
@@ -539,30 +907,54 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                                 value={data.idNumber}
                                 onChangeText={v => set({ idNumber: v })}
                                 autoCapitalize={data.idType === 'pan' ? 'characters' : 'none'}
+                                keyboardType={data.idType === 'aadhaar' ? 'numeric' : 'default'}
+                                maxLength={data.idType === 'aadhaar' ? 12 : 10}
                             />
                         </View>
                         <View style={{ flex: 1 }}>
                             <Text style={s.uploadLabel}>
                                 UPLOAD FRONT <Text style={s.req}>*</Text>
                             </Text>
-                            <UploadBtn
-                                uploadKey="id_front"
-                                mode="photo"
-                                label="ID Front"
-                                {...uploadBtnShared}
-                            />
+                            <View
+                                style={[
+                                    s.fieldWrap,
+                                    attemptedNext && !isIdFrontValid && s.fieldWrapError,
+                                ]}
+                            >
+                                <UploadBtn
+                                    uploadKey="id_front"
+                                    mode="photo"
+                                    label="ID Front"
+                                    {...uploadBtnShared}
+                                />
+                            </View>
                         </View>
                     </View>
+                    <FieldError
+                        show={attemptedNext && !isIdFrontValid}
+                        message="Please upload the front of your ID."
+                    />
                     {data.idType === 'aadhaar' && (
                         <>
                             <Text style={[s.uploadLabel, { marginTop: Spacing.sm }]}>
                                 UPLOAD BACK <Text style={s.req}>*</Text>
                             </Text>
-                            <UploadBtn
-                                uploadKey="id_back"
-                                mode="photo"
-                                label="ID Back"
-                                {...uploadBtnShared}
+                            <View
+                                style={[
+                                    s.fieldWrap,
+                                    attemptedNext && !isIdBackValid && s.fieldWrapError,
+                                ]}
+                            >
+                                <UploadBtn
+                                    uploadKey="id_back"
+                                    mode="photo"
+                                    label="ID Back"
+                                    {...uploadBtnShared}
+                                />
+                            </View>
+                            <FieldError
+                                show={attemptedNext && !isIdBackValid}
+                                message="Please upload the back of your Aadhaar card."
                             />
                         </>
                     )}
@@ -597,24 +989,39 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                     <Text style={s.pickerLabel}>
                         BUSINESS PROOF TYPE <Text style={s.req}>*</Text>
                     </Text>
-                    <PickerRow
-                        value={data.bizProofType}
-                        options={BUSINESS_PROOF_TYPES}
-                        open={bpOpen}
-                        onToggle={() => setBpOpen(!bpOpen)}
-                        onSelect={v => {
-                            set({ bizProofType: v });
-                            setBpOpen(false);
-                        }}
+                    <View
+                        style={[
+                            s.fieldWrap,
+                            attemptedNext && !isBizProofTypeValid && s.fieldWrapError,
+                        ]}
+                    >
+                        <PickerRow
+                            value={data.bizProofType}
+                            options={BUSINESS_PROOF_TYPES}
+                            open={bpOpen}
+                            onToggle={() => setBpOpen(!bpOpen)}
+                            onSelect={v => {
+                                set({ bizProofType: v });
+                                setBpOpen(false);
+                            }}
+                        />
+                    </View>
+                    <FieldError
+                        show={attemptedNext && !isBizProofTypeValid}
+                        message="Please select a business proof type."
                     />
                     {data.bizProofType === 'Other' && (
-                        <View style={{marginTop: '5%'}}>
+                        <View style={{ marginTop: '5%' }}>
                             <Field
                                 label="Please Specify"
                                 placeholder="e.g. Shop & Establishment License"
                                 icon="create-outline"
                                 value={data.bizProofOther}
                                 onChangeText={v => set({ bizProofOther: v })}
+                            />
+                            <FieldError
+                                show={attemptedNext && !isBizProofOtherValid}
+                                message="Please specify your business proof type."
                             />
                         </View>
                     )}
@@ -628,11 +1035,19 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                     <Text style={[s.uploadLabel, { marginTop: Spacing.sm }]}>
                         UPLOAD DOCUMENT <Text style={s.req}>*</Text>
                     </Text>
-                    <UploadBtn
-                        uploadKey="biz_doc"
-                        mode="document"
-                        label="Business Document"
-                        {...uploadBtnShared}
+                    <View
+                        style={[s.fieldWrap, attemptedNext && !isBizDocValid && s.fieldWrapError]}
+                    >
+                        <UploadBtn
+                            uploadKey="biz_doc"
+                            mode="document"
+                            label="Business Document"
+                            {...uploadBtnShared}
+                        />
+                    </View>
+                    <FieldError
+                        show={attemptedNext && !isBizDocValid}
+                        message="Please upload your business document."
                     />
                 </SectionCard>
 
@@ -700,26 +1115,48 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                             <Text style={s.pickerLabel}>
                                 ACCOUNT TYPE <Text style={s.req}>*</Text>
                             </Text>
-                            <PickerRow
-                                value={data.accountType}
-                                options={ACCOUNT_TYPES}
-                                open={atOpen}
-                                onToggle={() => setAtOpen(!atOpen)}
-                                onSelect={v => {
-                                    set({ accountType: v });
-                                    setAtOpen(false);
-                                }}
+                            <View
+                                style={[
+                                    s.fieldWrap,
+                                    attemptedNext && !isAccountTypeValid && s.fieldWrapError,
+                                ]}
+                            >
+                                <PickerRow
+                                    value={data.accountType}
+                                    options={ACCOUNT_TYPES}
+                                    open={atOpen}
+                                    onToggle={() => setAtOpen(!atOpen)}
+                                    onSelect={v => {
+                                        set({ accountType: v });
+                                        setAtOpen(false);
+                                    }}
+                                />
+                            </View>
+                            <FieldError
+                                show={attemptedNext && !isAccountTypeValid}
+                                message="Please select an account type."
                             />
                         </View>
                         <Text style={[s.uploadLabel, { marginTop: Spacing.sm }]}>
                             UPLOAD BANK PROOF <Text style={s.req}>*</Text>
                         </Text>
-                        <UploadBtn
-                            uploadKey="bank_proof"
-                            mode="document"
-                            label="Bank Proof"
-                            btnLabel="Upload Cancelled Cheque / Passbook"
-                            {...uploadBtnShared}
+                        <View
+                            style={[
+                                s.fieldWrap,
+                                attemptedNext && !isBankProofValid && s.fieldWrapError,
+                            ]}
+                        >
+                            <UploadBtn
+                                uploadKey="bank_proof"
+                                mode="document"
+                                label="Bank Proof"
+                                btnLabel="Upload Cancelled Cheque / Passbook"
+                                {...uploadBtnShared}
+                            />
+                        </View>
+                        <FieldError
+                            show={attemptedNext && !isBankProofValid}
+                            message="Please upload your bank proof document."
                         />
                         <View style={s.gstNote}>
                             <Ionicons
@@ -741,7 +1178,7 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
                     </View>
                 </SectionCard>
 
-                <NavButtons onPrev={onPrev} onNext={onNext} />
+                <NavButtons onPrev={onPrev} onNext={handleNext} />
             </ScrollView>
 
             {/* ── Bottom sheet ── */}
@@ -797,6 +1234,12 @@ export default function Step6Documents({ data, onChange, onPrev, onNext }: Props
 
 const s = StyleSheet.create({
     row: { flexDirection: 'column', gap: Spacing.sm },
+    verifyLinkText: {
+        fontSize: Typography.xs,
+        fontWeight: Typography.semiBold,
+        color: Colors.primary,
+        marginTop: 4,
+    },
     gstDivider: { height: 1, backgroundColor: Colors.border, marginVertical: Spacing.md },
     gstCheckRow: {
         flexDirection: 'row',
@@ -900,6 +1343,26 @@ const s = StyleSheet.create({
         marginBottom: 4,
     },
     req: { color: Colors.primary },
+
+    // ── Required-field validation ──
+    fieldWrap: {
+        borderRadius: Radii.md,
+    },
+    fieldWrapError: {
+        borderWidth: 1.5,
+        borderColor: Colors.danger,
+        borderRadius: Radii.md,
+        padding: 2,
+    },
+    fieldErrorRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        marginTop: 4,
+        marginBottom: Spacing.xs,
+    },
+    fieldErrorText: { fontSize: Typography.xs, color: Colors.danger, flex: 1 },
+
     secureNote: {
         flexDirection: 'row',
         alignItems: 'center',
@@ -1001,5 +1464,110 @@ const s = StyleSheet.create({
         fontSize: Typography.md,
         fontWeight: Typography.semiBold,
         color: Colors.charcoalMid ?? Colors.charcoalLight,
+    },
+    // OTP Modal
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.45)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 24,
+    },
+    modalCard: {
+        width: '100%',
+        backgroundColor: Colors.surface,
+        borderRadius: Radii.xxl,
+        padding: Spacing.xl,
+        ...Shadows.floating,
+    },
+    modalHeader: { alignItems: 'center', marginBottom: Spacing.lg, gap: Spacing.sm },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+        letterSpacing: -0.4,
+    },
+    modalSubtitle: {
+        fontSize: 13,
+        color: Colors.charcoalLight,
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    otpInput: {
+        height: 56,
+        borderRadius: Radii.md,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        backgroundColor: Colors.background,
+        fontSize: 22,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+        letterSpacing: 8,
+        marginBottom: Spacing.sm,
+    },
+    otpInputError: { borderColor: Colors.danger },
+    modalFooterRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: Spacing.md,
+    },
+    resendText: {
+        fontSize: 13,
+        fontWeight: Typography.semiBold,
+        color: Colors.primary,
+    },
+    errorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 5 },
+    errorText: { fontSize: 11, color: Colors.danger, fontWeight: Typography.semiBold },
+    registerBtn: {
+        backgroundColor: Colors.charcoal,
+        borderRadius: Radii.md,
+        height: 56,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 12,
+        ...Shadows.floating,
+    },
+    registerBtnText: {
+        fontSize: 16,
+        fontWeight: Typography.extraBold,
+        color: Colors.white,
+        letterSpacing: 0.3,
+    },
+    verifyBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        gap: 5,
+        marginTop: 6,
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 6,
+        borderRadius: Radii.full ?? 999,
+        backgroundColor: Colors.primaryLight,
+        borderWidth: 1,
+        borderColor: Colors.primary,
+    },
+    verifyBtnText: {
+        fontSize: Typography.xs,
+        fontWeight: Typography.bold,
+        color: Colors.primary,
+    },
+    verifiedBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        alignSelf: 'flex-start',
+        gap: 5,
+        marginTop: 6,
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 6,
+        borderRadius: Radii.full ?? 999,
+        backgroundColor: Colors.successLight,
+        borderWidth: 1,
+        borderColor: Colors.success,
+    },
+    verifiedBadgeText: {
+        fontSize: Typography.xs,
+        fontWeight: Typography.bold,
+        color: Colors.success,
     },
 });

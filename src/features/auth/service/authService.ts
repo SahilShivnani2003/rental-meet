@@ -33,7 +33,7 @@ export const login = async (data: { email: string, password: string, deviceId: s
     }
 }
 
-export const sendEmailOtp = async (data: { name: string, email: string }) => {
+export const sendEmailOtp = async (data: { name: string, email: string, purpose?: string }) => {
     try {
         console.log('Sending email otp...');
         const respone = await publicClient.post('/auth/send-email-otp', data);
@@ -58,7 +58,7 @@ export const verifyEmailOtp = async (data: { email: string, otp: string }) => {
     }
 }
 
-export const sendPhoneOtp = async (data: { name: string, phone: string }) => {
+export const sendPhoneOtp = async (data: { name: string, phone: string, purpose?: string  }) => {
     try {
         console.log('Sending phone otp...');
         const response = await publicClient.post('/auth/send-phone-otp', data);

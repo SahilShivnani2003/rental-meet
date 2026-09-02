@@ -14,6 +14,7 @@ import {
     Platform,
     Animated,
     RefreshControl,
+    Image,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Clipboard from '@react-native-clipboard/clipboard';
@@ -473,7 +474,7 @@ export default function AmbassadorProfileScreen({ navigation }: AmbassadorProfil
         profile?.referralInfo?.referralCode ||
         profileData?.user?.referralCode ||
         '';
-    const referralLink = `https://meetambassador.app/invite/${referralCode}`;
+    const referralLink = `https://rentalmeet.com/register-ambassador?ref=/${referralCode}`;
 
     const handleCopyLink = () => {
         Clipboard.setString(referralLink);
@@ -497,10 +498,10 @@ export default function AmbassadorProfileScreen({ navigation }: AmbassadorProfil
         updateProfile.mutate(payload as any, {
             onSuccess: () => {
                 setEditing(false);
-                alert.success('Saved', 'Your profile changes have been saved.')
+                alert.success('Saved', 'Your profile changes have been saved.');
             },
             onError: () => {
-                alert.error('Error','Could not save profile changes. Please try again.')
+                alert.error('Error', 'Could not save profile changes. Please try again.');
             },
         });
     };
@@ -533,6 +534,9 @@ export default function AmbassadorProfileScreen({ navigation }: AmbassadorProfil
     const aadhaarUploaded = !!profile?.documents?.aadhaarFront;
     const bankDetailsAdded = !!profile?.bankDetails?.accountNumber;
     const addressAdded = !!profile?.addressDetails?.currentAddress;
+    // Ambassador's uploaded profile/passport photo, if any — shown in the
+    // hero avatar instead of the initials fallback.
+    const passportPhoto = profile?.documents?.passportPhoto;
 
     const walletBalance = profile?.walletBalance ?? 0;
     const venuesApproved = profile?.totalVenuesApproved ?? 0;
@@ -582,10 +586,7 @@ export default function AmbassadorProfileScreen({ navigation }: AmbassadorProfil
                 contentContainerStyle={styles.contentPadding}
                 showsVerticalScrollIndicator={false}
                 refreshControl={
-                    <RefreshControl
-                        refreshing={isRefetching}
-                        onRefresh={()=> refetch()}
-                    />
+                    <RefreshControl refreshing={isRefetching} onRefresh={() => refetch()} />
                 }
             >
                 {/* ── Profile hero card ─────────────────────────────────────── */}
@@ -598,9 +599,17 @@ export default function AmbassadorProfileScreen({ navigation }: AmbassadorProfil
                     <View style={styles.heroBanner} />
                     <View style={styles.heroContent}>
                         <View style={styles.avatarRing}>
-                            <View style={styles.avatarCircle}>
-                                <Text style={styles.avatarText}>{initials}</Text>
-                            </View>
+                            {passportPhoto ? (
+                                <Image
+                                    source={{ uri: passportPhoto }}
+                                    style={styles.avatarImage}
+                                    resizeMode="cover"
+                                />
+                            ) : (
+                                <View style={styles.avatarCircle}>
+                                    <Text style={styles.avatarText}>{initials}</Text>
+                                </View>
+                            )}
                         </View>
 
                         <Text style={styles.profileName}>{form.fullName || 'Ambassador'}</Text>
@@ -1046,7 +1055,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: Spacing.sm,
+        overflow: 'hidden',
         ...Shadows.card,
+    },
+    avatarImage: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 39,
     },
     avatarCircle: {
         width: 72,

@@ -121,5 +121,5 @@ const styles = StyleSheet.create({
     },
     pairRow: { flexDirection: 'column', gap: Spacing.md },
     pairItem: { flex: 1 },
-    checkboxGroup: { gap: Spacing.md, marginTop: Spacing.xs },
+    checkboxGroup: { gap: Spacing.md, marginTop: Spacing.xs, marginBottom: Spacing.md },
 });

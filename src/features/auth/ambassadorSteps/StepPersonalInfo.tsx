@@ -55,7 +55,8 @@ export default function StepPersonalInfo({
     const [emailVerified, setEmailVerified] = useState(false);
     const [phoneVerified, setPhoneVerified] = useState(false);
     const [dobCalendarVisible, setDobCalendarVisible] = useState(false);
-
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     // ── OTP modal state ───────────────────────────────────────────────────────
     const [otpStep, setOtpStep] = useState<OtpStep>('none');
     const [otpValue, setOtpValue] = useState('');
@@ -105,7 +106,6 @@ export default function StepPersonalInfo({
             { email, name: data.personalInfo.fullName },
             {
                 onSuccess: () => {
-                    alert.success('OTP Sent', 'An OTP has been sent to your email');
                     setOtpStep('email');
                 },
                 onError: (error: ApiError) => {
@@ -149,7 +149,6 @@ export default function StepPersonalInfo({
             { phone, name: data.personalInfo.fullName },
             {
                 onSuccess: () => {
-                    alert.success('OTP Sent', 'An OTP has been sent to your phone');
                     setOtpStep('phone');
                 },
                 onError: (error: ApiError) => {
@@ -437,8 +436,9 @@ export default function StepPersonalInfo({
                             icon="lock-closed-outline"
                             value={data.password}
                             onChangeText={t => onChange(prev => ({ ...prev, password: t }))}
-                            secureTextEntry
-                            trailingIcon="eye-outline"
+                            secureTextEntry={!showPassword}
+                            trailingIcon={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                            onTrailingPress={() => setShowPassword(s => !s)}
                             error={errors.password}
                         />
                     </View>
@@ -449,8 +449,9 @@ export default function StepPersonalInfo({
                             icon="lock-closed-outline"
                             value={confirmPassword}
                             onChangeText={onConfirmPasswordChange}
-                            secureTextEntry
-                            trailingIcon="eye-outline"
+                            secureTextEntry={!showConfirmPassword}
+                            trailingIcon={showConfirmPassword ? 'eye-off-outline' : 'eye-outline'}
+                            onTrailingPress={() => setShowConfirmPassword(s => !s)}
                             error={errors.confirmPassword}
                         />
                     </View>
@@ -525,7 +526,7 @@ const styles = StyleSheet.create({
     registerBtn: {
         height: 52,
         borderRadius: Radii.md,
-        backgroundColor: Colors.charcoal,
+        backgroundColor: Colors.primary,
         alignItems: 'center',
         justifyContent: 'center',
     },

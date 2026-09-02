@@ -589,7 +589,20 @@ function PricingRadio({
     );
 }
 
-/** Inline rate-type picker (Fixed / Per Use) */
+/**
+ * Inline rate-type toggle (Fixed / Per Use).
+ *
+ * NOTE: this used to be built on the shared `PickerRow` component (like the
+ * capacity/food-type/parking pickers elsewhere in this file). `PickerRow` is
+ * built around the convention that `options[0]` is a "Select..." placeholder
+ * and NOT a real, selectable value — every other usage in this file follows
+ * that convention. `RATE_TYPES` only has two real values with no placeholder,
+ * so `'Fixed'` (sitting at index 0) was being treated as the placeholder and
+ * silently dropped from the selectable list once `'Per Use'` was chosen —
+ * that's why there was no way back to `'Fixed'`. A plain segmented toggle
+ * (matching the Included/Paid control above) sidesteps that assumption
+ * entirely and always keeps both options tappable.
+ */
 function RateTypePicker({
     value,
     onChange,
@@ -597,18 +610,24 @@ function RateTypePicker({
     value: 'Fixed' | 'Per Use';
     onChange: (v: 'Fixed' | 'Per Use') => void;
 }) {
-    const [open, setOpen] = useState(false);
     return (
-        <PickerRow
-            value={value}
-            options={RATE_TYPES}
-            open={open}
-            onToggle={() => setOpen(o => !o)}
-            onSelect={v => {
-                onChange(v as 'Fixed' | 'Per Use');
-                setOpen(false);
-            }}
-        />
+        <View style={rt.wrap}>
+            {RATE_TYPES.map(option => {
+                const active = value === option;
+                return (
+                    <TouchableOpacity
+                        key={option}
+                        style={[rt.segment, active && rt.segmentActive]}
+                        onPress={() => onChange(option)}
+                        activeOpacity={0.8}
+                    >
+                        <Text style={[rt.segmentText, active && rt.segmentTextActive]}>
+                            {option}
+                        </Text>
+                    </TouchableOpacity>
+                );
+            })}
+        </View>
     );
 }
 
@@ -888,6 +907,7 @@ const s = StyleSheet.create({
     rateRow: {
         flexDirection: 'row',
         alignItems: 'center',
+        flexWrap: 'wrap',
         gap: Spacing.xs,
         marginLeft: Spacing.sm,
     },
@@ -905,7 +925,7 @@ const s = StyleSheet.create({
     },
     rupee: { fontSize: Typography.sm, color: Colors.charcoalMid, marginRight: 2 },
     rateInputText: { fontSize: Typography.sm, color: Colors.charcoal, flex: 1, padding: 0 },
-    miniPickerWrap: { width: 110 },
+    miniPickerWrap: { minWidth: 128 },
     expandedFields: {
         backgroundColor: Colors.primaryLight,
         borderRadius: Radii.sm,
@@ -998,4 +1018,33 @@ const ft = StyleSheet.create({
         fontWeight: Typography.medium,
     },
     facilityLabelActive: { color: Colors.primary, fontWeight: Typography.semiBold },
+});
+
+const rt = StyleSheet.create({
+    wrap: {
+        flexDirection: 'row',
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        borderRadius: Radii.sm,
+        overflow: 'hidden',
+        height: 36,
+        backgroundColor: Colors.surface,
+    },
+    segment: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 8,
+    },
+    segmentActive: {
+        backgroundColor: Colors.primary,
+    },
+    segmentText: {
+        fontSize: 11,
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoalMid,
+    },
+    segmentTextActive: {
+        color: Colors.white,
+    },
 });

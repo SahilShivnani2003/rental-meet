@@ -120,17 +120,34 @@ export async function getDistrictByState(
     query: string,
     state: string,
 ): Promise<City[]> {
-    if (!query || !state) return [];
+    if (!query?.trim() || !state?.trim()) {
+        return [];
+    }
 
-    const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
-        query,
-    )}&types=(regions)&components=country:${countryCode}&key=${apiKey}`;
+    const input = `${query.trim()}, ${state.trim()}, India`;
+
+    const url =
+        `https://maps.googleapis.com/maps/api/place/autocomplete/json` +
+        `?input=${encodeURIComponent(input)}` +
+        `&types=(regions)` +
+        `&components=country:${countryCode}` +
+        `&key=${apiKey}`;
 
     try {
         const res = await fetch(url);
+
+        if (!res.ok) {
+            throw new Error(`HTTP error: ${res.status}`);
+        }
+
         const data = await res.json();
 
-        if (data.status !== "OK" && data.status !== "ZERO_RESULTS") {
+        console.log("Google Places response:", data);
+
+        if (
+            data.status !== "OK" &&
+            data.status !== "ZERO_RESULTS"
+        ) {
             throw new Error(
                 data.error_message || "Failed to fetch districts",
             );
@@ -138,17 +155,17 @@ export async function getDistrictByState(
 
         const districts: City[] = (data.predictions ?? [])
             .filter((prediction: any) => {
-                const types = prediction.types ?? [];
                 const description =
                     prediction.description?.toLowerCase() ?? "";
 
-                return (
-                    types.includes("administrative_area_level_2") &&
-                    description.includes(state.toLowerCase())
-                );
+                const stateName = state.toLowerCase();
+
+                return description.includes(stateName);
             })
             .map((prediction: any) => ({
-                name: prediction.description.split(",")[0].trim(),
+                name: prediction.description
+                    ?.split(",")[0]
+                    ?.trim(),
                 placeId: prediction.place_id,
             }));
 

@@ -125,7 +125,8 @@ export function validateDocumentsAndDeclaration(data: AmbassadorRegistration): F
     const errors: FieldErrors = {};
 
     if (!data.documents.aadhaarFront.trim()) errors.aadhaarFront = 'Aadhaar front side is required';
-
+    if(!data.documents.aadhaarBack.trim()) errors.aadhaarBack = 'Aadhaar back side is required';
+    if(!data.documents.passportPhoto.trim()) errors.passportPhoto = 'Passport size photo is required';
     if (!data.declaration.agreed) errors.agreed = 'You must accept the declaration to continue';
     if (!data.declaration.applicantSignatureName.trim()) {
         errors.applicantSignatureName = 'Signature / full name is required';

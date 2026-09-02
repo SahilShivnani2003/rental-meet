@@ -471,7 +471,7 @@ const styles = StyleSheet.create({
         gap: 6,
         height: 56,
         borderRadius: Radii.md,
-        backgroundColor: Colors.charcoal,
+        backgroundColor: Colors.primary,
         ...Shadows.floating,
     },
     nextBtnDisabled: { opacity: 0.7 },

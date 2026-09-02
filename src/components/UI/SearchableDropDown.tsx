@@ -213,12 +213,12 @@ export default function SearchableDropdown({
 const styles = StyleSheet.create({
     wrap: { marginBottom: Spacing.md },
     label: {
-        fontSize: 12,
-        fontWeight: Typography.semiBold,
-        color: Colors.charcoalLight,
+        fontSize: 11,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalMid,
         marginBottom: Spacing.xs,
         textTransform: 'uppercase',
-        letterSpacing: 0.5,
+        letterSpacing: 0.8,
     },
     inputRow: {
         flexDirection: 'row',

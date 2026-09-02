@@ -19,7 +19,22 @@ const MONTH_NAMES = [
     'November',
     'December',
 ];
+const MONTH_SHORT = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+];
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const YEARS_PER_PAGE = 12;
 
 /** Local YYYY-MM-DD — never use toISOString() here, it shifts by timezone */
 function toDateStr(d: Date): string {
@@ -37,6 +52,8 @@ function buildMonthGrid(year: number, month: number): (Date | null)[] {
     while (grid.length % 7 !== 0) grid.push(null);
     return grid;
 }
+
+type PickerMode = 'date' | 'month' | 'year';
 
 // ─── CalendarModal ────────────────────────────────────────────────────────────
 
@@ -91,6 +108,18 @@ export default function CalendarModal({
 
     const [viewYear, setViewYear] = useState(initialViewDate.getFullYear());
     const [viewMonth, setViewMonth] = useState(initialViewDate.getMonth());
+    // ── Quick jump (year/month picker) ─────────────────────────────────────
+    const [pickerMode, setPickerMode] = useState<PickerMode>('date');
+    const [yearPageStart, setYearPageStart] = useState(initialViewDate.getFullYear());
+
+    // ── Bounds ──────────────────────────────────────────────────────────────
+    const minYear = effectiveMin.getFullYear();
+    const maxYear = effectiveMax ? effectiveMax.getFullYear() : todayDate.getFullYear() + 50;
+
+    const alignedYearPageStart = (year: number) => {
+        const clamped = Math.max(minYear, Math.min(year, maxYear));
+        return minYear + Math.floor((clamped - minYear) / YEARS_PER_PAGE) * YEARS_PER_PAGE;
+    };
 
     useEffect(() => {
         if (visible) {
@@ -98,6 +127,8 @@ export default function CalendarModal({
                 parsedSelected && withinRange(parsedSelected) ? parsedSelected : fallbackViewDate;
             setViewYear(d.getFullYear());
             setViewMonth(d.getMonth());
+            setPickerMode('date');
+            setYearPageStart(alignedYearPageStart(d.getFullYear()));
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible]);
@@ -126,116 +157,319 @@ export default function CalendarModal({
         viewYear < effectiveMax.getFullYear() ||
         (viewYear === effectiveMax.getFullYear() && viewMonth < effectiveMax.getMonth());
 
+    const canGoPrevYear = viewYear > minYear;
+    const canGoNextYear = viewYear < maxYear;
+
+    const isMonthDisabled = (monthIdx: number) => {
+        if (viewYear === minYear && monthIdx < effectiveMin.getMonth()) return true;
+        if (effectiveMax && viewYear === maxYear && monthIdx > effectiveMax.getMonth()) return true;
+        return false;
+    };
+
+    const clampMonthForYear = (year: number, month: number) => {
+        if (year === minYear && month < effectiveMin.getMonth()) return effectiveMin.getMonth();
+        if (effectiveMax && year === maxYear && month > effectiveMax.getMonth())
+            return effectiveMax.getMonth();
+        return month;
+    };
+
+    const selectMonth = (monthIdx: number) => {
+        setViewMonth(monthIdx);
+        setPickerMode('date');
+    };
+
+    // ── Year page navigation ──────────────────────────────────────────────
+    const canGoPrevYearPage = yearPageStart > minYear;
+    const canGoNextYearPage = yearPageStart + YEARS_PER_PAGE <= maxYear;
+
+    const yearPageLabel = `${yearPageStart} – ${Math.min(
+        yearPageStart + YEARS_PER_PAGE - 1,
+        maxYear,
+    )}`;
+
+    const selectYear = (year: number) => {
+        const clampedMonth = clampMonthForYear(year, viewMonth);
+        setViewYear(year);
+        setViewMonth(clampedMonth);
+        setPickerMode('month');
+    };
+
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
             <TouchableOpacity style={cal.backdrop} activeOpacity={1} onPress={onClose} />
             <View style={cal.sheet}>
                 <View style={cal.handle} />
-                <View style={cal.monthNav}>
-                    <TouchableOpacity
-                        style={[cal.navBtn, !canGoPrev && cal.navBtnDisabled]}
-                        onPress={canGoPrev ? prevMonth : undefined}
-                        activeOpacity={0.7}
-                    >
-                        <Ionicons
-                            name="chevron-back"
-                            size={18}
-                            color={canGoPrev ? Colors.charcoal : Colors.border}
-                        />
-                    </TouchableOpacity>
-                    <Text style={cal.monthLabel}>
-                        {MONTH_NAMES[viewMonth]} {viewYear}
-                    </Text>
-                    <TouchableOpacity
-                        style={[cal.navBtn, !canGoNext && cal.navBtnDisabled]}
-                        onPress={canGoNext ? nextMonth : undefined}
-                        activeOpacity={0.7}
-                    >
-                        <Ionicons
-                            name="chevron-forward"
-                            size={18}
-                            color={canGoNext ? Colors.charcoal : Colors.border}
-                        />
-                    </TouchableOpacity>
-                </View>
-                <View style={cal.dayHeader}>
-                    {DAY_NAMES.map(d => (
-                        <Text
-                            key={d}
-                            style={[
-                                cal.dayName,
-                                (d === 'Sun' || d === 'Sat') && cal.dayNameWeekend,
-                            ]}
-                        >
-                            {d}
-                        </Text>
-                    ))}
-                </View>
-                <View style={cal.grid}>
-                    {grid.map((date, idx) => {
-                        if (!date) return <View key={`empty-${idx}`} style={cal.cell} />;
-                        const dateStr = toDateStr(date);
-                        const isOutOfRange =
-                            date < effectiveMin || (!!effectiveMax && date > effectiveMax);
-                        const isSelected = dateStr === selectedDate;
-                        const isToday = toDateStr(date) === toDateStr(todayDate);
-                        const isWknd = date.getDay() === 0 || date.getDay() === 6;
-                        return (
+
+                {pickerMode === 'date' && (
+                    <>
+                        <View style={cal.monthNav}>
                             <TouchableOpacity
-                                key={dateStr}
-                                style={[
-                                    cal.cell,
-                                    isSelected && cal.cellSelected,
-                                    !isOutOfRange && !isSelected && isWknd && cal.cellWeekend,
-                                    isOutOfRange && cal.cellDisabled,
-                                ]}
-                                onPress={() => {
-                                    if (!isOutOfRange) {
-                                        onSelect(dateStr);
-                                        onClose();
-                                    }
-                                }}
-                                activeOpacity={isOutOfRange ? 1 : 0.75}
-                                disabled={isOutOfRange}
+                                style={[cal.navBtn, !canGoPrev && cal.navBtnDisabled]}
+                                onPress={canGoPrev ? prevMonth : undefined}
+                                activeOpacity={0.7}
                             >
+                                <Ionicons
+                                    name="chevron-back"
+                                    size={18}
+                                    color={canGoPrev ? Colors.charcoal : Colors.border}
+                                />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={cal.monthLabelBtn}
+                                onPress={() => setPickerMode('month')}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={cal.monthLabel}>
+                                    {MONTH_NAMES[viewMonth]} {viewYear}
+                                </Text>
+                                <Ionicons
+                                    name="chevron-down"
+                                    size={14}
+                                    color={Colors.charcoalLight}
+                                />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[cal.navBtn, !canGoNext && cal.navBtnDisabled]}
+                                onPress={canGoNext ? nextMonth : undefined}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons
+                                    name="chevron-forward"
+                                    size={18}
+                                    color={canGoNext ? Colors.charcoal : Colors.border}
+                                />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={cal.dayHeader}>
+                            {DAY_NAMES.map(d => (
                                 <Text
+                                    key={d}
                                     style={[
-                                        cal.cellText,
-                                        isSelected && cal.cellTextSelected,
-                                        isOutOfRange && cal.cellTextDisabled,
-                                        !isOutOfRange &&
-                                            !isSelected &&
-                                            isWknd &&
-                                            cal.cellTextWeekend,
+                                        cal.dayName,
+                                        (d === 'Sun' || d === 'Sat') && cal.dayNameWeekend,
                                     ]}
                                 >
-                                    {date.getDate()}
+                                    {d}
                                 </Text>
-                                {isToday && !isSelected && <View style={cal.todayDot} />}
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
-                <View style={cal.legend}>
-                    {[
-                        { color: Colors.primary, label: 'Selected' },
-                        { color: Colors.primaryLight, label: 'Weekend', bordered: true },
-                        { color: Colors.background, label: outOfRangeLabel },
-                    ].map(item => (
-                        <View key={item.label} style={cal.legendItem}>
-                            <View
-                                style={[
-                                    cal.legendDot,
-                                    { backgroundColor: item.color },
-                                    item.bordered
-                                        ? { borderWidth: 1, borderColor: Colors.primaryBorder }
-                                        : null,
-                                ]}
-                            />
-                            <Text style={cal.legendText}>{item.label}</Text>
+                            ))}
                         </View>
-                    ))}
-                </View>
+                        <View style={cal.grid}>
+                            {grid.map((date, idx) => {
+                                if (!date) return <View key={`empty-${idx}`} style={cal.cell} />;
+                                const dateStr = toDateStr(date);
+                                const isOutOfRange =
+                                    date < effectiveMin || (!!effectiveMax && date > effectiveMax);
+                                const isSelected = dateStr === selectedDate;
+                                const isToday = toDateStr(date) === toDateStr(todayDate);
+                                const isWknd = date.getDay() === 0 || date.getDay() === 6;
+                                return (
+                                    <TouchableOpacity
+                                        key={dateStr}
+                                        style={[
+                                            cal.cell,
+                                            isSelected && cal.cellSelected,
+                                            !isOutOfRange &&
+                                                !isSelected &&
+                                                isWknd &&
+                                                cal.cellWeekend,
+                                            isOutOfRange && cal.cellDisabled,
+                                        ]}
+                                        onPress={() => {
+                                            if (!isOutOfRange) {
+                                                onSelect(dateStr);
+                                                onClose();
+                                            }
+                                        }}
+                                        activeOpacity={isOutOfRange ? 1 : 0.75}
+                                        disabled={isOutOfRange}
+                                    >
+                                        <Text
+                                            style={[
+                                                cal.cellText,
+                                                isSelected && cal.cellTextSelected,
+                                                isOutOfRange && cal.cellTextDisabled,
+                                                !isOutOfRange &&
+                                                    !isSelected &&
+                                                    isWknd &&
+                                                    cal.cellTextWeekend,
+                                            ]}
+                                        >
+                                            {date.getDate()}
+                                        </Text>
+                                        {isToday && !isSelected && <View style={cal.todayDot} />}
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+                        <View style={cal.legend}>
+                            {[
+                                { color: Colors.primary, label: 'Selected' },
+                                { color: Colors.primaryLight, label: 'Weekend', bordered: true },
+                                { color: Colors.background, label: outOfRangeLabel },
+                            ].map(item => (
+                                <View key={item.label} style={cal.legendItem}>
+                                    <View
+                                        style={[
+                                            cal.legendDot,
+                                            { backgroundColor: item.color },
+                                            item.bordered
+                                                ? {
+                                                      borderWidth: 1,
+                                                      borderColor: Colors.primaryBorder,
+                                                  }
+                                                : null,
+                                        ]}
+                                    />
+                                    <Text style={cal.legendText}>{item.label}</Text>
+                                </View>
+                            ))}
+                        </View>
+                    </>
+                )}
+
+                {pickerMode === 'month' && (
+                    <>
+                        <View style={cal.monthNav}>
+                            <TouchableOpacity
+                                style={[cal.navBtn, !canGoPrevYear && cal.navBtnDisabled]}
+                                onPress={canGoPrevYear ? () => setViewYear(y => y - 1) : undefined}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons
+                                    name="chevron-back"
+                                    size={18}
+                                    color={canGoPrevYear ? Colors.charcoal : Colors.border}
+                                />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={cal.monthLabelBtn}
+                                onPress={() => {
+                                    setYearPageStart(alignedYearPageStart(viewYear));
+                                    setPickerMode('year');
+                                }}
+                                activeOpacity={0.7}
+                            >
+                                <Text style={cal.monthLabel}>{viewYear}</Text>
+                                <Ionicons
+                                    name="chevron-down"
+                                    size={14}
+                                    color={Colors.charcoalLight}
+                                />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[cal.navBtn, !canGoNextYear && cal.navBtnDisabled]}
+                                onPress={canGoNextYear ? () => setViewYear(y => y + 1) : undefined}
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons
+                                    name="chevron-forward"
+                                    size={18}
+                                    color={canGoNextYear ? Colors.charcoal : Colors.border}
+                                />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={cal.pickerGrid}>
+                            {MONTH_SHORT.map((label, idx) => {
+                                const disabled = isMonthDisabled(idx);
+                                const isCurrent = idx === viewMonth;
+                                return (
+                                    <TouchableOpacity
+                                        key={label}
+                                        style={[
+                                            cal.pickerCell,
+                                            isCurrent && cal.pickerCellSelected,
+                                            disabled && cal.pickerCellDisabled,
+                                        ]}
+                                        onPress={disabled ? undefined : () => selectMonth(idx)}
+                                        disabled={disabled}
+                                        activeOpacity={0.75}
+                                    >
+                                        <Text
+                                            style={[
+                                                cal.pickerCellText,
+                                                isCurrent && cal.pickerCellTextSelected,
+                                                disabled && cal.pickerCellTextDisabled,
+                                            ]}
+                                        >
+                                            {label}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+                    </>
+                )}
+
+                {pickerMode === 'year' && (
+                    <>
+                        <View style={cal.monthNav}>
+                            <TouchableOpacity
+                                style={[cal.navBtn, !canGoPrevYearPage && cal.navBtnDisabled]}
+                                onPress={
+                                    canGoPrevYearPage
+                                        ? () => setYearPageStart(y => y - YEARS_PER_PAGE)
+                                        : undefined
+                                }
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons
+                                    name="chevron-back"
+                                    size={18}
+                                    color={canGoPrevYearPage ? Colors.charcoal : Colors.border}
+                                />
+                            </TouchableOpacity>
+                            <View style={cal.monthLabelBtn}>
+                                <Text style={cal.monthLabel}>{yearPageLabel}</Text>
+                            </View>
+                            <TouchableOpacity
+                                style={[cal.navBtn, !canGoNextYearPage && cal.navBtnDisabled]}
+                                onPress={
+                                    canGoNextYearPage
+                                        ? () => setYearPageStart(y => y + YEARS_PER_PAGE)
+                                        : undefined
+                                }
+                                activeOpacity={0.7}
+                            >
+                                <Ionicons
+                                    name="chevron-forward"
+                                    size={18}
+                                    color={canGoNextYearPage ? Colors.charcoal : Colors.border}
+                                />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={cal.pickerGrid}>
+                            {Array.from({ length: YEARS_PER_PAGE }, (_, i) => yearPageStart + i).map(
+                                year => {
+                                    const disabled = year < minYear || year > maxYear;
+                                    const isCurrent = year === viewYear;
+                                    return (
+                                        <TouchableOpacity
+                                            key={year}
+                                            style={[
+                                                cal.pickerCell,
+                                                isCurrent && cal.pickerCellSelected,
+                                                disabled && cal.pickerCellDisabled,
+                                            ]}
+                                            onPress={disabled ? undefined : () => selectYear(year)}
+                                            disabled={disabled}
+                                            activeOpacity={0.75}
+                                        >
+                                            <Text
+                                                style={[
+                                                    cal.pickerCellText,
+                                                    isCurrent && cal.pickerCellTextSelected,
+                                                    disabled && cal.pickerCellTextDisabled,
+                                                ]}
+                                            >
+                                                {year}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    );
+                                },
+                            )}
+                        </View>
+                    </>
+                )}
             </View>
         </Modal>
     );
@@ -279,6 +513,13 @@ const cal = StyleSheet.create({
         justifyContent: 'center',
     },
     navBtnDisabled: { opacity: 0.4 },
+    monthLabelBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: Spacing.sm,
+        paddingVertical: 4,
+    },
     monthLabel: {
         fontSize: 16,
         fontWeight: Typography.extraBold,
@@ -343,4 +584,28 @@ const cal = StyleSheet.create({
     legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
     legendDot: { width: 10, height: 10, borderRadius: 5 },
     legendText: { fontSize: 11, color: Colors.charcoalLight, fontWeight: Typography.medium },
+    // ── Quick jump picker (shared by month & year grids) ───────────────────
+    pickerGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        marginTop: Spacing.sm,
+    },
+    pickerCell: {
+        width: '33.33%',
+        paddingVertical: Spacing.md,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    pickerCellSelected: {
+        backgroundColor: Colors.primary,
+        borderRadius: Radii.md,
+    },
+    pickerCellDisabled: { opacity: 0.3 },
+    pickerCellText: {
+        fontSize: 15,
+        fontWeight: Typography.semiBold,
+        color: Colors.charcoal,
+    },
+    pickerCellTextSelected: { color: Colors.white },
+    pickerCellTextDisabled: { color: Colors.charcoalLight },
 });

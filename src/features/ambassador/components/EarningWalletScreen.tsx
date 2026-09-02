@@ -1,5 +1,5 @@
 import { Colors, Spacing, Radii, Shadows, Typography } from '@/theme/theme';
-import React from 'react';
+import React, { useState } from 'react';
 import {
     View,
     Text,
@@ -15,6 +15,7 @@ import {
     useGetAmbassadorPayouts,
     useRequestAmbassadorPayouts,
 } from '../hooks/useAmbassador';
+import RequestPayoutModal, { PayoutMethod } from '../model/RequestPayoutModal';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type LedgerTab = 'ledger' | 'settlements';
@@ -164,9 +165,11 @@ export default function EarningsWalletScreen() {
     const { data: payouts } = useGetAmbassadorPayouts();
     const requestPayout = useRequestAmbassadorPayouts();
 
-    const [activeTab, setActiveTab] = React.useState<LedgerTab>('ledger');
+    const [activeTab, setActiveTab] = useState<LedgerTab>('ledger');
+    const [isPayoutModalVisible, setPayoutModalVisible] = useState(false);
 
     const availableBalance = earnings?.walletBalance ?? 0;
+    const totalEarnings = earnings?.totalEarnings ?? 0;
     const listingRewards = earnings?.breakdown?.listingRewards ?? 0;
     const streakChallengeEarnings = earnings?.breakdown?.challengeBonuses ?? 0;
     const bookingShareEarnings = earnings?.breakdown?.bookingShare ?? 0;
@@ -178,6 +181,27 @@ export default function EarningsWalletScreen() {
     const streakTarget = earnings?.profitShareStatus?.streakTarget ?? 7;
     const totalVenuesTarget = earnings?.profitShareStatus?.totalVenuesTarget ?? 35;
     const dailyTarget = earnings?.profitShareStatus?.dailyTarget ?? 5;
+    const streakProgressPct = earnings?.profitShareStatus?.streakProgressPercentage ?? 0;
+    const venuesProgressPct = earnings?.profitShareStatus?.venuesProgressPercentage ?? 0;
+    const ruleTitle = earnings?.profitShareStatus?.ruleTitle;
+    const ruleText = earnings?.profitShareStatus?.ruleText;
+    const profitShareExpiresAt = earnings?.profitShareStatus?.profitShareExpiresAt;
+    const daysRemaining = earnings?.profitShareStatus?.daysRemaining ?? 0;
+
+    // The API returns saved payout details under `bankDetails` (flat `upiId`
+    // plus separate bank fields), not `payoutDetails`/`bankAccount`.
+    const bankDetails = earnings?.bankDetails;
+    const upiId = bankDetails?.upiId || undefined;
+    // The API doesn't return a UPI verification flag yet.
+    const upiVerified = true;
+    const bankAccount = bankDetails?.accountNumber
+        ? {
+              accountHolderName: bankDetails.accountHolderName,
+              bankName: bankDetails.bankName,
+              accountNumber: bankDetails.accountNumber,
+              ifscCode: bankDetails.ifscCode,
+          }
+        : undefined;
 
     const ledgerEntries = Array.isArray(earnings?.recentRewards) ? earnings.recentRewards : [];
 
@@ -193,8 +217,13 @@ export default function EarningsWalletScreen() {
 
     const visibleEntries = activeTab === 'ledger' ? ledgerEntries : settlementEntries;
 
-    const handleRequestPayout = () => {
-        requestPayout.mutate({ amount: availableBalance } as any);
+    const handleConfirmPayout = ({ amount, method }: { amount: number; method: PayoutMethod }) => {
+        requestPayout.mutate(
+            { amount, method } as any,
+            {
+                onSuccess: () => setPayoutModalVisible(false),
+            } as any,
+        );
     };
 
     return (
@@ -229,8 +258,7 @@ export default function EarningsWalletScreen() {
 
                 <TouchableOpacity
                     style={styles.payoutButton}
-                    onPress={handleRequestPayout}
-                    disabled={requestPayout.isPending || availableBalance <= 0}
+                    onPress={() => setPayoutModalVisible(true)}
                 >
                     <Ionicons name="arrow-up-outline" size={14} color={Colors.white} />
                     <Text style={styles.payoutButtonText}>Request Payout</Text>
@@ -242,7 +270,10 @@ export default function EarningsWalletScreen() {
                 <View style={styles.streakBannerTop}>
                     <View style={styles.streakBadge}>
                         <Text style={styles.streakBadgeText}>
-                            🔥 7-DAY STREAK TARGET: 5 VENUES/DAY (35 VENUES TOTAL)
+                            🔥{' '}
+                            {ruleTitle
+                                ? ruleTitle.toUpperCase()
+                                : `${streakTarget}-DAY STREAK TARGET: ${dailyTarget} VENUES/DAY (${totalVenuesTarget} VENUES TOTAL)`}
                         </Text>
                     </View>
 
@@ -255,7 +286,7 @@ export default function EarningsWalletScreen() {
                                 {streakDaysComplete} / {streakTarget} Days
                             </Text>
                         </View>
-                        <ProgressBar progress={streakDaysComplete / streakTarget} />
+                        <ProgressBar progress={streakProgressPct / 100} />
 
                         <View style={styles.streakSideMiniRow}>
                             <MiniStat
@@ -267,17 +298,23 @@ export default function EarningsWalletScreen() {
                                 value={`${streakTotalVenues} / ${totalVenuesTarget}`}
                             />
                         </View>
+
+                        <View style={styles.streakSideHeaderRow}>
+                            <Text style={styles.streakSideHeader}>Total Venues Progress</Text>
+                            <Text style={styles.streakSideHeaderValue}>{venuesProgressPct}%</Text>
+                        </View>
+                        <ProgressBar progress={venuesProgressPct / 100} />
                     </View>
                 </View>
 
                 <Text style={styles.streakBannerHeadline}>
-                    Roz 5 Venues × 7 Days Streak = Total 35 Venues to Unlock 25%{'\n'}
+                    {`Roz ${dailyTarget} Venues × ${streakTarget} Days Streak = Total ${totalVenuesTarget} Venues to Unlock 25%`}
+                    {'\n'}
                     Profit Share for 1 Year
                 </Text>
                 <Text style={styles.streakBannerBody}>
-                    Lagatar 7 din roz 5-5 verified venues list karein (Total 35 venues). 7-Day
-                    streak complete hote hi 1 Year (365 Days) ke liye 25% Recurring Booking Profit
-                    Share + ₹1,000 Cash Bonus instant unlock ho jayega!
+                    {ruleText ??
+                        `Lagatar ${streakTarget} din roz ${dailyTarget}-${dailyTarget} verified venues list karein (Total ${totalVenuesTarget} venues). Streak complete hote hi 1 Year (365 Days) ke liye 25% Recurring Booking Profit Share instant unlock ho jayega!`}
                 </Text>
             </View>
 
@@ -288,7 +325,7 @@ export default function EarningsWalletScreen() {
                     icon="wallet-outline"
                     iconColor={Colors.white}
                     value={`₹${availableBalance}`}
-                    caption="Instant withdrawal to UPI or Bank"
+                    caption={`Instant withdrawal to UPI or Bank · ₹${totalEarnings} earned lifetime`}
                     highlighted
                 />
                 <StatCard
@@ -310,7 +347,15 @@ export default function EarningsWalletScreen() {
                     icon="trending-up-outline"
                     iconColor="#7C3AED"
                     value={`₹${bookingShareEarnings}`}
-                    caption={`Complete ${streakTarget}-Day Streak to unlock 1-Year 25% Share (${streakDaysComplete}/${streakTarget} Days)`}
+                    caption={
+                        bookingShareLocked
+                            ? `Complete ${streakTarget}-Day Streak to unlock 1-Year 25% Share (${streakDaysComplete}/${streakTarget} Days)`
+                            : profitShareExpiresAt
+                            ? `Unlocked · expires ${formatDate(
+                                  profitShareExpiresAt,
+                              )} (${daysRemaining} days left)`
+                            : 'Unlocked for 1 year'
+                    }
                     locked={bookingShareLocked}
                 />
             </View>
@@ -374,6 +419,17 @@ export default function EarningsWalletScreen() {
                     </View>
                 )}
             </View>
+
+            <RequestPayoutModal
+                visible={isPayoutModalVisible}
+                onClose={() => setPayoutModalVisible(false)}
+                onConfirm={handleConfirmPayout}
+                availableBalance={availableBalance}
+                upiId={upiId}
+                upiVerified={upiVerified}
+                bankAccount={bankAccount}
+                isSubmitting={requestPayout.isPending}
+            />
         </ScrollView>
     );
 }

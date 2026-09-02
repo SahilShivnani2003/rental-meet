@@ -98,18 +98,17 @@ export function createEmptyAmbassadorForm(): AmbassadorRegistration {
 
 export const PROFILE_TYPE_OPTIONS = [
     'Venue Explorer (Part-Time)',
-    'Venue Explorer (Full-Time)',
-    'Field Ambassador',
-    'Corporate Tie-up Specialist',
+    'Venue Champion',
+    'City Venue Partner',
+    'Full-Time Venue Acquisition Partner',
 ];
 
-export const VENUES_PER_DAY_OPTIONS = ['1-2 Venues', '3-5 Venues', '6-10 Venues', '10+ Venues'];
+export const VENUES_PER_DAY_OPTIONS = ['1-2 Venues', '3-5 Venues (Challenges eligible)', '5+ Venues'];
 
 export const VENUES_PER_MONTH_OPTIONS = [
     '20-50 Venues (LV.1)',
-    '51-100 Venues (LV.2)',
-    '101-200 Venues (LV.3)',
-    '200+ Venues (LV.4)',
+    '51-200 Venues (LV.2)',
+    '200+ Venues (LV.3/LV.4)',
 ];
 
 export const GENDER_OPTIONS = ['Male', 'Female', 'Other'];

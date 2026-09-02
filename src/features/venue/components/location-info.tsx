@@ -11,7 +11,6 @@ import {
     TextInput,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import Geolocation from '@react-native-community/geolocation';
 import { Colors, Typography, Spacing, Radii } from '../../../theme/theme';
 import Field from '../../../components/UI/InputField';
 import {
@@ -22,25 +21,17 @@ import {
     Textarea,
 } from '../../../components/UI/shared-components';
 import { VenueFormData } from '../types/VenueFormData';
-import { config } from '@/config/env';
 import SearchableDropdown, { DropdownOption } from '@/components/UI/SearchableDropDown';
 import { getCitiesByState, getStates } from '@/utils/location';
+import {
+    getCurrentCoordinates,
+    LocationPermissionDeniedError,
+    LocationTimeoutError,
+} from '@/utils/deviceLocation';
+import { coordinatesToAddress } from '@/utils/geocoding';
 
-const GOOGLE_API_KEY = config.GOOGLEAPI;
 const PARKING_TYPES = ['Select parking type', 'Free', 'Paid', 'Limited', 'No'];
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface PlacePrediction {
-    place_id: string;
-    structured_formatting: { main_text: string; secondary_text: string };
-}
-
-interface DropdownLayout {
-    x: number;
-    y: number;
-    width: number;
-}
 
 interface Props {
     data: VenueFormData['location'];
@@ -48,110 +39,61 @@ interface Props {
     onPrev: () => void;
     onNext: () => void;
 }
-
-// ─── Geocoding helper ─────────────────────────────────────────────────────────
-
-interface GeocodeResult {
-    address: string;
-    city: string;
-    area: string;
-    state: string;
-    pincode: string;
-    googleMapLink: string;
-}
-
-async function reverseGeocode(lat: number, lng: number): Promise<GeocodeResult> {
-    const url =
-        `https://maps.googleapis.com/maps/api/geocode/json` +
-        `?latlng=${lat},${lng}` +
-        `&key=${GOOGLE_API_KEY}`;
-
-    const res = await fetch(url);
-    const json = await res.json();
-
-    if (json.status !== 'OK' || !json.results?.length) {
-        throw new Error('Geocoding failed: ' + json.status);
-    }
-
-    // Pick the most detailed result (first one)
-    const result = json.results[0];
-    const components: { long_name: string; types: string[] }[] = result.address_components;
-
-    const get = (type: string) => components.find(c => c.types.includes(type))?.long_name ?? '';
-
-    // Build a clean street address from sub-components
-    const premise = get('premise');
-    const subPremise = get('subpremise');
-    const streetNumber = get('street_number');
-    const route = get('route');
-    const sublocality2 = get('sublocality_level_2');
-    const sublocality1 = get('sublocality_level_1');
-
-    const addressParts = [
-        subPremise,
-        premise,
-        streetNumber,
-        route,
-        sublocality2,
-        sublocality1,
-    ].filter(Boolean);
-    const address = addressParts.length ? addressParts.join(', ') : result.formatted_address;
-
-    return {
-        address,
-        city: get('locality') || get('administrative_area_level_2'),
-        area: get('sublocality_level_1') || get('sublocality_level_2') || get('neighborhood'),
-        state: get('administrative_area_level_1'),
-        pincode: get('postal_code'),
-        googleMapLink: `https://maps.google.com/?q=${lat},${lng}`,
-    };
-}
-
 // ─── Step2Location ────────────────────────────────────────────────────────────
 
 export default function Step2Location({ data, onChange, onPrev, onNext }: Props) {
     const set = (patch: Partial<VenueFormData['location']>) => onChange({ ...data, ...patch });
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [locating, setLocating] = useState(false);
+    const [locationError, setLocationError] = useState<string | null>(null);
     const [parkingOpen, setParkingOpen] = useState(false);
 
     const clearErr = (key: string) => setErrors(p => ({ ...p, [key]: '' }));
 
     // ── Real geolocation + reverse geocoding ───────────────────────────────
-    const handleUseCurrentLocation = () => {
+    const handleUseCurrentLocation = async () => {
         setLocating(true);
-        Geolocation.getCurrentPosition(
-            async position => {
-                const { latitude, longitude } = position.coords;
-                try {
-                    const geo = await reverseGeocode(latitude, longitude);
-                    set({
-                        address: geo.address,
-                        city: geo.city,
-                        area: geo.area,
-                        state: geo.state,
-                        pincode: geo.pincode,
-                        googleMapLink: geo.googleMapLink,
-                        landmark: data.landmark, // keep existing landmark
-                        village: data.village,
-                    });
-                    setErrors({});
-                } catch (e) {
-                    console.error('Reverse geocode error:', e);
-                } finally {
-                    setLocating(false);
-                }
-            },
-            error => {
-                console.error('Geolocation error:', error);
-                setLocating(false);
-            },
-            {
-                enableHighAccuracy: true,
-                timeout: 15000,
-                maximumAge: 10000,
-            },
-        );
+        setLocationError(null);
+
+        try {
+            const coords = await getCurrentCoordinates();
+            const geocoded = await coordinatesToAddress(coords);
+
+            if (!geocoded) {
+                setLocationError(
+                    'Could not determine your address from this location. Please fill it in manually.',
+                );
+                return;
+            }
+
+            set({
+                address: geocoded.addressLine || data.address,
+                city: geocoded.city || data.city,
+                state: geocoded.state || data.state,
+                pincode: geocoded.pincode || data.pincode,
+                googleMapLink: `https://www.google.com/maps?q=${coords.latitude},${coords.longitude}`,
+            });
+            setErrors(p => ({
+                ...p,
+                address: '',
+                city: '',
+                state: '',
+                pincode: '',
+                mapsLink: '',
+            }));
+        } catch (error) {
+            if (error instanceof LocationPermissionDeniedError) {
+                setLocationError(
+                    'Location permission denied. Enable it in your device settings, or fill in your address manually.',
+                );
+            } else if (error instanceof LocationTimeoutError) {
+                setLocationError(error.message);
+            } else {
+                setLocationError('Could not fetch your current location. Please enter it manually.');
+            }
+        } finally {
+            setLocating(false);
+        }
     };
 
     const validate = () => {
@@ -197,6 +139,12 @@ export default function Step2Location({ data, onChange, onPrev, onNext }: Props)
                         </>
                     )}
                 </TouchableOpacity>
+                {!!locationError && (
+                    <View style={s.locationErrorRow}>
+                        <Ionicons name="alert-circle" size={12} color={Colors.danger} />
+                        <Text style={s.locationErrorText}>{locationError}</Text>
+                    </View>
+                )}
 
                 <View style={s.divider}>
                     <View style={s.dividerLine} />
@@ -350,20 +298,22 @@ export default function Step2Location({ data, onChange, onPrev, onNext }: Props)
                 <View style={s.row}>
                     <View style={{ flex: 1 }}>
                         <Field
-                            label="Nearest Bus/Auto Stand"
+                            label="Nearest Bus/Auto Stand (KM)"
                             placeholder="MP Nagar Bus Stand - 500m"
                             icon="bus-outline"
                             value={data.nearestBusAuto}
                             onChangeText={v => set({ nearestBusAuto: v })}
+                            keyboardType="numeric"
                         />
                     </View>
                     <View style={{ flex: 1 }}>
                         <Field
-                            label="Nearest Metro/Train"
+                            label="Nearest Metro/Train (KM)"
                             placeholder="MP Nagar Metro - 500m"
                             icon="train-outline"
                             value={data.nearestMetroTrain}
                             onChangeText={v => set({ nearestMetroTrain: v })}
+                            keyboardType="numeric"
                         />
                     </View>
                 </View>
@@ -416,6 +366,19 @@ const s = StyleSheet.create({
         fontSize: Typography.md,
         fontWeight: Typography.semiBold,
         color: Colors.primary,
+    },
+    locationErrorRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 4,
+        marginTop: -Spacing.sm,
+        marginBottom: Spacing.md,
+    },
+    locationErrorText: {
+        flex: 1,
+        fontSize: 11,
+        color: Colors.danger,
+        fontWeight: Typography.semiBold,
     },
     divider: {
         flexDirection: 'row',

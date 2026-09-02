@@ -11,49 +11,7 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Colors, Typography, Spacing, Radii, Shadows } from '../../../theme/theme';
 import { StepHeader } from '../../../components/UI/shared-components';
 import { VenueFormData } from '../types/VenueFormData';
-
-const TERMS = [
-    {
-        section: '1. Commission Agreement',
-        points: [
-            'I agree to pay RentalMeet 15% commission on all confirmed bookings',
-            'Commission will be deducted before payout',
-            'Payouts processed within 24-48 hours after event completion',
-        ],
-    },
-    {
-        section: '2. Venue Standards',
-        points: [
-            'Maintain venue as described in listing',
-            'Provide all promised amenities and facilities',
-            'Ensure venue is clean and ready before each booking',
-        ],
-    },
-    {
-        section: '3. Booking Management',
-        points: [
-            'Respond to booking requests within 2 hours',
-            'Honor confirmed bookings',
-            'Update calendar regularly',
-        ],
-    },
-    {
-        section: '4. Cancellation Policy',
-        points: [
-            'Follow RentalMeet standard cancellation policy',
-            'Refunds processed as per policy guidelines',
-            'Excessive cancellations may result in account suspension',
-        ],
-    },
-    {
-        section: '5. Platform Usage',
-        points: [
-            'Do not engage in off-platform transactions',
-            'Maintain accurate venue information at all times',
-            'Report any disputes through official channels',
-        ],
-    },
-];
+import { useTermsCondition } from '@/features/booking/hooks/useTermsCondition';
 
 interface Props {
     data: VenueFormData['terms'];
@@ -63,6 +21,39 @@ interface Props {
     isSubmitting?: boolean;
 }
 
+interface ParsedTermSection {
+    title: string;
+    points: string[];
+}
+
+function parseVenueTerms(raw?: string): { heading: string; sections: ParsedTermSection[] } {
+    if (!raw) return { heading: '', sections: [] };
+
+    const lines = raw
+        .split('\n')
+        .map(l => l.trim())
+        .filter(Boolean);
+    let heading = '';
+    const sections: ParsedTermSection[] = [];
+    let current: ParsedTermSection | null = null;
+
+    for (const line of lines) {
+        if (/^\d+\.\s/.test(line)) {
+            // New numbered section header, e.g. "1. Commission Agreement"
+            current = { title: line.replace(/^\d+\.\s*/, ''), points: [] };
+            sections.push(current);
+        } else if (line.startsWith('•')) {
+            const point = line.replace(/^•\s*/, '');
+            if (current) current.points.push(point);
+        } else if (!current) {
+            // Any line before the first numbered section is the heading
+            heading = heading ? `${heading} ${line}` : line;
+        }
+    }
+
+    return { heading, sections };
+}
+
 export default function Step7Terms({
     data,
     onChange,
@@ -70,15 +61,18 @@ export default function Step7Terms({
     onSubmit,
     isSubmitting = false,
 }: Props) {
+    const { data: terms, isLoading, isError, refetch } = useTermsCondition();
     const set = (patch: Partial<VenueFormData['terms']>) => onChange({ ...data, ...patch });
+    const { heading, sections } = parseVenueTerms(terms?.terms?.venueOnboardingTerms);
+
+    const hasParsedContent = sections.length > 0;
+    const hasRawFallback = !hasParsedContent && !!terms?.terms?.venueOnboardingTerms?.trim();
 
     return (
         <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 20 }}
         >
-            {/* <StepHeader title="Step 7: Terms" current={7} /> */}
-
             {/* ── Info banner ── */}
             <View style={s.infoBanner}>
                 <Ionicons name="information-circle-outline" size={22} color={Colors.primary} />
@@ -92,24 +86,52 @@ export default function Step7Terms({
 
             {/* ── Terms box ── */}
             <View style={s.termsBox}>
-                <Text style={s.agreementTitle}>RentalMeet Venue Owner Agreement</Text>
-                <ScrollView
-                    showsVerticalScrollIndicator
-                    nestedScrollEnabled
-                    contentContainerStyle={{ paddingBottom: 4 }}
-                >
-                    {TERMS.map((t, i) => (
-                        <View key={i} style={s.termSection}>
-                            <Text style={s.termSectionTitle}>{t.section}</Text>
-                            {t.points.map((pt, j) => (
-                                <View key={j} style={s.termPoint}>
-                                    <Text style={s.bullet}>•</Text>
-                                    <Text style={s.termText}>{pt}</Text>
+                <Text style={s.agreementTitle}>
+                    {heading || 'RentalMeet Venue Owner Agreement'}
+                </Text>
+
+                {isLoading ? (
+                    <View style={s.centerState}>
+                        <ActivityIndicator size="small" color={Colors.primary} />
+                        <Text style={s.centerStateText}>Loading terms…</Text>
+                    </View>
+                ) : isError ? (
+                    <View style={s.centerState}>
+                        <Ionicons name="alert-circle-outline" size={22} color={Colors.danger} />
+                        <Text style={s.centerStateText}>Couldn't load terms.</Text>
+                        <TouchableOpacity onPress={() => refetch()} style={s.retryBtn}>
+                            <Text style={s.retryText}>Retry</Text>
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <ScrollView
+                        showsVerticalScrollIndicator
+                        nestedScrollEnabled
+                        contentContainerStyle={{ paddingBottom: 4 }}
+                    >
+                        {hasParsedContent ? (
+                            sections.map((t, i) => (
+                                <View key={i} style={s.termSection}>
+                                    <Text style={s.termSectionTitle}>{t.title}</Text>
+                                    {t.points.map((pt, j) => (
+                                        <View key={j} style={s.termPoint}>
+                                            <Text style={s.bullet}>•</Text>
+                                            <Text style={s.termText}>{pt}</Text>
+                                        </View>
+                                    ))}
                                 </View>
-                            ))}
-                        </View>
-                    ))}
-                </ScrollView>
+                            ))
+                        ) : hasRawFallback ? (
+                            // Parsing didn't match the expected format — show the raw text
+                            // rather than an empty box, so nothing is silently lost.
+                            <Text style={s.termText}>{terms.terms.venueOnboardingTerms}</Text>
+                        ) : (
+                            <View style={s.centerState}>
+                                <Text style={s.centerStateText}>No terms available.</Text>
+                            </View>
+                        )}
+                    </ScrollView>
+                )}
             </View>
 
             {/* ── Agree checkbox ── */}
@@ -183,7 +205,7 @@ const s = StyleSheet.create({
     },
     infoTitle: { fontSize: Typography.md, fontWeight: Typography.bold, color: Colors.charcoal },
     infoSub: { fontSize: Typography.sm, color: Colors.charcoalLight, marginTop: 2 },
-    
+
     termsBox: {
         marginHorizontal: Spacing.lg,
         marginTop: Spacing.md,
@@ -205,12 +227,37 @@ const s = StyleSheet.create({
     termSectionTitle: {
         fontSize: Typography.base,
         fontWeight: Typography.bold,
-        color: Colors.charcoalMid,
+        color: Colors.charcoal, // was charcoalMid
         marginBottom: Spacing.xs,
     },
+    bullet: { fontSize: Typography.base, color: Colors.charcoalMid }, // was charcoalLight
+    termText: { flex: 1, fontSize: Typography.sm, color: Colors.charcoalMid, lineHeight: 19 }, // was charcoalLight
+
+    centerState: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: Spacing.xl,
+        gap: Spacing.sm,
+    },
+    centerStateText: {
+        fontSize: Typography.sm,
+        color: Colors.charcoalLight,
+    },
+    retryBtn: {
+        marginTop: Spacing.xs,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: 6,
+        borderRadius: Radii.full,
+        borderWidth: 1,
+        borderColor: Colors.primary,
+    },
+    retryText: {
+        fontSize: Typography.xs,
+        fontWeight: Typography.bold,
+        color: Colors.primary,
+    },
     termPoint: { flexDirection: 'row', gap: Spacing.xs, marginBottom: 4 },
-    bullet: { fontSize: Typography.base, color: Colors.charcoalLight },
-    termText: { flex: 1, fontSize: Typography.sm, color: Colors.charcoalLight, lineHeight: 18 },
     checkRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
