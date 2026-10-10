@@ -31,6 +31,8 @@ export default function RegisterTypeScreen({ navigation }: registerTypeParams) {
     const handleSelect = (roleId: string) => {
         if (roleId === 'ambassador') {
             navigation.navigate('ambassadorRegister');
+        } else if (roleId === 'owner') {
+            navigation.navigate('venueOwnerRegister');
         } else {
             navigation.navigate('register', {
                 role: roleId,

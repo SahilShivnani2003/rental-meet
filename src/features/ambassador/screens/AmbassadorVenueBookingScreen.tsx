@@ -182,7 +182,7 @@ export default function AmbasssadorVenueBookingScreen({
 
     // Navigation helpers — adjust route names to match your actual
     // AmbassadorTabParamList / parent stack navigator.
-    const goToOnboardVenue = () => rootNav.navigate('addVenue');
+    const goToOnboardVenue = () => rootNav.navigate('ambassadorAddVenue');
     const goToBookingDetail = (booking: AmbassadorBooking) =>navigation.navigate('bookings');
 
     const activeFilterLabel = FILTERS.find(f => f.key === filter)?.label ?? 'All Bookings';

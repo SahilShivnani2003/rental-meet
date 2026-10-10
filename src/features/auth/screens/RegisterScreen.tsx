@@ -48,8 +48,20 @@ import { getCitiesByState, getStates, City, State } from '@/utils/location';
 import SearchableDropdown, { DropdownOption } from '@/components/UI/SearchableDropDown';
 import { User } from '@/features/profile/types/User';
 import DeviceInfo from 'react-native-device-info';
+import SelectField from '../components/SelectField';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const VENDOR_CATEGORIES = [
+    'Catering & Food',
+    'Makeup & Beauty',
+    'Photography & Video',
+    'Entertainment',
+    'Decor & Floral',
+    'Security',
+    'Celebrity',
+    'Logistics & Support',
+];
 
 // ── OTP step type ─────────────────────────────────────────────────────────────
 type OtpStep = 'none' | 'email' | 'phone';
@@ -108,6 +120,7 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
     // ── Customer / Vendor location fields ─────────────────────────────────────
     const [city, setCity] = useState('');
     const [state, setState] = useState('');
+    const [vendorCategory, setVendorCategory] = useState('');
     // Google place_ids for the selected city/state, in case the payload or a
     // later step wants them (not required for buildRegisterData currently).
     const [cityPlaceId, setCityPlaceId] = useState<string | null>(null);
@@ -197,6 +210,9 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
         if (role === 'customer' || role === 'vendor') {
             if (!state.trim()) e.state = 'State is required';
             if (!city.trim()) e.city = 'City is required';
+        }
+        if (role === 'vendor' && !vendorCategory) {
+            e.vendorCategory = 'Please select a vendor category';
         }
 
         if (!agreed) e.agreed = 'Please accept the terms to continue';
@@ -348,7 +364,7 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
         return role === 'customer'
             ? { ...base, role: 'customer' as const, city, state }
             : role === 'vendor'
-            ? { ...base, role: 'vendor' as const, city, state }
+            ? { ...base, role: 'vendor' as const, city, state, vendorCategory }
             : { ...base, role: 'owner' as const, city, state };
     };
 
@@ -923,6 +939,19 @@ export default function RegisterScreen({ navigation, route }: registerProps) {
                                     />
                                 </View>
                             </View>
+                            {role === 'vendor' && (
+                                <SelectField
+                                    label="Vendor category"
+                                    value={vendorCategory}
+                                    options={VENDOR_CATEGORIES}
+                                    onSelect={value => {
+                                        setVendorCategory(value);
+                                        clearError('vendorCategory');
+                                    }}
+                                    error={errors.vendorCategory}
+                                    placeholder="Choose your service category"
+                                />
+                            )}
 
                             {/* Email with verify button */}
                             <Field

@@ -1,5 +1,6 @@
 import { privateClient, publicClient } from "@/service/apiClient";
 import { Venue } from "../types/Venue";
+import { AmbassadorAddVenue } from "@/features/ambassador/types/AmbassadorAddVenue";
 
 export interface VenueParams {
   city?: string;
@@ -28,7 +29,7 @@ export const getAllVenues = async (params?:VenueParams) => {
     }
 }
 
-export const createVenue = async (data: Venue) => {
+export const createVenue = async (data: Venue | AmbassadorAddVenue) => {
     try {
 
         console.log('Creating venue....');

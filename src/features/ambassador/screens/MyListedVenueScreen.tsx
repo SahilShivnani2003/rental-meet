@@ -278,7 +278,7 @@ const MyListedVenuesScreen = ({ navigation }: MyListedVenueScreenProps) => {
     }, [venues, filter, search]);
 
     const goToVenueDetail = (venue: Venue) => console.log('navigating to venue detail');
-    const goToOnboardVenue = () => rootNav.navigate('addVenue');
+    const goToOnboardVenue = () => rootNav.navigate('ambassadorAddVenue');
 
     if (isLoading) {
         return (

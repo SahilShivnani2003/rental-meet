@@ -1,8 +1,21 @@
 import { VenueFormData } from './VenueFormData';
 import { Venue } from './Venue';
 
-export function buildVenuePayload(form: VenueFormData): Omit<Venue, '_id' | 'owner'> {
-    const { basic, location, amenities, pricing, photos, documents, terms } = form;
+export function buildVenuePayload(
+    form: VenueFormData,
+    includeExtendedPricing = false,
+): Omit<Venue, '_id' | 'owner'> {
+    const {
+        basic,
+        location,
+        amenities,
+        cateringFacility,
+        pricing,
+        photos,
+        socialLinks,
+        documents,
+        terms,
+    } = form;
 
     const basePayload: Omit<Venue, '_id' | 'owner'> = {
         businessName: basic.businessName.trim(),
@@ -11,6 +24,18 @@ export function buildVenuePayload(form: VenueFormData): Omit<Venue, '_id' | 'own
         capacity: basic.capacity as Venue['capacity'],
         areaSqft: Number(basic.areaSqft) || 0,
         foodType: basic.foodType,
+        rulesAndPolicies: {
+            foodPolicy: terms.rulesAndPolicies.foodPolicy.trim() || undefined,
+            outsideVendors: terms.rulesAndPolicies.outsideVendors.trim() || undefined,
+            decoration: terms.rulesAndPolicies.decoration.trim() || undefined,
+            musicNoise: terms.rulesAndPolicies.musicNoise.trim() || undefined,
+            alcohol: terms.rulesAndPolicies.alcohol.trim() || undefined,
+            pets: terms.rulesAndPolicies.pets.trim() || undefined,
+        },
+        taxSettings: {
+            taxType: pricing.taxType,
+            gstRate: pricing.taxType === 'GST Not Applicable' ? undefined : num(pricing.gstRate),
+        },
 
         location: {
             address: location.address.trim(),
@@ -75,6 +100,7 @@ export function buildVenuePayload(form: VenueFormData): Omit<Venue, '_id' | 'own
                         ? Number(amenities.kitchenAccess.rate)
                         : undefined,
             },
+
             diningArea: {
                 available: amenities.diningArea.available,
                 type: amenities.diningArea.type,
@@ -92,6 +118,46 @@ export function buildVenuePayload(form: VenueFormData): Omit<Venue, '_id' | 'own
                     charges: a.type === 'Paid' && a.rate ? Number(a.rate) : undefined,
                 })),
         },
+
+        cateringFacility: {
+                available: cateringFacility.available,
+                outsideCateringAllowed: cateringFacility.available
+                    ? cateringFacility.outsideCateringAllowed
+                    : false,
+                beverages: amenities.beverages
+                    .filter(item => item.selected)
+                    .map(item => ({
+                        name: item.name,
+                        available: true,
+                        ratePerUnit: num(item.ratePerUnit),
+                    })),
+                breakfast: amenities.refreshmentFood
+                    .filter(item => item.selected && item.category === 'Breakfast')
+                    .map(item => ({
+                        name: item.name,
+                        available: true,
+                        ratePerPlate: num(item.ratePerPlate),
+                        items: item.items.trim() || undefined,
+                    })),
+                lunchDinner: amenities.lunchThalis.flatMap(thali =>
+                    thali.categories.map(category => ({
+                        name: `${thali.thaliType} - ${category.category}`,
+                        available: true,
+                        foodType: basic.foodType === 'Non Veg' ? 'Non-Veg' as const : basic.foodType,
+                        ratePerPlate: num(category.ratePerPlate),
+                        items: category.itemNames.trim() || undefined,
+                    })),
+                ),
+        },
+
+        additionalFacilities: amenities.additional
+                .filter(item => item.selected)
+                .map(item => ({
+                    name: item.name,
+                    available: true,
+                    type: item.type,
+                    charges: item.type === 'Paid' ? num(item.rate) : undefined,
+                })),
 
         pricing: {
             enabledOptions: {
@@ -115,6 +181,65 @@ export function buildVenuePayload(form: VenueFormData): Omit<Venue, '_id' | 'own
                 weekday: num(pricing.prices.extraHour?.weekday),
                 weekend: num(pricing.prices.extraHour?.weekend),
             },
+            ...(includeExtendedPricing
+                ? {
+                      selectedPricingModels: pricing.selectedPricingModels,
+                      onlyRent: {
+                          hourly: {
+                              rate: num(pricing.onlyRent.hourly.rate),
+                              extraPerHour: num(pricing.onlyRent.hourly.extraPerHour),
+                          },
+                          halfDay: {
+                              rate: num(pricing.onlyRent.halfDay.rate),
+                              extraPerHour: num(pricing.onlyRent.halfDay.extraPerHour),
+                          },
+                          fullDay: {
+                              rate: num(pricing.onlyRent.fullDay.rate),
+                              extraPerHour: num(pricing.onlyRent.fullDay.extraPerHour),
+                          },
+                      },
+                      rentWithAmenities: {
+                          hourly: {
+                              rate: num(pricing.rentWithAmenities.hourly.rate),
+                              extraPerHour: num(pricing.rentWithAmenities.hourly.extraPerHour),
+                          },
+                          halfDay: {
+                              rate: num(pricing.rentWithAmenities.halfDay.rate),
+                              extraPerHour: num(pricing.rentWithAmenities.halfDay.extraPerHour),
+                          },
+                          fullDay: {
+                              rate: num(pricing.rentWithAmenities.fullDay.rate),
+                              extraPerHour: num(pricing.rentWithAmenities.fullDay.extraPerHour),
+                          },
+                      },
+                      perPax: {
+                          withoutFood: {
+                              rate: num(pricing.perPax.withoutFood.rate),
+                              minPax: num(pricing.perPax.withoutFood.minPax),
+                          },
+                          breakfastOnly: {
+                              rate: num(pricing.perPax.breakfastOnly.rate),
+                              minPax: num(pricing.perPax.breakfastOnly.minPax),
+                          },
+                          breakfastLunch: {
+                              rate: num(pricing.perPax.breakfastLunch.rate),
+                              minPax: num(pricing.perPax.breakfastLunch.minPax),
+                          },
+                          lunchOnly: {
+                              rate: num(pricing.perPax.lunchOnly.rate),
+                              minPax: num(pricing.perPax.lunchOnly.minPax),
+                          },
+                          dinnerOnly: {
+                              rate: num(pricing.perPax.dinnerOnly.rate),
+                              minPax: num(pricing.perPax.dinnerOnly.minPax),
+                          },
+                          allMeals: {
+                              rate: num(pricing.perPax.allMeals.rate),
+                              minPax: num(pricing.perPax.allMeals.minPax),
+                          },
+                      },
+                  }
+                : {}),
         },
 
         availability: {
@@ -128,6 +253,16 @@ export function buildVenuePayload(form: VenueFormData): Omit<Venue, '_id' | 'own
                 ? [{ date: new Date(pricing.blackoutDate) }]
                 : [],
             confirmationHours: pricing.confirmationHours,
+        },
+
+        socialLinks: {
+            instagram: socialLinks.instagram.trim() || undefined,
+            facebook: socialLinks.facebook.trim() || undefined,
+            youtube: socialLinks.youtube
+                .split(/[\n,]+/)
+                .map(link => link.trim())
+                .filter(Boolean),
+            website: socialLinks.website.trim() || undefined,
         },
 
         images: photos.uploadedImages.map(img => ({

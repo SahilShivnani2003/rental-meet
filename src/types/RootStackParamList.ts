@@ -18,6 +18,7 @@ export type RootStackParamList = {
     vendor: NavigatorScreenParams<VendorTabParamList> | undefined;
     ambassador: NavigatorScreenParams<AmbassadorTabParamList> | undefined;
     ambassadorRegister: undefined;
+    venueOwnerRegister: undefined;
     register: {
         role: string;
     };
@@ -72,4 +73,6 @@ export type RootStackParamList = {
     quotationDownload: undefined;
     notification: undefined;
     venueCoupon: undefined;
+    enquires: undefined;
+    ambassadorAddVenue: undefined;
 };

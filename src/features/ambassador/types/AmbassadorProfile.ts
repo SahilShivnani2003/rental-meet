@@ -1,5 +1,5 @@
+
 // ── Ambassador profile API types ──────────────────────────────────────────────
-// Mirrors the exact shape returned by GET /ambassador/profile.
 
 export interface PersonalInfo {
     fullName: string;
@@ -90,28 +90,76 @@ export interface Declaration {
 }
 
 export interface StreakInfo {
+    date?: string;
+    weekStart?: string;
+    month?: string;
     approvedCount: number;
     bonusAwarded: boolean;
 }
 
-export type ApplicationStatus = 'pending' | 'approved' | 'rejected' | (string & {});
+export type ApplicationStatus =
+    | 'pending'
+    | 'approved'
+    | 'rejected'
+    | (string & {});
+
+export interface AmbassadorStatusHistory {
+    action?: string;
+    status?: string;
+    isActive?: boolean;
+    reason?: string;
+    changedBy?: {
+        userId?: string;
+        name?: string;
+        email?: string;
+        role?: string;
+    };
+    ipAddress?: string;
+    timestamp?: string;
+}
 
 export interface AmbassadorProfile {
     _id: string;
     user: string;
+
+    // Office ID
     ambassadorId: string;
+
+    // Level & Badge
     assignedLevel: string;
     badge: string;
-    profileType: string;
-    applicationStatus: ApplicationStatus;
 
+    // Profile
+    profileType: string;
+
+    // Application Status
+    applicationStatus: ApplicationStatus;
+    isActive: boolean;
+    deactivatedAt?: string;
+    deactivationReason?: string;
+    cityPartnerCode?: string;
+    rejectionReason?: string;
+
+    // Verification
+    verifiedAt?: string;
+    verifiedBy?: string;
+
+    // Status Audit History
+    statusHistory?: AmbassadorStatusHistory[];
+
+    // Earnings & Performance
     walletBalance: number;
     totalEarnings: number;
     totalVenuesSubmitted: number;
     totalVenuesApproved: number;
     totalVenuesRejected: number;
-    profitShareUnlocked: boolean;
 
+    // Profit Share
+    profitShareUnlocked: boolean;
+    profitShareUnlockedAt?: string;
+    profitShareExpiresAt?: string;
+
+    // Profile Sections
     personalInfo: PersonalInfo;
     addressDetails: AddressDetails;
     professionalDetails: ProfessionalDetails;
@@ -123,14 +171,14 @@ export interface AmbassadorProfile {
     documents: AmbassadorDocuments;
     declaration: Declaration;
 
+    // Challenge Streaks
     dailyStreak: StreakInfo;
     weeklyStreak: StreakInfo;
     monthlyStreak: StreakInfo;
 
+    // Timestamps
     createdAt: string;
     updatedAt: string;
-    verifiedAt?: string;
-    verifiedBy?: string;
     __v?: number;
 }
 
@@ -142,23 +190,46 @@ export interface AmbassadorUser {
     referralCode: string;
 }
 
-// Shape returned by the profile-fetch endpoint / hook.
+// GET /ambassador/profile response
 export interface GetAmbassadorProfileResponse {
     success: boolean;
     profile: AmbassadorProfile;
     user: AmbassadorUser;
 }
 
-// Nested partial payload sent back on save — mirrors the editable
-// sub-objects on AmbassadorProfile so the update endpoint can merge them.
+// Update Ambassador Profile Payload
 export interface UpdateAmbassadorProfilePayload {
     personalInfo?: Partial<
-        Pick<PersonalInfo, 'fullName' | 'dateOfBirth' | 'gender' | 'whatsAppNumber' | 'email' | 'aadhaarNumber'>
+        Pick<
+            PersonalInfo,
+            | 'fullName'
+            | 'dateOfBirth'
+            | 'gender'
+            | 'whatsAppNumber'
+            | 'email'
+            | 'aadhaarNumber'
+        >
     >;
+
     profileType?: string;
+
     addressDetails?: Partial<
-        Pick<AddressDetails, 'currentAddress' | 'areaCoverage' | 'city' | 'state' | 'pincode'>
+        Pick<
+            AddressDetails,
+            | 'currentAddress'
+            | 'areaCoverage'
+            | 'city'
+            | 'state'
+            | 'pincode'
+        >
     >;
-    professionalDetails?: Partial<Pick<ProfessionalDetails, 'currentOccupation' | 'companyName'>>;
+
+    professionalDetails?: Partial<
+        Pick<
+            ProfessionalDetails,
+            'currentOccupation' | 'companyName'
+        >
+    >;
+
     bankDetails?: Partial<BankDetails>;
 }

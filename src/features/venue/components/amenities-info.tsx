@@ -44,11 +44,22 @@ const RATE_TYPES: Array<'Fixed' | 'Per Use'> = ['Fixed', 'Per Use'];
 interface Props {
     data: VenueFormData['amenities'];
     onChange: (data: VenueFormData['amenities']) => void;
+    section?: 'all' | 'amenities' | 'catering' | 'additional';
+    cateringFacility?: VenueFormData['cateringFacility'];
+    onCateringFacilityChange?: (data: VenueFormData['cateringFacility']) => void;
     onPrev: () => void;
     onNext: () => void;
 }
 
-export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props) {
+export default function Step3Amenities({
+    data,
+    onChange,
+    section = 'all',
+    cateringFacility,
+    onCateringFacilityChange,
+    onPrev,
+    onNext,
+}: Props) {
     const set = (patch: Partial<VenueFormData['amenities']>) => onChange({ ...data, ...patch });
 
     // ── Generic array updaters ────────────────────────────────────────────────
@@ -135,6 +146,8 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
         >
             {/* <StepHeader title="Step 3: Amenities" current={3} /> */}
 
+            {(section === 'all' || section === 'amenities') && (
+            <>
             {/* ── Basic Amenities ── */}
             <SectionCard accentColor={Colors.primary}>
                 <SectionTitle
@@ -248,7 +261,43 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                     </View>
                 ))}
             </SectionCard>
+            </>
+            )}
 
+            {(section === 'all' || section === 'catering') && (
+            <>
+            {cateringFacility && onCateringFacilityChange && (
+                <SectionCard accentColor={Colors.success}>
+                    <SectionTitle
+                        icon="restaurant-outline"
+                        title="Catering Facility"
+                        subtitle="Tell guests how food and outside catering are handled"
+                        iconColor={Colors.success}
+                        bgColor={Colors.successLight}
+                    />
+                    <FacilityChoice
+                        label="Catering available at venue"
+                        value={cateringFacility.available}
+                        onChange={available => onCateringFacilityChange({
+                            ...cateringFacility,
+                            available,
+                            outsideCateringAllowed: available
+                                ? cateringFacility.outsideCateringAllowed
+                                : false,
+                        })}
+                    />
+                    {cateringFacility.available && (
+                        <FacilityChoice
+                            label="Outside catering allowed"
+                            value={cateringFacility.outsideCateringAllowed}
+                            onChange={outsideCateringAllowed => onCateringFacilityChange({
+                                ...cateringFacility,
+                                outsideCateringAllowed,
+                            })}
+                        />
+                    )}
+                </SectionCard>
+            )}
             {/* ── Beverages ── */}
             <SectionCard accentColor={Colors.info}>
                 <SectionTitle
@@ -481,7 +530,11 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                     </View>
                 </View>
             </SectionCard>
+            </>
+            )}
 
+            {(section === 'all' || section === 'additional') && (
+            <>
             {/* ── Additional Facilities ── */}
             <SectionCard accentColor={Colors.warning}>
                 <SectionTitle
@@ -545,9 +598,43 @@ export default function Step3Amenities({ data, onChange, onPrev, onNext }: Props
                     </View>
                 ))}
             </SectionCard>
+            </>
+            )}
 
             <NavButtons onPrev={onPrev} onNext={onNext} />
         </ScrollView>
+    );
+}
+
+function FacilityChoice({
+    label,
+    value,
+    onChange,
+}: {
+    label: string;
+    value: boolean;
+    onChange: (value: boolean) => void;
+}) {
+    return (
+        <View style={s.facilityChoice}>
+            <Text style={s.facilityChoiceLabel}>{label}</Text>
+            <View style={s.facilityChoiceActions}>
+                {(['Yes', 'No'] as const).map(option => {
+                    const selected = value === (option === 'Yes');
+                    return (
+                        <TouchableOpacity
+                            key={option}
+                            style={[s.facilityChoiceButton, selected && s.facilityChoiceButtonActive]}
+                            onPress={() => onChange(option === 'Yes')}
+                        >
+                            <Text style={[s.facilityChoiceText, selected && s.facilityChoiceTextActive]}>
+                                {option}
+                            </Text>
+                        </TouchableOpacity>
+                    );
+                })}
+            </View>
+        </View>
     );
 }
 
@@ -825,6 +912,42 @@ function ThaliCard({
 }
 
 const s = StyleSheet.create({
+    facilityChoice: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: Spacing.md,
+        paddingVertical: Spacing.sm,
+        borderTopWidth: 1,
+        borderTopColor: Colors.divider,
+    },
+    facilityChoiceLabel: {
+        flex: 1,
+        color: Colors.charcoal,
+        fontSize: Typography.base,
+        fontWeight: Typography.semiBold,
+    },
+    facilityChoiceActions: { flexDirection: 'row', gap: Spacing.xs },
+    facilityChoiceButton: {
+        minWidth: 54,
+        alignItems: 'center',
+        paddingVertical: 8,
+        paddingHorizontal: Spacing.sm,
+        borderRadius: Radii.full,
+        backgroundColor: Colors.background,
+        borderWidth: 1,
+        borderColor: Colors.border,
+    },
+    facilityChoiceButtonActive: {
+        backgroundColor: Colors.primaryLight,
+        borderColor: Colors.primary,
+    },
+    facilityChoiceText: {
+        fontSize: Typography.sm,
+        fontWeight: Typography.bold,
+        color: Colors.charcoalLight,
+    },
+    facilityChoiceTextActive: { color: Colors.primaryDark },
     amenCard: {
         borderRadius: Radii.sm,
         borderWidth: 1,

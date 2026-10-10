@@ -21,19 +21,23 @@ import Step2Location from '../components/location-info';
 import Step5Photos from '../components/photos-upload';
 import Step4Pricing from '../components/pricing-info';
 import Step7Terms from '../components/terms-info';
+import StepSocialLinks from '../components/social-info';
 import { useCreateVenue } from '../hooks/useCreateVenue';
 import { VenueFormData, initialVenueFormData } from '../types/VenueFormData';
 import { buildVenuePayload } from '../types/BuildVenuePlayload';
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 10;
 const STEP_LABELS = [
     'Basic Info',
-    'Location',
+    'Address & Location',
     'Amenities',
-    'Pricing',
+    'Catering Facility',
+    'Additional Facilities',
+    'Pricing & Taxes',
     'Photos',
+    'Social Pages',
     'Documents',
-    'Terms',
+    'Rules & Terms',
 ];
 
 type RegisterVenueProps = NativeStackScreenProps<RootStackParamList, 'addVenue'>;
@@ -93,11 +97,34 @@ export default function RegisterVenueScreen({ navigation }: RegisterVenueProps) 
                     <Step3Amenities
                         data={form.amenities}
                         onChange={v => patchForm('amenities', v)}
+                        section="amenities"
                         onPrev={goPrev}
                         onNext={goNext}
                     />
                 );
             case 4:
+                return (
+                    <Step3Amenities
+                        data={form.amenities}
+                        onChange={v => patchForm('amenities', v)}
+                        section="catering"
+                        cateringFacility={form.cateringFacility}
+                        onCateringFacilityChange={v => patchForm('cateringFacility', v)}
+                        onPrev={goPrev}
+                        onNext={goNext}
+                    />
+                );
+            case 5:
+                return (
+                    <Step3Amenities
+                        data={form.amenities}
+                        onChange={v => patchForm('amenities', v)}
+                        section="additional"
+                        onPrev={goPrev}
+                        onNext={goNext}
+                    />
+                );
+            case 6:
                 return (
                     <Step4Pricing
                         data={form.pricing}
@@ -106,7 +133,7 @@ export default function RegisterVenueScreen({ navigation }: RegisterVenueProps) 
                         onNext={goNext}
                     />
                 );
-            case 5:
+            case 7:
                 return (
                     <Step5Photos
                         data={form.photos}
@@ -115,7 +142,16 @@ export default function RegisterVenueScreen({ navigation }: RegisterVenueProps) 
                         onNext={goNext}
                     />
                 );
-            case 6:
+            case 8:
+                return (
+                    <StepSocialLinks
+                        data={form.socialLinks}
+                        onChange={v => patchForm('socialLinks', v)}
+                        onPrev={goPrev}
+                        onNext={goNext}
+                    />
+                );
+            case 9:
                 return (
                     <Step6Documents
                         data={form.documents}
@@ -124,7 +160,7 @@ export default function RegisterVenueScreen({ navigation }: RegisterVenueProps) 
                         onNext={goNext}
                     />
                 );
-            case 7:
+            case 10:
                 return (
                     <Step7Terms
                         data={form.terms}
@@ -162,11 +198,11 @@ export default function RegisterVenueScreen({ navigation }: RegisterVenueProps) 
                     </View>
                     <TouchableOpacity
                         style={s.backBtn}
-                        onPress={() => navigation.goBack()}
+                        onPress={() => (step > 1 ? goPrev() : navigation.goBack())}
                         activeOpacity={0.75}
                     >
-                        <Text style={s.backBtnText}>Back</Text>
-                        <Ionicons name="arrow-forward" size={16} color={Colors.charcoal} />
+                        <Ionicons name="arrow-back" size={16} color={Colors.charcoal} />
+                        <Text style={s.backBtnText}>{step > 1 ? 'Previous' : 'Back'}</Text>
                     </TouchableOpacity>
                 </View>
                 <View style={s.progressWrap}>

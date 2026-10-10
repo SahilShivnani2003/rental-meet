@@ -390,7 +390,7 @@ const AmbassadorDashboardScreen = ({ navigation }: AmbassadorDashboardScreenProp
 
     // Navigation helpers — adjust route names to match your actual
     // AmbassadorTabParamList / parent stack navigator.
-    const goToOnboardVenue = () => rootNav.navigate('addVenue');
+    const goToOnboardVenue = () => rootNav.navigate('ambassadorAddVenue');
     const goToAllVenues = () => navigation.navigate('venues');
     const goToLedger = () => navigation.navigate('statics');
     const goToChallengeHistory = () => navigation.navigate('statics');

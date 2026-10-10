@@ -12,6 +12,7 @@ import { Colors, Typography, Spacing, Radii, Shadows } from '../../../theme/them
 import { StepHeader } from '../../../components/UI/shared-components';
 import { VenueFormData } from '../types/VenueFormData';
 import { useTermsCondition } from '@/features/booking/hooks/useTermsCondition';
+import Field from '@/components/UI/InputField';
 
 interface Props {
     data: VenueFormData['terms'];
@@ -134,6 +135,67 @@ export default function Step7Terms({
                 )}
             </View>
 
+            <View style={s.rulesCard}>
+                <Text style={s.rulesTitle}>Venue rules & policies</Text>
+                <Text style={s.rulesSubtitle}>
+                    Add clear expectations for guests and event organizers.
+                </Text>
+                <Field
+                    label="Food policy"
+                    placeholder="e.g. Outside food is not permitted"
+                    icon="restaurant-outline"
+                    value={data.rulesAndPolicies.foodPolicy}
+                    onChangeText={foodPolicy => set({
+                        rulesAndPolicies: { ...data.rulesAndPolicies, foodPolicy },
+                    })}
+                />
+                <Field
+                    label="Outside vendors"
+                    placeholder="Rules for decorators, DJs, and other vendors"
+                    icon="people-outline"
+                    value={data.rulesAndPolicies.outsideVendors}
+                    onChangeText={outsideVendors => set({
+                        rulesAndPolicies: { ...data.rulesAndPolicies, outsideVendors },
+                    })}
+                />
+                <Field
+                    label="Decorations"
+                    placeholder="Decoration guidelines or restrictions"
+                    icon="color-palette-outline"
+                    value={data.rulesAndPolicies.decoration}
+                    onChangeText={decoration => set({
+                        rulesAndPolicies: { ...data.rulesAndPolicies, decoration },
+                    })}
+                />
+                <Field
+                    label="Music & noise"
+                    placeholder="Music timings and noise limits"
+                    icon="musical-notes-outline"
+                    value={data.rulesAndPolicies.musicNoise}
+                    onChangeText={musicNoise => set({
+                        rulesAndPolicies: { ...data.rulesAndPolicies, musicNoise },
+                    })}
+                />
+                <Field
+                    label="Alcohol"
+                    placeholder="Alcohol policy"
+                    icon="wine-outline"
+                    value={data.rulesAndPolicies.alcohol}
+                    onChangeText={alcohol => set({
+                        rulesAndPolicies: { ...data.rulesAndPolicies, alcohol },
+                    })}
+                />
+                <Field
+                    label="Pets"
+                    placeholder="Pet policy"
+                    icon="paw-outline"
+                    value={data.rulesAndPolicies.pets}
+                    onChangeText={pets => set({
+                        rulesAndPolicies: { ...data.rulesAndPolicies, pets },
+                    })}
+                />
+            </View>
+
             {/* ── Agree checkbox ── */}
             <TouchableOpacity
                 style={[s.checkRow, data.agreed && s.checkRowActive]}
@@ -189,6 +251,26 @@ export default function Step7Terms({
 }
 
 const s = StyleSheet.create({
+    rulesCard: {
+        backgroundColor: Colors.surface,
+        borderRadius: Radii.lg,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        padding: Spacing.md,
+        marginBottom: Spacing.md,
+    },
+    rulesTitle: {
+        fontSize: Typography.md,
+        fontWeight: Typography.extraBold,
+        color: Colors.charcoal,
+    },
+    rulesSubtitle: {
+        fontSize: Typography.sm,
+        color: Colors.charcoalLight,
+        lineHeight: 18,
+        marginTop: 4,
+        marginBottom: Spacing.md,
+    },
     infoBanner: {
         flexDirection: 'row',
         alignItems: 'flex-start',

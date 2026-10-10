@@ -6,6 +6,7 @@ import BookingsScreen from '@/features/booking/screens/BookingScreen';
 import VenuesScreen from '@/features/venue/screens/VenueScreen';
 import ProfileScreen from '@/features/profile/screen/OwnerProfile';
 import PaymentsScreen from '@/features/payments/screens/VenuePaymentScreen';
+import VenueEnquiryScreen from '@/features/enquiry/screens/VenueEnquiryScreen';
 
 export type OwnerTabParamList = {
     dashboard: undefined;
@@ -17,15 +18,15 @@ export type OwnerTabParamList = {
 
 // ─── Tab config ───────────────────────────────────────────────────────────────
 const ownerTabs = [
-    { name: 'dashboard', label: 'Dashboard', icon: 'grid', iconOff: 'grid-outline' },
+    { name: 'dashboard', label: 'Home', icon: 'grid', iconOff: 'grid-outline' },
     {
         name: 'venues',
-        label: 'My Venues',
+        label: 'Venues',
         icon: 'search',
         iconOff: 'search-outline',
         center: true,
     },
-    { name: 'bookings', label: 'My Bookings', icon: 'calendar', iconOff: 'calendar-outline' },
+    { name: 'bookings', label: 'Bookings', icon: 'calendar', iconOff: 'calendar-outline' },
     {
         name: 'payment',
         label: 'Payment',

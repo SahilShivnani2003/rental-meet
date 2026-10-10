@@ -21,7 +21,6 @@ import { User } from '../types/User';
 import { useGetMyProfile } from '../hooks/useGetMyProfile';
 import { useGetAllBookings } from '@/features/booking/hooks/useGetAllbookings';
 import Loader from '@/components/UI/loader';
-import { Booking } from '@/features/booking/types/Booking';
 import { useChangePassword } from '../hooks/useChangePassword';
 import { useUpdateProfile } from '../hooks/useUpdateProfile';
 import ChangePasswordModal from '../models/ChangePasswordModal';
@@ -277,6 +276,15 @@ export default function ProfileScreen({ navigation }: ProfileProps) {
     ];
 
     const quickActions = [
+        user?.role === 'owner' && {
+            id: 'enquiry',
+            icon: 'chatbubbles',
+            iconColor: Colors.warning,
+            iconBg: Colors.warningLight,
+            title: 'Enquires',
+            subtitle: 'View enquires regarding venue.',
+            onPress: () => rootNav.navigate('enquires')
+        },
         {
             id: 'quotations',
             icon: 'document-text-outline', // better for quotations/docs

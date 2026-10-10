@@ -103,6 +103,10 @@ export interface VenueFormData {
         diningArea: FacilityForm;
         additional: AdditionalForm[];
     };
+    cateringFacility: {
+        available: boolean;
+        outsideCateringAllowed: boolean;
+    };
     pricing: {
         prices: Record<string, { weekday: string; weekend: string }>;
         enabledOptions?: {
@@ -110,16 +114,43 @@ export interface VenueFormData {
             halfDay?: boolean;
             fullDay?: boolean;
         };
+        selectedPricingModels: ('onlyRent' | 'rentWithAmenities' | 'perPax')[];
+        onlyRent: {
+            hourly: { rate: string; extraPerHour: string };
+            halfDay: { rate: string; extraPerHour: string };
+            fullDay: { rate: string; extraPerHour: string };
+        };
+        rentWithAmenities: {
+            hourly: { rate: string; extraPerHour: string };
+            halfDay: { rate: string; extraPerHour: string };
+            fullDay: { rate: string; extraPerHour: string };
+        };
+        perPax: {
+            withoutFood: { rate: string; minPax: string };
+            breakfastOnly: { rate: string; minPax: string };
+            breakfastLunch: { rate: string; minPax: string };
+            lunchOnly: { rate: string; minPax: string };
+            dinnerOnly: { rate: string; minPax: string };
+            allMeals: { rate: string; minPax: string };
+        };
         openTime: string;
         closeTime: string;
         availDays: string[];
         advanceBooking: string;
         blackoutDate: string;
         confirmationHours: 1 | 2 | 3;
+        taxType: 'GST Included' | 'GST Extra' | 'GST Not Applicable';
+        gstRate: string;
     };
 
     photos: {
         uploadedImages: UploadedImage[];
+    };
+    socialLinks: {
+        instagram: string;
+        facebook: string;
+        youtube: string;
+        website: string;
     };
     documents: {
         fullName: string;
@@ -146,7 +177,14 @@ export interface VenueFormData {
     };
     terms: {
         agreed: boolean;
-
+        rulesAndPolicies: {
+            foodPolicy: string;
+            outsideVendors: string;
+            decoration: string;
+            musicNoise: string;
+            alcohol: string;
+            pets: string;
+        };
     };
 }
 
@@ -264,6 +302,10 @@ export const initialVenueFormData: VenueFormData = {
         diningArea: { available: false, type: 'Included', rate: '' },
         additional: DEFAULT_ADDITIONAL,
     },
+    cateringFacility: {
+        available: false,
+        outsideCateringAllowed: false,
+    },
     pricing: {
         prices: {
             perHour: { weekday: '', weekend: '' },
@@ -276,15 +318,42 @@ export const initialVenueFormData: VenueFormData = {
             halfDay: false,
             fullDay: false,
         },
+        selectedPricingModels: [],
+        onlyRent: {
+            hourly: { rate: '', extraPerHour: '' },
+            halfDay: { rate: '', extraPerHour: '' },
+            fullDay: { rate: '', extraPerHour: '' },
+        },
+        rentWithAmenities: {
+            hourly: { rate: '', extraPerHour: '' },
+            halfDay: { rate: '', extraPerHour: '' },
+            fullDay: { rate: '', extraPerHour: '' },
+        },
+        perPax: {
+            withoutFood: { rate: '', minPax: '' },
+            breakfastOnly: { rate: '', minPax: '' },
+            breakfastLunch: { rate: '', minPax: '' },
+            lunchOnly: { rate: '', minPax: '' },
+            dinnerOnly: { rate: '', minPax: '' },
+            allMeals: { rate: '', minPax: '' },
+        },
         openTime: '09:00 AM',
         closeTime: '09:00 PM',
         availDays: [],
         advanceBooking: ADVANCE_OPTIONS[0],
         blackoutDate: '',
         confirmationHours: 2,
+        taxType: 'GST Not Applicable',
+        gstRate: '',
     },
     photos: {
         uploadedImages: [],
+    },
+    socialLinks: {
+        instagram: '',
+        facebook: '',
+        youtube: '',
+        website: '',
     },
     documents: {
         fullName: '',
@@ -309,6 +378,13 @@ export const initialVenueFormData: VenueFormData = {
     },
     terms: {
         agreed: false,
-
+        rulesAndPolicies: {
+            foodPolicy: '',
+            outsideVendors: '',
+            decoration: '',
+            musicNoise: '',
+            alcohol: '',
+            pets: '',
+        },
     },
 };

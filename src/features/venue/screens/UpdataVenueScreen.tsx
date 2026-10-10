@@ -22,6 +22,7 @@ import Step2Location from '../components/location-info';
 import Step5Photos from '../components/photos-upload';
 import Step4Pricing from '../components/pricing-info';
 import Step7Terms from '../components/terms-info';
+import StepSocialLinks from '../components/social-info';
 import {
     VenueFormData,
     initialVenueFormData,
@@ -40,15 +41,18 @@ import { useUpdateVenue } from '../hooks/useUpdateVenue';
 import { Venue } from '../types/Venue';
 import { buildVenuePayload } from '../types/BuildVenuePlayload';
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 10;
 const STEP_LABELS = [
     'Basic Info',
-    'Location',
+    'Address & Location',
     'Amenities',
-    'Pricing',
+    'Catering Facility',
+    'Additional Facilities',
+    'Pricing & Taxes',
     'Photos',
+    'Social Pages',
     'Documents',
-    'Terms',
+    'Rules & Terms',
 ];
 
 type UpdateVenueProps = NativeStackScreenProps<RootStackParamList, 'updateVenue'>;
@@ -66,6 +70,7 @@ function venueToFormData(v: Venue, defaults: VenueFormData): VenueFormData {
             ? v.capacity ?? CAPACITY_RANGES[0]
             : CAPACITY_RANGES[0],
         areaSqft: v.areaSqft ? String(v.areaSqft) : '',
+        foodType: v.foodType === 'Non-Veg' ? 'Non Veg' : v.foodType,
     };
 
     // ── Location ──────────────────────────────────────────────────────────────
@@ -99,7 +104,7 @@ function venueToFormData(v: Venue, defaults: VenueFormData): VenueFormData {
         };
     });
 
-    const apiBev = v.amenities?.beverages ?? [];
+    const apiBev = v.amenities?.beverages ?? v.cateringFacility?.beverages ?? [];
     const beverages: BeverageForm[] = defaults.amenities.beverages.map(row => {
         const match = apiBev.find(b => b.name === row.name);
         if (!match) return row;
@@ -111,7 +116,7 @@ function venueToFormData(v: Venue, defaults: VenueFormData): VenueFormData {
         };
     });
 
-    const apiFood = v.amenities?.refreshmentFood ?? [];
+    const apiFood = v.amenities?.refreshmentFood ?? v.cateringFacility?.breakfast ?? [];
     const refreshmentFood: FoodPackForm[] = defaults.amenities.refreshmentFood.map(row => {
         const match = apiFood.find(f => f.name === row.name);
         if (!match) return row;
@@ -134,7 +139,7 @@ function venueToFormData(v: Venue, defaults: VenueFormData): VenueFormData {
 
     const apiKitchen = v.amenities?.kitchenAccess;
     const apiDining = v.amenities?.diningArea;
-    const apiAdditional = v.amenities?.additional ?? [];
+    const apiAdditional = v.amenities?.additional ?? v.additionalFacilities ?? [];
 
     const additional = defaults.amenities.additional.map(row => {
         const match = apiAdditional.find(a => a.name === row.name);
@@ -165,10 +170,29 @@ function venueToFormData(v: Venue, defaults: VenueFormData): VenueFormData {
         additional,
     };
 
+    const cateringFacility: VenueFormData['cateringFacility'] = {
+        available: v.cateringFacility?.available ?? false,
+        outsideCateringAllowed: v.cateringFacility?.outsideCateringAllowed ?? false,
+    };
+
     // ── Pricing ───────────────────────────────────────────────────────────────
     const p = v.pricing ?? {};
     const avail = v.availability ?? {};
     const rawAdvance = avail.advanceBookingRule ?? '';
+    const pricingModelAliases: Record<
+        string,
+        VenueFormData['pricing']['selectedPricingModels'][number]
+    > = {
+        onlyRent: 'onlyRent',
+        'Only Rent': 'onlyRent',
+        'Venue only': 'onlyRent',
+        rentWithAmenities: 'rentWithAmenities',
+        'Rent (Included Amenities)': 'rentWithAmenities',
+        'Venue + amenities': 'rentWithAmenities',
+        perPax: 'perPax',
+        'Per Pax': 'perPax',
+        'Per guest': 'perPax',
+    };
     const pricing: VenueFormData['pricing'] = {
         prices: {
             perHour: {
@@ -188,6 +212,98 @@ function venueToFormData(v: Venue, defaults: VenueFormData): VenueFormData {
                 weekend: p.extraHourRate?.weekend ? String(p.extraHourRate.weekend) : '',
             },
         },
+        selectedPricingModels: Array.from(
+            new Set(
+                (p.selectedPricingModels ?? [])
+                    .map(model => pricingModelAliases[model])
+                    .filter(
+                        (
+                            model,
+                        ): model is VenueFormData['pricing']['selectedPricingModels'][number] =>
+                            !!model,
+                    ),
+            ),
+        ),
+        onlyRent: {
+            hourly: {
+                rate: p.onlyRent?.hourly?.rate ? String(p.onlyRent.hourly.rate) : '',
+                extraPerHour: p.onlyRent?.hourly?.extraPerHour
+                    ? String(p.onlyRent.hourly.extraPerHour)
+                    : '',
+            },
+            halfDay: {
+                rate: p.onlyRent?.halfDay?.rate ? String(p.onlyRent.halfDay.rate) : '',
+                extraPerHour: p.onlyRent?.halfDay?.extraPerHour
+                    ? String(p.onlyRent.halfDay.extraPerHour)
+                    : '',
+            },
+            fullDay: {
+                rate: p.onlyRent?.fullDay?.rate ? String(p.onlyRent.fullDay.rate) : '',
+                extraPerHour: p.onlyRent?.fullDay?.extraPerHour
+                    ? String(p.onlyRent.fullDay.extraPerHour)
+                    : '',
+            },
+        },
+        rentWithAmenities: {
+            hourly: {
+                rate: p.rentWithAmenities?.hourly?.rate
+                    ? String(p.rentWithAmenities.hourly.rate)
+                    : '',
+                extraPerHour: p.rentWithAmenities?.hourly?.extraPerHour
+                    ? String(p.rentWithAmenities.hourly.extraPerHour)
+                    : '',
+            },
+            halfDay: {
+                rate: p.rentWithAmenities?.halfDay?.rate
+                    ? String(p.rentWithAmenities.halfDay.rate)
+                    : '',
+                extraPerHour: p.rentWithAmenities?.halfDay?.extraPerHour
+                    ? String(p.rentWithAmenities.halfDay.extraPerHour)
+                    : '',
+            },
+            fullDay: {
+                rate: p.rentWithAmenities?.fullDay?.rate
+                    ? String(p.rentWithAmenities.fullDay.rate)
+                    : '',
+                extraPerHour: p.rentWithAmenities?.fullDay?.extraPerHour
+                    ? String(p.rentWithAmenities.fullDay.extraPerHour)
+                    : '',
+            },
+        },
+        perPax: {
+            withoutFood: {
+                rate: p.perPax?.withoutFood?.rate ? String(p.perPax.withoutFood.rate) : '',
+                minPax: p.perPax?.withoutFood?.minPax ? String(p.perPax.withoutFood.minPax) : '',
+            },
+            breakfastOnly: {
+                rate: p.perPax?.breakfastOnly?.rate
+                    ? String(p.perPax.breakfastOnly.rate)
+                    : '',
+                minPax: p.perPax?.breakfastOnly?.minPax
+                    ? String(p.perPax.breakfastOnly.minPax)
+                    : '',
+            },
+            breakfastLunch: {
+                rate: p.perPax?.breakfastLunch?.rate
+                    ? String(p.perPax.breakfastLunch.rate)
+                    : '',
+                minPax: p.perPax?.breakfastLunch?.minPax
+                    ? String(p.perPax.breakfastLunch.minPax)
+                    : '',
+            },
+            lunchOnly: {
+                rate: p.perPax?.lunchOnly?.rate ? String(p.perPax.lunchOnly.rate) : '',
+                minPax: p.perPax?.lunchOnly?.minPax ? String(p.perPax.lunchOnly.minPax) : '',
+            },
+            dinnerOnly: {
+                rate: p.perPax?.dinnerOnly?.rate ? String(p.perPax.dinnerOnly.rate) : '',
+                minPax: p.perPax?.dinnerOnly?.minPax ? String(p.perPax.dinnerOnly.minPax) : '',
+            },
+            allMeals: {
+                rate: p.perPax?.allMeals?.rate ? String(p.perPax.allMeals.rate) : '',
+                minPax: p.perPax?.allMeals?.minPax ? String(p.perPax.allMeals.minPax) : '',
+            },
+        },
         openTime: avail.openingTime ?? '09:00 AM',
         closeTime: avail.closingTime ?? '09:00 PM',
         availDays: (avail.availableDays as string[]) ?? [],
@@ -195,6 +311,9 @@ function venueToFormData(v: Venue, defaults: VenueFormData): VenueFormData {
         blackoutDate: avail.blackoutDates?.[0]?.date
             ? new Date(avail.blackoutDates[0].date).toLocaleDateString('en-IN')
             : '',
+        confirmationHours: (avail.confirmationHours as 1 | 2 | 3) ?? 2,
+        taxType: v.taxSettings?.taxType ?? 'GST Not Applicable',
+        gstRate: v.taxSettings?.gstRate ? String(v.taxSettings.gstRate) : '',
     };
 
     // ── Photos ────────────────────────────────────────────────────────────────
@@ -204,6 +323,13 @@ function venueToFormData(v: Venue, defaults: VenueFormData): VenueFormData {
             publicId: '', // publicId not stored in Venue model
             sectionKey: categoryToSectionKey(img.category),
         })),
+    };
+
+    const socialLinks: VenueFormData['socialLinks'] = {
+        instagram: v.socialLinks?.instagram ?? '',
+        facebook: v.socialLinks?.facebook ?? '',
+        youtube: v.socialLinks?.youtube?.join('\n') ?? '',
+        website: v.socialLinks?.website ?? '',
     };
 
     // ── Documents ─────────────────────────────────────────────────────────────
@@ -262,10 +388,27 @@ function venueToFormData(v: Venue, defaults: VenueFormData): VenueFormData {
     // ── Terms ─────────────────────────────────────────────────────────────────
     const terms: VenueFormData['terms'] = {
         agreed: v.termsAccepted ?? false,
-        confirmationHours: (avail.confirmationHours as 1 | 2 | 3) ?? 2,
+        rulesAndPolicies: {
+            foodPolicy: v.rulesAndPolicies?.foodPolicy ?? '',
+            outsideVendors: v.rulesAndPolicies?.outsideVendors ?? '',
+            decoration: v.rulesAndPolicies?.decoration ?? '',
+            musicNoise: v.rulesAndPolicies?.musicNoise ?? '',
+            alcohol: v.rulesAndPolicies?.alcohol ?? '',
+            pets: v.rulesAndPolicies?.pets ?? '',
+        },
     };
 
-    return { basic, location, amenities, pricing, photos, documents, terms };
+    return {
+        basic,
+        location,
+        amenities,
+        cateringFacility,
+        pricing,
+        photos,
+        socialLinks,
+        documents,
+        terms,
+    };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -327,7 +470,7 @@ export default function UpdateVenueScreen({ navigation, route }: UpdateVenueProp
             return;
         }
         try {
-            const payload = buildVenuePayload(form);
+            const payload = buildVenuePayload(form, true);
             const response = await updateVenueAsync({ id: venueId, data: payload });
             if (!response?.success) {
                 alert.error?.('Failed', response?.message ?? 'Something went wrong');
@@ -365,20 +508,44 @@ export default function UpdateVenueScreen({ navigation, route }: UpdateVenueProp
                     <Step3Amenities
                         data={form.amenities}
                         onChange={v => patchForm('amenities', v)}
+                        section="amenities"
                         onPrev={goPrev}
                         onNext={goNext}
                     />
                 );
             case 4:
                 return (
-                    <Step4Pricing
-                        data={form.pricing}
-                        onChange={v => patchForm('pricing', v)}
+                    <Step3Amenities
+                        data={form.amenities}
+                        onChange={v => patchForm('amenities', v)}
+                        section="catering"
+                        cateringFacility={form.cateringFacility}
+                        onCateringFacilityChange={v => patchForm('cateringFacility', v)}
                         onPrev={goPrev}
                         onNext={goNext}
                     />
                 );
             case 5:
+                return (
+                    <Step3Amenities
+                        data={form.amenities}
+                        onChange={v => patchForm('amenities', v)}
+                        section="additional"
+                        onPrev={goPrev}
+                        onNext={goNext}
+                    />
+                );
+            case 6:
+                return (
+                    <Step4Pricing
+                        data={form.pricing}
+                        onChange={v => patchForm('pricing', v)}
+                        onPrev={goPrev}
+                        onNext={goNext}
+                        showExtendedPricing
+                    />
+                );
+            case 7:
                 return (
                     <Step5Photos
                         data={form.photos}
@@ -387,7 +554,16 @@ export default function UpdateVenueScreen({ navigation, route }: UpdateVenueProp
                         onNext={goNext}
                     />
                 );
-            case 6:
+            case 8:
+                return (
+                    <StepSocialLinks
+                        data={form.socialLinks}
+                        onChange={v => patchForm('socialLinks', v)}
+                        onPrev={goPrev}
+                        onNext={goNext}
+                    />
+                );
+            case 9:
                 return (
                     <Step6Documents
                         data={form.documents}
@@ -396,7 +572,7 @@ export default function UpdateVenueScreen({ navigation, route }: UpdateVenueProp
                         onNext={goNext}
                     />
                 );
-            case 7:
+            case 10:
                 return (
                     <Step7Terms
                         data={form.terms}

@@ -36,6 +36,9 @@ import { NotificationScreen } from '@/features/notification/screens/Notification
 import { VenueCouponScreen } from '@/features/coupon/screens/VenueCouponScreen';
 import AmbassadorRegistrationScreen from '@/features/auth/screens/AmbassadorRegistrationScreen';
 import { AmbassadorTabNavigation } from './tabNavigations/AmbassadorTabNavigation';
+import { VenueOwnerRegistrationScreen } from '@/features/auth/screens/VenueOwnerRegistrationScreen';
+import VenueEnquiryScreen from '@/features/enquiry/screens/VenueEnquiryScreen';
+import { AmbassadorAddVenueScreen } from '@/features/ambassador/screens/AmbassadorAddVenueScreeen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -61,6 +64,10 @@ export default function RootNavigator() {
                             name="ambassadorRegister"
                             component={AmbassadorRegistrationScreen}
                         />
+                        <Stack.Screen
+                            name="venueOwnerRegister"
+                            component={VenueOwnerRegistrationScreen}
+                        />
                         <Stack.Screen name="forgotPassword" component={ForgotPasswordScreen} />
                         <Stack.Screen
                             name="client"
@@ -72,7 +79,7 @@ export default function RootNavigator() {
                             component={OwnerTabNavigation}
                             options={{ animation: 'fade' }}
                         />
-                        <Stack.Screen name="ambassador" component={AmbassadorTabNavigation}/>
+                        <Stack.Screen name="ambassador" component={AmbassadorTabNavigation} />
                         <Stack.Screen name="vendor" component={VendorTabNavigation} />
                         <Stack.Screen name="venueDetail" component={VenueDetailScreen} />
                         <Stack.Screen name="category" component={BrowseCategoryScreen} />
@@ -98,6 +105,8 @@ export default function RootNavigator() {
                         />
                         <Stack.Screen name="notification" component={NotificationScreen} />
                         <Stack.Screen name="venueCoupon" component={VenueCouponScreen} />
+                        <Stack.Screen name="enquires" component={VenueEnquiryScreen}/>
+                        <Stack.Screen name="ambassadorAddVenue" component={AmbassadorAddVenueScreen}/>
                     </Stack.Navigator>
                 </NavigationContainer>
             </AlertProvider>

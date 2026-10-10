@@ -1,22 +1,23 @@
+
 import { Venue } from "@/features/venue/types/Venue";
 
 export interface Booking {
     _id?: string;
-
-    bookingNumber?: string;
+    bookingNumber: string;
 
     venue: string | Venue;
-    customer?: string;
+    customer: string;
 
-    bookingDate: Date;
+    bookingDate: Date | string;
     startTime: string;
     endTime: string;
 
-    bookingType: 'hourly' | 'halfday' | 'fullday';
+    bookingType: 'hourly' | 'halfday' | 'fullday' | 'perpax' | 'custom';
 
     amount: number;
+    ownerEarnings?: number;
 
-    // ── Amenities ─────────────────────────────────────
+    // ── Selected Amenities and Services ──────────────────
     selectedAmenities: {
         basic: {
             name?: string;
@@ -60,25 +61,43 @@ export interface Booking {
             quantity?: number;
             total?: number;
         }[];
+
+        parking?: {
+            cars?: number;
+            twoWheelers?: number;
+            charges?: number;
+        };
     };
 
     amenitiesTotal?: number;
 
-    // ── Price Breakdown ───────────────────────────────
+    // ── Price Breakdown ──────────────────────────────────
     priceBreakdown?: {
         basePrice?: number;
         amenitiesTotal?: number;
         subtotal?: number;
+        durationHours?: number;
+        pricingModel?: string;
+        perPaxPackage?: string;
+        guestCount?: number;
+        parkingCharges?: number;
 
+        // Venue GST
         venueCGST?: number;
         venueCGSTRate?: number;
         venueSGST?: number;
         venueSGSTRate?: number;
+        venueHSN?: string;
         gst?: number;
         gstRate?: number;
 
+        // Platform Fee
         platformFee?: number;
+        platformFeeSource?: string;
+        platformFeeType?: 'fixed' | 'percentage';
+        platformFeeValue?: number;
         platformFeeRate?: number;
+        platformFeePercentage?: number;
         platformFeeCGST?: number;
         platformFeeCGSTRate?: number;
         platformFeeSGST?: number;
@@ -86,19 +105,23 @@ export interface Booking {
         platformFeeGST?: number;
         platformFeeTotal?: number;
 
+        // Discount and Total
         discount?: number;
+        discountAppliesTo?: string;
         couponCode?: string;
         total?: number;
     };
 
-    // ── Coupon ───────────────────────────────────────
+    // ── Coupon ───────────────────────────────────────────
     coupon?: {
         couponId?: string;
         code?: string;
+        appliesTo?: string;
         discountAmount?: number;
+        isOwnerSponsored?: boolean;
     };
 
-    // ── Venue Invoice ────────────────────────────────
+    // ── Venue Invoice ────────────────────────────────────
     venueInvoice?: {
         invoiceNumber?: string;
         amount?: number;
@@ -110,7 +133,7 @@ export interface Booking {
         hsnCode?: string;
     };
 
-    // ── Platform Invoice ─────────────────────────────
+    // ── Platform Invoice ─────────────────────────────────
     platformInvoice?: {
         invoiceNumber?: string;
         platformFee?: number;
@@ -123,17 +146,19 @@ export interface Booking {
         hsnCode?: string;
     };
 
-    // ── GST Snapshot ─────────────────────────────────
+    // ── GST Settings Snapshot ────────────────────────────
     gstSettingsSnapshot?: {
         venueCGST?: number;
         venueSGST?: number;
         venueHSN?: string;
+        platformFeeType?: string;
+        platformFeeValue?: number;
         platformFeePercentage?: number;
         platformCGST?: number;
         platformSGST?: number;
     };
 
-    // ── Customer Details ─────────────────────────────
+    // ── Customer Details ─────────────────────────────────
     customerDetails?: {
         name?: string;
         email?: string;
@@ -141,154 +166,126 @@ export interface Booking {
         eventType?: string;
         guestCount?: number;
         specialRequirements?: string;
+        gstNumber?: string;
+        companyName?: string;
     };
 
-    // ── Status ───────────────────────────────────────
+    // ── Booking Status ───────────────────────────────────
     status?: 'pending' | 'confirmed' | 'cancelled' | 'completed';
 
     paymentStatus?: 'pending' | 'paid' | 'refunded';
-
     paymentId?: string;
 
-    paymentDetails: {
-        razorpay_order_id: string;
-        razorpay_payment_id: string;
-        razorpay_signature: string;
-        paidAt: number;
+    paymentDetails?: {
+        razorpay_order_id?: string;
+        razorpay_payment_id?: string;
+        razorpay_signature?: string;
+        paidAt?: Date | string;
     };
 
+    // ── Cancellation ─────────────────────────────────────
     cancellationReason?: string;
-
     cancelledBy?: string;
 
-    confirmationDeadline?: Date;
+    cancelledByRole?: 'customer' | 'owner' | 'vendor' | 'admin' | 'system' | null;
 
+    cancellationType?: 'auto' | 'manual';
+
+    confirmationDeadline?: Date | string;
     approveSoonUsed?: boolean;
 
-    // ── Refund ───────────────────────────────────────
+    // ── Refund Details ───────────────────────────────────
     refundDetails?: {
         refundId?: string;
         refundAmount?: number;
         refundStatus?: 'pending' | 'processed' | 'failed';
-        refundedAt?: Date;
+        refundedAt?: Date | string;
         refundReason?: string;
     };
 
-    // ── Payment Ledger ───────────────────────────────
+    // ── Payout Settlement ────────────────────────────────
+    settlementStatus?: 'unsettled' | 'settled' | 'failed';
+
+    settlementDetails?: {
+        transactionId?: string;
+        settledAt?: Date | string;
+        amount?: number;
+        remarks?: string;
+        settlementMethod?: 'automatic' | 'manual';
+    };
+
+    // ── Payment Ledger ───────────────────────────────────
     paymentLedger?: {
         totalDue?: number;
         totalPaid?: number;
         amountDue?: number;
         refundDue?: number;
 
-        transactions: {
+        transactions?: {
             txnId?: string;
-            type?: 'payment' | 'refund' | 'adjustment' | 'manual_payment' | 'manual_refund';
+            type?:
+            | 'payment'
+            | 'refund'
+            | 'adjustment'
+            | 'manual_payment'
+            | 'manual_refund';
             amount?: number;
             status?: 'pending' | 'completed' | 'failed';
             note?: string;
             performedBy?: string;
-            date?: Date;
+            date?: Date | string;
         }[];
 
-        adjustments: {
+        adjustments?: {
             oldAmount?: number;
             newAmount?: number;
             difference?: number;
             reason?: string;
             performedBy?: string;
-            date?: Date;
+            date?: Date | string;
         }[];
     };
 
-    createdAt?: Date;
-    updatedAt?: Date;
+    // ── Timestamps ───────────────────────────────────────
+    createdAt?: Date | string;
+    updatedAt?: Date | string;
+
+    // ── Mongoose Helper Methods (optional) ────────────────
+    generateInvoiceNumbers?: () => void;
+
+    calculateGSTInvoices?: (
+        gstSettings: {
+            platformFeeType?: 'fixed' | 'percentage';
+            platformFeeValue?: number;
+            platformFeePercentage?: number;
+            venueCGST: number;
+            venueSGST: number;
+            venueHSN?: string;
+            platformCGST: number;
+            platformSGST: number;
+        }
+    ) => {
+        venueInvoice: Booking['venueInvoice'];
+        platformInvoice: Booking['platformInvoice'];
+        customerPays: number;
+    };
 }
 
+// ── Modify Booking Payload ────────────────────────────────
 export interface ModifyBookingPayload {
-    bookingDate: Date;
+    bookingDate: Date | string;
     startTime: string;
     endTime: string;
 
-    bookingType: 'hourly' | 'halfday' | 'fullday';
+    bookingType: 'hourly' | 'halfday' | 'fullday' | 'perpax' | 'custom';
+
     amount: number;
-    selectedAmenities: {
-        basic: {
-            name?: string;
-            type?: string;
-            rate?: number;
-            rateType?: string;
-            quantity?: number;
-            total?: number;
-        }[];
 
-        beverages: {
-            name?: string;
-            ratePerUnit?: number;
-            brand?: string;
-            quantity?: number;
-            total?: number;
-        }[];
-
-        refreshmentFood: {
-            name?: string;
-            ratePerPlate?: number;
-            items?: string;
-            quantity?: number;
-            total?: number;
-        }[];
-
-        lunchThalis: {
-            thaliType?: string;
-            category?: string;
-            ratePerPlate?: number;
-            numberOfItems?: number;
-            itemNames?: string;
-            quantity?: number;
-            total?: number;
-        }[];
-
-        additional: {
-            name?: string;
-            type?: string;
-            charges?: number;
-            quantity?: number;
-            total?: number;
-        }[];
-    };
+    selectedAmenities: Booking['selectedAmenities'];
 
     amenitiesTotal?: number;
-    priceBreakdown?: {
-        basePrice?: number;
-        amenitiesTotal?: number;
-        subtotal?: number;
 
-        venueCGST?: number;
-        venueCGSTRate?: number;
-        venueSGST?: number;
-        venueSGSTRate?: number;
-        gst?: number;
-        gstRate?: number;
+    priceBreakdown?: Booking['priceBreakdown'];
 
-        platformFee?: number;
-        platformFeeRate?: number;
-        platformFeeCGST?: number;
-        platformFeeCGSTRate?: number;
-        platformFeeSGST?: number;
-        platformFeeSGSTRate?: number;
-        platformFeeGST?: number;
-        platformFeeTotal?: number;
-
-        discount?: number;
-        couponCode?: string;
-        total?: number;
-    };
-    customerDetails?: {
-        name?: string;
-        email?: string;
-        phone?: string;
-        eventType?: string;
-        guestCount?: number;
-        specialRequirements?: string;
-    };
+    customerDetails?: Booking['customerDetails'];
 }

@@ -1,3 +1,4 @@
+
 export interface User {
     _id?: string;
     userId?: string;
@@ -17,20 +18,35 @@ export interface User {
     | 'ambassador';
 
     password?: string;
-
     resetPasswordToken?: string;
-    resetPasswordExpire?: Date;
+    resetPasswordExpire?: Date | string;
 
     address?: string;
     city?: string;
     state?: string;
     pincode?: string;
-
     profilePicture?: string;
 
     isActive?: boolean;
     isDeleted?: boolean;
-    deletedAt?: Date | null;
+    deletedAt?: Date | string | null;
+
+    // Audit Status History
+    statusHistory?: {
+        action?: string;
+        role?: string;
+        isActive?: boolean;
+        isDeleted?: boolean;
+        reason?: string;
+        changedBy?: {
+            userId?: string;
+            name?: string;
+            email?: string;
+            role?: string;
+        };
+        ipAddress?: string;
+        timestamp?: Date | string;
+    }[];
 
     // KYC
     kyc?: {
@@ -45,7 +61,7 @@ export interface User {
         | null;
         selfie?: string | null;
         addressProof?: string | null;
-        verifiedAt?: Date | null;
+        verifiedAt?: Date | string | null;
     };
 
     // SubAdmin Permissions
@@ -54,6 +70,7 @@ export interface User {
 
         // Venues
         venues?: boolean;
+        addVenue?: boolean;
         venueTypes?: boolean;
         bookings?: boolean;
         payments?: boolean;
@@ -78,23 +95,24 @@ export interface User {
         reviews?: boolean;
         platformSettings?: boolean;
         faqs?: boolean;
+        blogs?: boolean;
         chatbot?: boolean;
         settings?: boolean;
         notifications?: boolean;
         analytics?: boolean;
+        authImages?: boolean;
+        ambassadors?: boolean;
     };
 
     // Referral System
     referralCode?: string;
-
     referredBy?: string;
     referredByCode?: string;
-
     referralCount?: number;
 
-    referrals: {
+    referrals?: {
         user?: string;
-        joinedAt?: Date;
+        joinedAt?: Date | string;
     }[];
 
     // Account
@@ -112,16 +130,13 @@ export interface User {
     razorpayAccountId?: string;
     linkedAccountId?: string;
     razorpayAccountStatus?: string;
-    razorpayAccountSyncedAt?: Date;
+    razorpayAccountSyncedAt?: Date | string;
 
     // Employee
     employeeDetails?: {
         title?: 'Mr' | 'Mrs' | 'Ms' | 'Dr' | 'Prof';
-
         fatherOrHusbandName?: string;
-
-        dateOfBirth?: Date;
-
+        dateOfBirth?: Date | string;
         gender?: 'Male' | 'Female' | 'Other';
 
         maritalStatus?:
@@ -174,13 +189,10 @@ export interface User {
         };
 
         photo?: string;
-
         position?: string;
-
         department?: string;
 
         employmentType?: 'Permanent' | 'Contract';
-
         salary?: number;
 
         contractDetails?: {
@@ -188,10 +200,8 @@ export interface User {
             amount?: number;
         };
 
-        joiningDate?: Date;
-
+        joiningDate?: Date | string;
         reportingManager?: string;
-
         previousExperience?: number;
 
         // Employee Documents
@@ -199,15 +209,13 @@ export interface User {
             aadhaarNumber?: string;
             aadhaarFront?: string;
             aadhaarBack?: string;
-
             panNumber?: string;
             panCard?: string;
-
             gstNumber?: string;
             companyName?: string;
         };
 
-        // Bank
+        // Bank Details
         bankDetails?: {
             accountHolderName?: string;
             accountNumber?: string;
@@ -224,6 +232,8 @@ export interface User {
         };
     };
 
-    createdAt?: Date;
-    updatedAt?: Date;
+    // Timestamps
+    createdAt?: Date | string;
+    updatedAt?: Date | string;
+
 }

@@ -17,6 +17,7 @@ import {
     Modal,
     FlatList,
     Platform,
+    TextInput,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { VenueFormData } from '../types/VenueFormData';
@@ -36,6 +37,24 @@ const TOGGLE_PRICE_ROWS: Array<{ key: 'perHour' | 'halfDay' | 'fullDay'; label: 
     { key: 'halfDay', label: 'Half Day (4 hours)' },
     { key: 'fullDay', label: 'Full Day (8 hours)' },
 ];
+const EXTENDED_RENT_ROWS = [
+    { key: 'hourly', label: 'Hourly' },
+    { key: 'halfDay', label: 'Half Day (4 Hrs)' },
+    { key: 'fullDay', label: 'Full Day (12 Hrs)' },
+] as const;
+const EXTENDED_PAX_ROWS = [
+    { key: 'withoutFood', label: 'Per Pax without food' },
+    { key: 'breakfastOnly', label: 'Per Pax with only breakfast' },
+    { key: 'breakfastLunch', label: 'Per Pax with breakfast + lunch' },
+    { key: 'lunchOnly', label: 'Per Pax with only lunch' },
+    { key: 'dinnerOnly', label: 'Per Pax with only dinner' },
+    { key: 'allMeals', label: 'Per Pax with breakfast + lunch + dinner' },
+] as const;
+const EXTENDED_PRICING_MODELS = [
+    { key: 'onlyRent', label: 'Only Rent' },
+    { key: 'rentWithAmenities', label: 'Rent (Included Amenities)' },
+    { key: 'perPax', label: 'Per Pax' },
+] as const;
 /** Always-active row — no checkbox */
 const EXTRA_HOUR_ROW = { key: 'extraHour', label: 'Extra Hour Rate' };
 
@@ -290,9 +309,16 @@ interface Props {
     onChange: (data: VenueFormData['pricing']) => void;
     onPrev: () => void;
     onNext: () => void;
+    showExtendedPricing?: boolean;
 }
 
-export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) {
+export default function Step4Pricing({
+    data,
+    onChange,
+    onPrev,
+    onNext,
+    showExtendedPricing = false,
+}: Props) {
     const set = (patch: Partial<VenueFormData['pricing']>) => onChange({ ...data, ...patch });
 
     const [advOpen, setAdvOpen] = useState(false);
@@ -315,6 +341,49 @@ export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) 
             },
         });
         clearErr('pricingStructure');
+    };
+
+    const toggleExtendedPricingModel = (
+        key: VenueFormData['pricing']['selectedPricingModels'][number],
+    ) => {
+        set({
+            selectedPricingModels: data.selectedPricingModels.includes(key)
+                ? data.selectedPricingModels.filter(model => model !== key)
+                : [...data.selectedPricingModels, key],
+        });
+    };
+
+    const updateExtendedRent = (
+        model: 'onlyRent' | 'rentWithAmenities',
+        duration: 'hourly' | 'halfDay' | 'fullDay',
+        field: 'rate' | 'extraPerHour',
+        value: string,
+    ) => {
+        set({
+            [model]: {
+                ...data[model],
+                [duration]: {
+                    ...data[model][duration],
+                    [field]: value.replace(/\D/g, ''),
+                },
+            },
+        });
+    };
+
+    const updateExtendedPax = (
+        packageKey: (typeof EXTENDED_PAX_ROWS)[number]['key'],
+        field: 'rate' | 'minPax',
+        value: string,
+    ) => {
+        set({
+            perPax: {
+                ...data.perPax,
+                [packageKey]: {
+                    ...data.perPax[packageKey],
+                    [field]: value.replace(/\D/g, ''),
+                },
+            },
+        });
     };
 
     const toggleDay = (day: string) => {
@@ -460,6 +529,148 @@ export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) 
                 </View>
                 {!!errors.extraHour && <ErrorRow msg={errors.extraHour} />}
             </SectionCard>
+
+            {showExtendedPricing && (
+                <SectionCard accentColor={Colors.info}>
+                    <SectionTitle
+                        icon="pricetag-outline"
+                        title="Additional Pricing Models"
+                        subtitle="Edit the venue, amenities, and per-person rates"
+                        iconColor={Colors.info}
+                        bgColor={Colors.infoLight}
+                    />
+                    <View style={s.extendedModelChoices}>
+                        {EXTENDED_PRICING_MODELS.map(model => {
+                            const selected = data.selectedPricingModels.includes(model.key);
+                            return (
+                                <TouchableOpacity
+                                    key={model.key}
+                                    style={[
+                                        s.extendedModelChoice,
+                                        selected && s.extendedModelChoiceSelected,
+                                    ]}
+                                    onPress={() => toggleExtendedPricingModel(model.key)}
+                                    activeOpacity={0.8}
+                                >
+                                    <Text
+                                        style={[
+                                            s.extendedModelText,
+                                            selected && s.extendedModelTextSelected,
+                                        ]}
+                                    >
+                                        {model.label}
+                                    </Text>
+                                    <View
+                                        style={[
+                                            s.extendedCheckbox,
+                                            selected && s.extendedCheckboxSelected,
+                                        ]}
+                                    >
+                                        {selected && (
+                                            <Ionicons
+                                                name="checkmark"
+                                                size={12}
+                                                color={Colors.white}
+                                            />
+                                        )}
+                                    </View>
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
+
+                    {(['onlyRent', 'rentWithAmenities'] as const).map(
+                        model =>
+                            data.selectedPricingModels.includes(model) && (
+                                <View key={model} style={s.extendedRateGroup}>
+                                    <Text style={s.extendedRateTitle}>
+                                        {model === 'onlyRent'
+                                            ? 'ONLY RENT'
+                                            : 'RENT (INCLUDED AMENITIES)'}
+                                    </Text>
+                                    <View style={s.extendedTableHeader}>
+                                        <Text style={[s.extendedColumnHeader, s.extendedDuration]}>
+                                            Duration Type
+                                        </Text>
+                                        <Text style={[s.extendedColumnHeader, s.extendedAmount]}>
+                                            Rate (₹)
+                                        </Text>
+                                        <Text style={[s.extendedColumnHeader, s.extendedAmount]}>
+                                            Extra Per Hr. (₹)
+                                        </Text>
+                                    </View>
+                                    {EXTENDED_RENT_ROWS.map(row => (
+                                        <View
+                                            key={`${model}-${row.key}`}
+                                            style={s.extendedRateRow}
+                                        >
+                                            <Text style={[s.extendedDurationText, s.extendedDuration]}>
+                                                {row.label}
+                                            </Text>
+                                            {(['rate', 'extraPerHour'] as const).map(field => (
+                                                <TextInput
+                                                    key={field}
+                                                    style={[s.extendedInput, s.extendedAmount]}
+                                                    placeholder="₹ 0"
+                                                    placeholderTextColor={Colors.charcoalLight}
+                                                    value={data[model][row.key][field]}
+                                                    onChangeText={value =>
+                                                        updateExtendedRent(
+                                                            model,
+                                                            row.key,
+                                                            field,
+                                                            value,
+                                                        )
+                                                    }
+                                                    keyboardType="numeric"
+                                                    accessibilityLabel={`${model} ${row.label} ${field}`}
+                                                />
+                                            ))}
+                                        </View>
+                                    ))}
+                                </View>
+                            ),
+                    )}
+
+                    {data.selectedPricingModels.includes('perPax') && (
+                        <View style={s.extendedRateGroup}>
+                            <Text style={s.extendedRateTitle}>PER PAX (PER PERSON)</Text>
+                            <View style={s.extendedTableHeader}>
+                                <Text style={[s.extendedColumnHeader, s.extendedDuration]}>
+                                    Meal / Package Type
+                                </Text>
+                                <Text style={[s.extendedColumnHeader, s.extendedAmount]}>
+                                    Rate (₹)
+                                </Text>
+                                <Text style={[s.extendedColumnHeader, s.extendedAmount]}>
+                                    Minimum Pax
+                                </Text>
+                            </View>
+                            {EXTENDED_PAX_ROWS.map(row => (
+                                <View key={row.key} style={s.extendedRateRow}>
+                                    <Text style={[s.extendedDurationText, s.extendedDuration]}>
+                                        {row.label}
+                                    </Text>
+                                    {(['rate', 'minPax'] as const).map(field => (
+                                        <TextInput
+                                            key={field}
+                                            style={[s.extendedInput, s.extendedAmount]}
+                                            placeholder={field === 'rate' ? '₹ 0' : '0'}
+                                            placeholderTextColor={Colors.charcoalLight}
+                                            value={data.perPax[row.key][field]}
+                                            onChangeText={value =>
+                                                updateExtendedPax(row.key, field, value)
+                                            }
+                                            keyboardType="numeric"
+                                            accessibilityLabel={`${row.label} ${field}`}
+                                        />
+                                    ))}
+                                </View>
+                            ))}
+                        </View>
+                    )}
+                </SectionCard>
+            )}
 
             {/* ── Availability Schedule ── */}
             <SectionCard accentColor={Colors.info}>
@@ -621,6 +832,49 @@ export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) 
                 </Text>
             </SectionCard>
 
+            <SectionCard accentColor={Colors.warning}>
+                <SectionTitle
+                    icon="receipt-outline"
+                    title="Pricing & Taxes"
+                    subtitle="Set the GST treatment guests should see when they book"
+                    iconColor={Colors.warning}
+                    bgColor={Colors.warningLight}
+                />
+                {(['GST Included', 'GST Extra', 'GST Not Applicable'] as const).map(option => {
+                    const selected = data.taxType === option;
+                    return (
+                        <TouchableOpacity
+                            key={option}
+                            style={[
+                                s.taxOption,
+                                selected && s.taxOptionSelected,
+                            ]}
+                            onPress={() => set({ taxType: option })}
+                            activeOpacity={0.75}
+                        >
+                            <View style={[s.checkbox, selected && s.checkboxActive]}>
+                                {selected && (
+                                    <Ionicons name="checkmark" size={12} color={Colors.white} />
+                                )}
+                            </View>
+                            <Text style={[s.taxOptionText, selected && s.taxOptionTextSelected]}>
+                                {option}
+                            </Text>
+                        </TouchableOpacity>
+                    );
+                })}
+                {data.taxType !== 'GST Not Applicable' && (
+                    <Field
+                        label="GST rate (%)"
+                        placeholder="e.g. 18"
+                        icon="calculator-outline"
+                        value={data.gstRate}
+                        onChangeText={value => set({ gstRate: value.replace(/[^0-9.]/g, '') })}
+                        keyboardType="numeric"
+                    />
+                )}
+            </SectionCard>
+
             <NavButtons
                 onPrev={onPrev}
                 onNext={() => {
@@ -656,6 +910,104 @@ export default function Step4Pricing({ data, onChange, onPrev, onNext }: Props) 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const s = StyleSheet.create({
+    extendedModelChoices: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: Spacing.sm,
+        marginBottom: Spacing.md,
+    },
+    extendedModelChoice: {
+        minHeight: 42,
+        flexGrow: 1,
+        flexBasis: '30%',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: Spacing.xs,
+        paddingHorizontal: Spacing.sm,
+        borderWidth: 1.5,
+        borderColor: Colors.border,
+        borderRadius: Radii.md,
+        backgroundColor: Colors.background,
+    },
+    extendedModelChoiceSelected: {
+        borderColor: Colors.primaryBorder,
+        backgroundColor: Colors.primaryHighLight,
+    },
+    extendedModelText: {
+        flexShrink: 1,
+        color: Colors.charcoalMid,
+        fontSize: Typography.xs,
+        fontWeight: Typography.bold,
+    },
+    extendedModelTextSelected: { color: Colors.primaryDark },
+    extendedCheckbox: {
+        width: 15,
+        height: 15,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: Colors.primary,
+        borderRadius: 4,
+        backgroundColor: Colors.surface,
+    },
+    extendedCheckboxSelected: {
+        borderColor: Colors.primary,
+        backgroundColor: Colors.primary,
+    },
+    extendedRateGroup: {
+        marginTop: Spacing.sm,
+        padding: Spacing.sm,
+        borderRadius: Radii.md,
+        backgroundColor: Colors.background,
+    },
+    extendedRateTitle: {
+        color: Colors.charcoal,
+        fontSize: Typography.sm,
+        fontWeight: Typography.extraBold,
+        marginBottom: Spacing.sm,
+    },
+    extendedTableHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.xs,
+        paddingBottom: Spacing.xs,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.border,
+        marginBottom: Spacing.xs,
+    },
+    extendedColumnHeader: {
+        color: Colors.charcoalMid,
+        fontSize: 9,
+        fontWeight: Typography.bold,
+    },
+    extendedDuration: { flex: 1.15 },
+    extendedAmount: { flex: 0.9 },
+    extendedRateRow: {
+        minHeight: 42,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.xs,
+        paddingVertical: Spacing.xs,
+        borderBottomWidth: 1,
+        borderBottomColor: Colors.divider,
+    },
+    extendedDurationText: {
+        color: Colors.charcoalMid,
+        fontSize: 10,
+        fontWeight: Typography.medium,
+    },
+    extendedInput: {
+        minHeight: 34,
+        paddingHorizontal: 6,
+        paddingVertical: 4,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        borderRadius: Radii.sm,
+        backgroundColor: Colors.surface,
+        color: Colors.charcoal,
+        fontSize: Typography.xs,
+    },
     tableHeader: {
         flexDirection: 'row',
         alignItems: 'flex-end',
@@ -816,6 +1168,20 @@ const s = StyleSheet.create({
     },
     dayTextActive: { color: Colors.primary },
     hint: { fontSize: Typography.xs, color: Colors.charcoalLight, marginTop: -Spacing.sm },
+    taxOption: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.sm,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        borderRadius: Radii.md,
+        padding: Spacing.md,
+        marginBottom: Spacing.sm,
+        backgroundColor: Colors.background,
+    },
+    taxOptionSelected: { borderColor: Colors.primary, backgroundColor: Colors.primaryHighLight },
+    taxOptionText: { fontSize: Typography.base, color: Colors.charcoalMid, fontWeight: Typography.medium },
+    taxOptionTextSelected: { color: Colors.primaryDark, fontWeight: Typography.bold },
 });
 
 // TimeField styles
